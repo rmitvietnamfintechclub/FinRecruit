@@ -9,7 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@auth/mongodb-adapter": "^3.11.1",
+    "mongoose": "^9.2.3",
     "next": "16.1.6",
+    "next-auth": "^4.24.13",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
@@ -21,6 +24,8 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -1,0 +1,38 @@
+```
+└── 📁src
+    └── 📁app
+        └── 📁(backend)
+            └── 📁api
+                └── 📁auth
+                    └── 📁[...nextauth]
+                        ├── route.ts
+                └── 📁candidates
+                └── 📁export
+                └── 📁test-db
+                    ├── route.ts
+                └── 📁webhooks
+            └── 📁controllers
+                ├── pipelineController.ts
+            └── 📁libs
+                ├── dbConnect.ts
+                ├── mongodb.ts
+            └── 📁middleware
+                ├── auth&RBAC.ts
+            └── 📁models
+                ├── AuditLog.ts
+                ├── Candidate.ts
+                ├── SystemConfig.ts
+                ├── User.ts
+            └── 📁types
+                ├── index.d.ts
+        └── 📁(frontend)
+            └── 📁(router)
+                └── 📁HeadDashboard
+                    ├── page.tsx
+                └── 📁loginPage
+                    ├── page.tsx
+            ├── layout.tsx
+            ├── page.tsx
+    └── 📁components
+    └── services
+```
