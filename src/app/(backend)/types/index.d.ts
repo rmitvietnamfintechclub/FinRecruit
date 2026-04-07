@@ -13,22 +13,49 @@ export interface IUser extends Document {
   isActive: boolean;
   createdAt: Date;
 }
-
-export interface ICandidate extends Document {
-  studentId: string;
+export interface ICustomAnswer {
+  question: string;
+  answer: string;
+}
+export interface ICandidate {
+  _id?: string; // Tự động sinh ra bởi MongoDB
+  
+  // --- THÔNG TIN CÁ NHÂN ---
   fullName: string;
   email: string;
+  dob: string;
   phone: string;
+  majorAndYear: string;
+  facebookLink: string;
   cvLink: string;
-  choice1: DepartmentType;
-  choice2?: DepartmentType; // Dấu ? nghĩa là có thể trống (Optional)
-  department: DepartmentType; // Ban đang giữ hồ sơ hiện tại
-  status: StatusType;
-  customAnswers?: Record<string, any>; // Object linh hoạt chứa các câu hỏi phụ
+  futurePlans: string;
+
+  // --- CÂU HỎI CHUNG ---
+  fintechAspect: string;
+  achievementExpectation: string;
+  timeCommitment: string;
+
+  // --- PHÂN LUỒNG & TRẠNG THÁI ---
+  choice1: 'Technology' | 'Business' | 'Human Resources' | 'Marketing';
+  choice2?: 'Technology' | 'Business' | 'Human Resources' | 'Marketing';
+  department: 'Technology' | 'Business' | 'Human Resources' | 'Marketing' | 'Unassigned';
+  status: 'Pending' | 'Interviewing' | 'Pass' | 'Fail' | 'Incomplete';
+  isRerouted: boolean;
+  reviewerEmail?: string;
+
+  // --- NGĂN PHỤ (HYBRID) ---
+  // Sử dụng Record<string, any> là cách chuẩn nhất trong TypeScript 
+  // để đại diện cho kiểu Schema.Types.Mixed của Mongoose
+  customAnswers: ICustomAnswer[];
+
+  // --- METADATA ---
   generation: string;
   semester: string;
   appliedAt: Date;
-  updatedAt: Date;
+  
+  // Được tự động thêm vào nhờ thuộc tính { timestamps: true } trong Schema
+  createdAt?: Date;
+  updatedAt?: Date; 
 }
 
 export interface ISystemConfig extends Document {
@@ -42,6 +69,7 @@ export interface IAuditLog extends Document {
   action: string;
   performedBy: string;
   targetUser?: string;
+  targetCandidateId?: string;
   details?: string;
   timestamp: Date;
 }
