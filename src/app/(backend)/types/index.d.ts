@@ -1,4 +1,4 @@
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 // 1. Enums (Định nghĩa các giá trị cố định để tránh gõ sai chính tả)
 export type RoleType = 'Guest' | 'Department Head' | 'Executive Board';
@@ -7,14 +7,19 @@ export type StatusType = 'Pending' | 'Pass' | 'Fail' | 'Incomplete';
 
 // 2. Interfaces
 export interface IUser extends Document {
+  _id: Types.ObjectId;
+  name?: string | null;
   email: string;
+  avatar?: string | null;
   role: RoleType;
   department: DepartmentType;
   isActive: boolean;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ICandidate extends Document {
+  _id: Types.ObjectId;
   studentId: string;
   fullName: string;
   email: string;
@@ -32,6 +37,7 @@ export interface ICandidate extends Document {
 }
 
 export interface ISystemConfig extends Document {
+  _id: Types.ObjectId;
   configName: string;
   currentGeneration: string;
   currentSemester: string;
@@ -39,9 +45,19 @@ export interface ISystemConfig extends Document {
 }
 
 export interface IAuditLog extends Document {
+  _id: Types.ObjectId;
   action: string;
   performedBy: string;
   targetUser?: string;
   details?: string;
   timestamp: Date;
+}
+
+export interface ISession extends Document {
+  _id: Types.ObjectId;
+  sessionId: string;
+  userId: Types.ObjectId;
+  expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
