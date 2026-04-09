@@ -15,15 +15,21 @@ type GoogleProfilePayload = {
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-const getRequiredEnv = (key: string) => {
-  const value = process.env[key];
+function buildGoogleProviders() {
+  const googleClientId = process.env.AUTH_GOOGLE_ID;
+  const googleClientSecret = process.env.AUTH_GOOGLE_SECRET;
 
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
+  if (!googleClientId || !googleClientSecret) {
+    return [];
   }
 
-  return value;
-};
+  return [
+    GoogleProvider({
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
+    }),
+  ];
+}
 
 export async function upsertGoogleUser({
   email,
@@ -63,21 +69,13 @@ export async function upsertGoogleUser({
 }
 
 export function buildAuthOptions(): AuthOptions {
-  const googleClientId = getRequiredEnv('AUTH_GOOGLE_ID');
-  const googleClientSecret = getRequiredEnv('AUTH_GOOGLE_SECRET');
-
   return {
     secret: process.env.NEXTAUTH_SECRET,
     session: {
       strategy: 'jwt',
       maxAge: APP_SESSION_MAX_AGE_SECONDS,
     },
-    providers: [
-      GoogleProvider({
-        clientId: googleClientId,
-        clientSecret: googleClientSecret,
-      }),
-    ],
+    providers: buildGoogleProviders(),
     callbacks: {
       async signIn({ user, profile }) {
         if (!user.email) {

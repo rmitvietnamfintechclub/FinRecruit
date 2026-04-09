@@ -1,6 +1,10 @@
 import { cookies } from 'next/headers';
-import type { NextRequest } from 'next/server';
-import { APP_SESSION_COOKIE_NAME, getActiveAppSession } from '@/app/(backend)/libs/session';
+import { NextResponse, type NextRequest } from 'next/server';
+import {
+  APP_SESSION_COOKIE_NAME,
+  type ActiveAppSession,
+  getActiveAppSession,
+} from '@/app/(backend)/libs/session';
 import type { RoleType } from '@/app/(backend)/types';
 
 export class AuthorizationError extends Error {
@@ -44,4 +48,45 @@ export async function checkRole(
   }
 
   return session;
+}
+
+export function authorizationErrorToResponse(error: AuthorizationError) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: error.message,
+    },
+    { status: error.status }
+  );
+}
+
+type ProtectedRouteContext = Record<string, unknown>;
+
+type ProtectedRouteHandler<TContext extends ProtectedRouteContext> = (
+  req: NextRequest,
+  context: TContext & { session: ActiveAppSession }
+) => Promise<Response>;
+
+export function withRBAC<TContext extends ProtectedRouteContext = ProtectedRouteContext>(
+  requiredRoles: RoleType | RoleType[],
+  handler: ProtectedRouteHandler<TContext>
+) {
+  return async (req: NextRequest, context?: TContext) => {
+    try {
+      const session = await checkRole(requiredRoles, req);
+
+      return await handler(
+        req,
+        Object.assign({}, context, { session }) as TContext & {
+          session: ActiveAppSession;
+        }
+      );
+    } catch (error) {
+      if (error instanceof AuthorizationError) {
+        return authorizationErrorToResponse(error);
+      }
+
+      throw error;
+    }
+  };
 }
