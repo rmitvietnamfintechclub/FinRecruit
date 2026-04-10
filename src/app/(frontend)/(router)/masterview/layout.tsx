@@ -1,14 +1,25 @@
+import type { ReactNode } from 'react';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { buildAuthOptions } from '@/app/(backend)/libs/auth';
 import { getHomePathForRole } from '@/lib/role-routes';
 
-export default async function HomePage() {
+type MasterviewLayoutProps = {
+  children: ReactNode;
+};
+
+export default async function MasterviewLayout({
+  children,
+}: MasterviewLayoutProps) {
   const session = await getServerSession(buildAuthOptions());
 
   if (!session?.user) {
     redirect('/loginPage');
   }
 
-  redirect(getHomePathForRole(session.user.role ?? null));
+  if (session.user.role !== 'Executive Board') {
+    redirect(getHomePathForRole(session.user.role ?? null));
+  }
+
+  return <>{children}</>;
 }

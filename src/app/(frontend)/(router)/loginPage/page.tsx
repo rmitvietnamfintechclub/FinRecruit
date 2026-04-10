@@ -1,8 +1,43 @@
 'use client';
 
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { getHomePathForRole } from '@/lib/role-routes';
 
 export default function LoginPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'loading') {
+      return;
+    }
+    if (!session?.user) {
+      return;
+    }
+    router.replace(getHomePathForRole(session.user.role ?? null));
+  }, [session, status, router]);
+
+  if (status === 'loading' || session?.user) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          margin: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(160deg, #f4f4f5 0%, #e4e4e7 100%)',
+          fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif',
+          color: '#71717a',
+        }}
+      >
+        <p style={{ fontSize: 14 }}>Đang tải…</p>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{

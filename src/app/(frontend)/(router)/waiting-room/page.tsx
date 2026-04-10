@@ -1,56 +1,37 @@
 'use client';
 
-import { signOut, useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { LogoutButton } from '@/components/LogoutButton';
 
+/**
+ * Guest · route /waiting-room
+ * Team FE chỉnh giao diện tại file này.
+ */
 export default function WaitingRoomPage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (status !== 'loading' && session?.user?.role && session.user.role !== 'Guest') {
-      router.replace('/');
-    }
-  }, [session, status, router]);
-
   return (
-    <div
+    <main
       style={{
+        padding: 24,
+        fontFamily: 'system-ui, sans-serif',
         minHeight: '100vh',
-        margin: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f4f4f5',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        color: '#71717a',
       }}
     >
-      {status === 'loading' ? (
-        <p style={{ fontSize: 14 }}>…</p>
-      ) : (
-        <>
-          <p style={{ fontSize: 14, letterSpacing: '0.02em', margin: 0 }}>Đang chờ phân quyền</p>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: '/loginPage' })}
-            style={{
-              marginTop: 24,
-              padding: '8px 14px',
-              fontSize: 13,
-              color: '#71717a',
-              background: 'transparent',
-              border: '1px solid #d4d4d8',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            Đăng xuất
-          </button>
-        </>
-      )}
-    </div>
+      <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+        Chỉnh UI Guest tại:
+      </p>
+      <pre
+        style={{
+          fontSize: 11,
+          margin: '8px 0 16px',
+          padding: 8,
+          background: '#f4f4f5',
+          borderRadius: 6,
+          overflow: 'auto',
+        }}
+      >
+        src/app/(frontend)/(router)/waiting-room/page.tsx
+      </pre>
+      <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Waiting room · Guest</h1>
+      <LogoutButton />
+    </main>
   );
 }
