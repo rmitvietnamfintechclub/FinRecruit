@@ -26,14 +26,22 @@ if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
 }
 
+const logPrefix = '[dbConnect]';
+
 async function dbConnect() {
   // BƯỚC 1: Nếu đã có kết nối trong cache -> Trả về dùng luôn, KHÔNG tạo mới
   if (cached.conn) {
+    const host = cached.conn.connection.host;
+    const name = cached.conn.connection.name;
+    console.log(
+      `${logPrefix} Reusing cached connection (host=${host}, db=${name}, readyState=${cached.conn.connection.readyState})`
+    );
     return cached.conn;
   }
 
   // BƯỚC 2: Nếu chưa có, bắt đầu gọi lệnh kết nối
   if (!cached.promise) {
+    console.log(`${logPrefix} No cached connection — initiating mongoose.connect(...)`);
     const opts = {
       bufferCommands: false, // Tắt tính năng tự động buffer của Mongoose để báo lỗi ngay nếu mất mạng
     };
@@ -41,12 +49,20 @@ async function dbConnect() {
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       return mongoose;
     });
+  } else {
+    console.log(`${logPrefix} Connection in progress — awaiting existing promise`);
   }
 
   try {
     // Lưu kết quả vào cache
     cached.conn = await cached.promise;
+    const host = cached.conn.connection.host;
+    const name = cached.conn.connection.name;
+    console.log(
+      `${logPrefix} Connected (host=${host}, db=${name}, readyState=${cached.conn.connection.readyState})`
+    );
   } catch (e) {
+    console.error(`${logPrefix} Connection failed:`, e);
     cached.promise = null;
     throw e;
   }

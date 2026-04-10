@@ -113,6 +113,21 @@ export function buildAuthOptions(): AuthOptions {
           }
         }
 
+        // Keep role/isActive in sync on JWT refresh and after admin DB updates
+        if (token.userId) {
+          await dbConnect();
+          const dbUser = await User.findById(token.userId)
+            .select('role department isActive')
+            .lean()
+            .exec();
+
+          if (dbUser) {
+            token.role = dbUser.role;
+            token.department = dbUser.department;
+            token.isActive = dbUser.isActive;
+          }
+        }
+
         return token;
       },
       async session({ session, token }) {
