@@ -21,13 +21,26 @@ const CandidateSchema = new Schema<ICandidate>({
   fintechAspect: { type: String, required: true },
   achievementExpectation: { type: String, required: true },
   timeCommitment: { type: String, required: true },
+  explanation: { type: String, required: true },
+
 
   // --- PHÂN LUỒNG & TRẠNG THÁI (Hệ thống) ---
-  choice1: { type: String, required: true, enum: ['Technology', 'Business', 'HR', 'Marketing'] },
-  choice2: { type: String, enum: ['Technology', 'Business', 'HR', 'Marketing'] }, // *Xem cảnh báo bên dưới
-  department: { type: String, required: true, enum: ['Technology', 'Business', 'HR', 'Marketing', 'Unassigned'] },
+choice1: { 
+    type: String, 
+    required: true, 
+    enum: ['Technology Department', 'Business Department', 'HR Department', 'Marketing Department'] 
+  },
+  choice2: { 
+    type: String, 
+    enum: ['Technology Department', 'Business Department', 'HR Department', 'Marketing Department'] 
+  }, 
+  department: { 
+    type: String, 
+    required: true, 
+    enum: ['Technology Department', 'Business Department', 'HR Department', 'Marketing Department', 'Unassigned'] 
+  },
   
-  status: { type: String, enum: ['Pending', 'Interviewing', 'Pass', 'Fail', 'Incomplete'], default: 'Pending' },
+  status: { type: String, enum: ['Pending', 'Pass', 'Fail'], default: 'Pending' },
   isRerouted: { type: Boolean, default: false },
   reviewerEmail: { type: String },
 
@@ -43,6 +56,6 @@ const CandidateSchema = new Schema<ICandidate>({
 });
 
 // Compound Index: Chặn nộp trùng trong cùng 1 kỳ
-// CandidateSchema.index({ studentId: 1, semester: 1 }, { unique: true });
+CandidateSchema.index({ studentId: 1, semester: 1 }, { unique: true });
 
 export default mongoose.models.Candidate || mongoose.model<ICandidate>('Candidate', CandidateSchema);
