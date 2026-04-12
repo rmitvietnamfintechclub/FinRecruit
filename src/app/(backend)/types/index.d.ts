@@ -1,14 +1,14 @@
 import { Document } from 'mongoose';
 
-// 1. Enums (Nguồn chân lý duy nhất cho toàn bộ app)
+// 1. Enums (single source of truth for the app)
 export type RoleType = 'Guest' | 'Department Head' | 'Executive Board';
 
-// ĐÃ SỬA: Dùng đúng chữ 'HR Department' để khớp với Form. Thêm EBMB.
+// Align with the application form labels; includes EBMB.
 export type DepartmentType = 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department' | 'EBMB' | 'Unassigned';
 
 export type StatusType = 'Pending' | 'Pass' | 'Fail';
 
-// Loại bỏ các ban không dành cho form ứng tuyển (EBMB, Unassigned)
+// Application-form choices only (excludes EBMB, Unassigned)
 export type CandidateChoiceType = 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
 
 // 2. Interfaces
@@ -27,7 +27,7 @@ export interface ICustomAnswer {
 
 export interface ICandidate {
   _id?: string; 
-  // --- THÔNG TIN CÁ NHÂN ---
+  // --- Personal information ---
   fullName: string;
   email: string;
   dob: string;
@@ -37,14 +37,14 @@ export interface ICandidate {
   cvLink: string;
   futurePlans: string;
   
-  // --- CÂU HỎI CHUNG ---
+  // --- General questions ---
   fintechAspect: string;
   achievementExpectation: string;
   timeCommitment: string;
   explanation: string;
   questionsForUs: string;
   
-  // --- PHÂN LUỒNG & TRẠNG THÁI ---
+  // --- Assignment & status ---
   choice1: CandidateChoiceType;
   choice2?: CandidateChoiceType | '';
   department: DepartmentType;
@@ -53,10 +53,10 @@ export interface ICandidate {
   isRerouted: boolean;
   reviewerEmail?: string;
   
-  // --- NGĂN PHỤ ---
+  // --- Supplementary ---
   customAnswers: ICustomAnswer[];
   
-  // --- METADATA ---
+  // --- Metadata ---
   generation: string;
   semester: string;
   appliedAt: Date;

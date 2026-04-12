@@ -11,7 +11,7 @@ export async function GET() {
     }, { status: 200 });
 
   } catch (error: any) {
-    //If Error
+    // On error
     console.error('Database connection error:', error);
     return NextResponse.json({ 
       success: false, 

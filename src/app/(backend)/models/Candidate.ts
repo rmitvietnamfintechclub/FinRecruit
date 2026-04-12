@@ -1,14 +1,14 @@
 import mongoose, { Schema } from 'mongoose';
 import { ICandidate } from '@/app/(backend)/types';
 
-// Tắt _id tự động cho từng câu hỏi để database gọn nhẹ hơn
+// Disable per-question _id to keep embedded documents lean
 const CustomAnswerSchema = new Schema({
   question: { type: String, required: true },
-  answer: { type: String, default: "" } // Cho phép rỗng nếu ứng viên không trả lời
+  answer: { type: String, default: "" } // Allow empty when the candidate skips the question
 }, { _id: false }); 
 
 const CandidateSchema = new Schema<ICandidate>({
-  // --- THÔNG TIN CÁ NHÂN ---
+  // --- Personal information ---
   fullName: { type: String, required: true },
   email: { type: String, required: true }, 
   dob: { type: String, required: true }, 
@@ -18,15 +18,15 @@ const CandidateSchema = new Schema<ICandidate>({
   cvLink: { type: String, required: true },
   futurePlans: { type: String, required: true },
 
-  // --- CÂU HỎI CHUNG ---
+  // --- General questions ---
   fintechAspect: { type: String, required: true },
   achievementExpectation: { type: String, required: true },
   timeCommitment: { type: String, required: true },
-  // Giữ nguyên default: "" để không bị sập khi Logic App đẩy chuỗi rỗng "" vào
+  // Keep default "" so Logic App empty strings do not break validation
   explanation: { type: String, default: "" },
   questionsForUs: { type: String, default: "" },
 
-  // --- PHÂN LUỒNG & TRẠNG THÁI ---
+  // --- Assignment & status ---
   choice1: { 
     type: String, 
     required: true, 
@@ -50,15 +50,15 @@ const CandidateSchema = new Schema<ICandidate>({
   isRerouted: { type: Boolean, default: false },
   reviewerEmail: { type: String },
 
-  // --- NGĂN PHỤ ---
+  // --- Supplementary ---
   customAnswers: [CustomAnswerSchema], 
 
-  // --- METADATA ---
+  // --- Metadata ---
   generation: { type: String, required: true },
   semester: { type: String, required: true },
   appliedAt: { type: Date, default: Date.now }
 }, {
-  // Tự động sinh createdAt và updatedAt để khớp với interface ICandidate
+  // Auto-manage createdAt and updatedAt to match ICandidate
   timestamps: true
 });
 
