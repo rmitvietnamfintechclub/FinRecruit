@@ -1,9 +1,15 @@
 import { Document } from 'mongoose';
 
-// 1. Enums (Định nghĩa các giá trị cố định để tránh gõ sai chính tả)
+// 1. Enums (Nguồn chân lý duy nhất cho toàn bộ app)
 export type RoleType = 'Guest' | 'Department Head' | 'Executive Board';
-export type DepartmentType = 'Technology Departmeny ' | 'Business' | 'Human Resources' | 'Marketing' | 'All' | 'Unassigned';
+
+// ĐÃ SỬA: Dùng đúng chữ 'HR Department' để khớp với Form. Thêm EBMB.
+export type DepartmentType = 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department' | 'EBMB' | 'Unassigned';
+
 export type StatusType = 'Pending' | 'Pass' | 'Fail';
+
+// Loại bỏ các ban không dành cho form ứng tuyển (EBMB, Unassigned)
+export type CandidateChoiceType = 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
 
 // 2. Interfaces
 export interface IUser extends Document {
@@ -13,12 +19,14 @@ export interface IUser extends Document {
   isActive: boolean;
   createdAt: Date;
 }
+
 export interface ICustomAnswer {
   question: string;
   answer: string;
 }
+
 export interface ICandidate {
-  _id?: string; // Tự động sinh ra bởi MongoDB
+  _id?: string; 
   // --- THÔNG TIN CÁ NHÂN ---
   fullName: string;
   email: string;
@@ -28,27 +36,30 @@ export interface ICandidate {
   facebookLink: string;
   cvLink: string;
   futurePlans: string;
+  
   // --- CÂU HỎI CHUNG ---
   fintechAspect: string;
   achievementExpectation: string;
   timeCommitment: string;
   explanation: string;
+  questionsForUs: string;
+  
   // --- PHÂN LUỒNG & TRẠNG THÁI ---
-  choice1: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
-  choice2?: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
-  department: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department' | 'Unassigned' | 'All';
-  status: 'Pending' | 'Pass' | 'Fail';
+  choice1: CandidateChoiceType;
+  choice2?: CandidateChoiceType | '';
+  department: DepartmentType;
+  
+  status: StatusType;
   isRerouted: boolean;
   reviewerEmail?: string;
-  // --- NGĂN PHỤ (HYBRID) ---
-  // Sử dụng Record<string, any> là cách chuẩn nhất trong TypeScript 
-  // để đại diện cho kiểu Schema.Types.Mixed của Mongoose
+  
+  // --- NGĂN PHỤ ---
   customAnswers: ICustomAnswer[];
+  
   // --- METADATA ---
   generation: string;
   semester: string;
   appliedAt: Date;
-  // Được tự động thêm vào nhờ thuộc tính { timestamps: true } trong Schema
   createdAt?: Date;
   updatedAt?: Date; 
 }
