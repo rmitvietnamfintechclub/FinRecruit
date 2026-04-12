@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-// Lấy chuỗi kết nối từ file .env
+// Connection string from .env
 const MONGODB_URI = process.env.MONGODB_URI!;
 
 if (!MONGODB_URI) {
@@ -9,7 +9,7 @@ if (!MONGODB_URI) {
   );
 }
 
-// Mở rộng interface Global của NodeJS để TypeScript không báo lỗi đỏ
+// Extend NodeJS global typing for TypeScript
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -19,7 +19,7 @@ declare global {
   var mongoose: MongooseCache;
 }
 
-// Khởi tạo cache từ biến global (để sống sót qua các lần Hot Reload)
+// Reuse cached connection across hot reloads in development
 let cached = global.mongoose;
 
 if (!cached) {
@@ -29,7 +29,7 @@ if (!cached) {
 const logPrefix = '[dbConnect]';
 
 async function dbConnect() {
-  // BƯỚC 1: Nếu đã có kết nối trong cache -> Trả về dùng luôn, KHÔNG tạo mới
+  // Step 1: return existing connection if present
   if (cached.conn) {
     const host = cached.conn.connection.host;
     const name = cached.conn.connection.name;
@@ -39,11 +39,11 @@ async function dbConnect() {
     return cached.conn;
   }
 
-  // BƯỚC 2: Nếu chưa có, bắt đầu gọi lệnh kết nối
+  // Step 2: otherwise start a new connection
   if (!cached.promise) {
     console.log(`${logPrefix} No cached connection — initiating mongoose.connect(...)`);
     const opts = {
-      bufferCommands: false, // Tắt tính năng tự động buffer của Mongoose để báo lỗi ngay nếu mất mạng
+      bufferCommands: false, // Fail fast when disconnected instead of buffering commands
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
@@ -54,7 +54,7 @@ async function dbConnect() {
   }
 
   try {
-    // Lưu kết quả vào cache
+    // Store connection in cache
     cached.conn = await cached.promise;
     const host = cached.conn.connection.host;
     const name = cached.conn.connection.name;

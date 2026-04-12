@@ -1,8 +1,8 @@
-// Todo (Dev A & Dev C): Implement logic xử lý data pipeline
+// TODO (Dev A & Dev C): Implement data pipeline processing
 export const processCandidateData = async (rawPayload: any) => {
-    // 1. Map dữ liệu tĩnh và gom nhóm customAnswers
-    // 2. Query DB kiểm tra duplicate (Student ID & Email)
-    // 3. Nếu duplicate -> check timestamp -> Update hoặc Bỏ qua
-    // 4. Nếu không duplicate -> Phân loại Department theo Choice 1
-    // 5. Insert vào DB
+    // 1. Map static fields and group customAnswers
+    // 2. Query DB for duplicates (student ID & email)
+    // 3. If duplicate: compare timestamps -> update or skip
+    // 4. If not duplicate: assign department from choice 1
+    // 5. Insert into DB
 };

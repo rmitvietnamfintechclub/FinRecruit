@@ -1,9 +1,15 @@
 import { Document, Types } from 'mongoose';
 
-// 1. Enums (Định nghĩa các giá trị cố định để tránh gõ sai chính tả)
+// 1. Enums (single source of truth for the app)
 export type RoleType = 'Guest' | 'Department Head' | 'Executive Board';
-export type DepartmentType = 'Technology' | 'Business' | 'Human Resources' | 'Marketing' | 'All' | 'Unassigned';
-export type StatusType = 'Pending' | 'Pass' | 'Fail' | 'Incomplete';
+
+// Align with the application form labels; includes EBMB.
+export type DepartmentType = 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department' | 'EBMB' | 'Unassigned';
+
+export type StatusType = 'Pending' | 'Pass' | 'Fail';
+
+// Application-form choices only (excludes EBMB, Unassigned)
+export type CandidateChoiceType = 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
 
 // 2. Interfaces
 export interface IUser extends Document {
@@ -18,22 +24,48 @@ export interface IUser extends Document {
   updatedAt: Date;
 }
 
-export interface ICandidate extends Document {
-  _id: Types.ObjectId;
-  studentId: string;
+export interface ICustomAnswer {
+  question: string;
+  answer: string;
+}
+
+export interface ICandidate {
+  _id?: string; 
+  // --- Personal information ---
   fullName: string;
   email: string;
+  dob: string;
   phone: string;
+  majorAndYear: string;
+  facebookLink: string;
   cvLink: string;
-  choice1: DepartmentType;
-  choice2?: DepartmentType; // Dấu ? nghĩa là có thể trống (Optional)
-  department: DepartmentType; // Ban đang giữ hồ sơ hiện tại
+  futurePlans: string;
+  
+  // --- General questions ---
+  fintechAspect: string;
+  achievementExpectation: string;
+  timeCommitment: string;
+  explanation: string;
+  questionsForUs: string;
+  
+  // --- Assignment & status ---
+  choice1: CandidateChoiceType;
+  choice2?: CandidateChoiceType | '';
+  department: DepartmentType;
+  
   status: StatusType;
-  customAnswers?: Record<string, any>; // Object linh hoạt chứa các câu hỏi phụ
+  isRerouted: boolean;
+  reviewerEmail?: string;
+  
+  // --- Supplementary ---
+  customAnswers: ICustomAnswer[];
+  
+  // --- Metadata ---
   generation: string;
   semester: string;
   appliedAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date; 
 }
 
 export interface ISystemConfig extends Document {
@@ -49,6 +81,7 @@ export interface IAuditLog extends Document {
   action: string;
   performedBy: string;
   targetUser?: string;
+  targetCandidateId?: string;
   details?: string;
   timestamp: Date;
 }
