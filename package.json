@@ -12,6 +12,7 @@
     "@auth/mongodb-adapter": "^3.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "lucide-react": "^0.577.0",
     "mongoose": "^9.2.3",
     "next": "16.1.6",
