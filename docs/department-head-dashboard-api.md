@@ -8,6 +8,7 @@ Backend scope for Smart Dashboard access used by Department Heads only.
 - The backend uses the logged-in head's assigned department from the session.
 - A Department Head can only read or update candidates whose current `department` exactly matches their own department.
 - Submitted candidate data remains read-only. The only writable field through this API is the evaluation result flow: `Pass`, `Fail`, `Pending`.
+- Candidates with status `Incomplete` are reserved for the Executive Board exception queue and are excluded from all Department Head dashboard endpoints.
 
 Canonical department values in the backend:
 

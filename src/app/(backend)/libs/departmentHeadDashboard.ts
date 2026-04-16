@@ -1,12 +1,6 @@
 import { Types } from 'mongoose';
+import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import type { DepartmentType, StatusType } from '@/app/(backend)/types';
-
-export const HEAD_DEPARTMENTS = [
-  'Technology',
-  'Business',
-  'Human Resources',
-  'Marketing',
-] as const;
 
 export const DASHBOARD_STATUS_OPTIONS = ['Pending', 'Pass', 'Fail'] as const;
 
@@ -97,12 +91,6 @@ type DashboardQueryOptions = {
   status?: DashboardStatus | null;
 };
 
-export function isHeadDepartment(
-  department: string | null | undefined
-): department is DepartmentType {
-  return HEAD_DEPARTMENTS.includes(department as (typeof HEAD_DEPARTMENTS)[number]);
-}
-
 export function parseDashboardStatus(
   value: string | null | undefined
 ): DashboardStatus | null {
@@ -150,11 +138,8 @@ export function buildDepartmentHeadCandidateMatch({
 }: DashboardQueryOptions) {
   const match: Record<string, unknown> = {
     department,
+    status: status ? status : { $in: [...DASHBOARD_STATUS_OPTIONS] },
   };
-
-  if (status) {
-    match.status = status;
-  }
 
   if (search) {
     match.fullName = { $regex: escapeRegex(search), $options: 'i' };

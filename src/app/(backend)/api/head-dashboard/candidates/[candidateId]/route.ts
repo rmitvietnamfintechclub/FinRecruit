@@ -48,6 +48,7 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
     const candidate = await Candidate.findOne({
       _id: candidateId,
       department: assignedDepartment,
+      status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
     })
       .select(
         'studentId fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'

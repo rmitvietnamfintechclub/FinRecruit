@@ -81,6 +81,7 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
     const candidate = await Candidate.findOne({
       _id: candidateId,
       department: assignedDepartment,
+      status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
     })
       .select(
         'studentId fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
@@ -148,6 +149,7 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
       {
         _id: candidateId,
         department: assignedDepartment,
+        status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
       },
       {
         $set: updatePayload,
