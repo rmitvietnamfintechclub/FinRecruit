@@ -21,5 +21,7 @@ const CandidateSchema = new Schema<ICandidate>({
 
 //Compound Index để cho phép rớt kỳ này, kỳ sau nộp lại được:
 CandidateSchema.index({ studentId: 1, semester: 1 }, { unique: true });
+CandidateSchema.index({ department: 1, status: 1, updatedAt: -1 });
+CandidateSchema.index({ department: 1, updatedAt: -1 });
 
 export default mongoose.models.Candidate || mongoose.model<ICandidate>('Candidate', CandidateSchema);
