@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
-type DashboardStatus = 'Pending' | 'Pass' | 'Fail';
+import { CandidateDetailModal } from '@/app/(frontend)/(router)/HeadDashboard/CandidateDetailModal';
+import {
+  patchCandidateStatus,
+  type DashboardStatus,
+} from '@/app/(frontend)/(router)/HeadDashboard/patchCandidateStatus';
 
 type CandidateRow = {
   id: string;
@@ -36,21 +39,6 @@ type ListApiResponse = {
   };
 };
 
-type PatchSuccessBody = {
-  success: boolean;
-  message?: string;
-  code?: string;
-  candidate?: CandidateRow;
-};
-
-type PatchRerouteBody = {
-  success: boolean;
-  message?: string;
-  code?: string;
-  requiresConfirmation?: boolean;
-  reroutePreview?: { targetDepartment: string; resultingStatus: string };
-};
-
 const STATUS_OPTIONS: DashboardStatus[] = ['Pending', 'Pass', 'Fail'];
 
 function formatDate(iso: string) {
@@ -73,7 +61,6 @@ function countByStatus(rows: CandidateRow[]) {
   return { pending, pass, fail };
 }
 
-/** Gọi GET /api/head-dashboard/candidates — lặp trang đến khi hết (tối đa 100/trang). */
 async function fetchAllCandidates(): Promise<{
   rows: CandidateRow[];
   meta: ListApiResponse['meta'];
@@ -115,6 +102,10 @@ export function DepartmentCandidatesTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailCandidateId, setDetailCandidateId] = useState<string | null>(
+    null
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -150,56 +141,29 @@ export function DepartmentCandidatesTable() {
   const patchStatus = async (candidateId: string, status: DashboardStatus) => {
     setUpdatingId(candidateId);
     try {
-      const res = await fetch(
-        `/api/head-dashboard/candidates/${candidateId}/status`,
-        {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status }),
+      const { ok, message } = await patchCandidateStatus(candidateId, status);
+      if (!ok) {
+        if (message && message !== 'Đã hủy.') {
+          window.alert(message);
         }
-      );
-      const json = (await res.json()) as PatchSuccessBody & PatchRerouteBody;
-
-      if (res.status === 409 && json.requiresConfirmation && status === 'Fail') {
-        const ok = window.confirm(
-          `${json.message ?? 'Xác nhận chuyển thí sinh sang phòng ban choice 2?'}\n\n` +
-            (json.reroutePreview
-              ? `Phòng đích: ${json.reroutePreview.targetDepartment} → trạng thái: ${json.reroutePreview.resultingStatus}`
-              : '')
-        );
-        if (!ok) {
-          return;
-        }
-        const res2 = await fetch(
-          `/api/head-dashboard/candidates/${candidateId}/status`,
-          {
-            method: 'PATCH',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'Fail', confirmReroute: true }),
-          }
-        );
-        const json2 = (await res2.json()) as PatchSuccessBody;
-        if (!res2.ok) {
-          window.alert(json2.message ?? `Lỗi ${res2.status}`);
-          return;
-        }
-        await load();
         return;
       }
-
-      if (!res.ok) {
-        window.alert(json.message ?? `Lỗi ${res.status}`);
-        return;
-      }
-
       await load();
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'Cập nhật thất bại.');
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const openDetail = (id: string) => {
+    setDetailCandidateId(id);
+    setDetailOpen(true);
+  };
+
+  const closeDetail = () => {
+    setDetailOpen(false);
+    setDetailCandidateId(null);
   };
 
   if (loading) {
@@ -226,6 +190,13 @@ export function DepartmentCandidatesTable() {
 
   return (
     <div className="space-y-6">
+      <CandidateDetailModal
+        open={detailOpen}
+        candidateId={detailCandidateId}
+        onClose={closeDetail}
+        onAfterStatusChange={load}
+      />
+
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 shadow-sm">
           <p className="text-xs font-medium uppercase text-zinc-500">
@@ -271,6 +242,12 @@ export function DepartmentCandidatesTable() {
       )}
 
       {rows.length > 0 && (
+        <p className="text-xs text-zinc-500">
+          Nhấn vào một hàng để xem chi tiết hồ sơ (popup).
+        </p>
+      )}
+
+      {rows.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white shadow-sm">
           <table className="w-full min-w-[880px] text-left text-sm">
             <thead>
@@ -289,7 +266,16 @@ export function DepartmentCandidatesTable() {
               {rows.map((c) => (
                 <tr
                   key={c.id}
-                  className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50/80"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openDetail(c.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openDetail(c.id);
+                    }
+                  }}
+                  className="cursor-pointer border-b border-zinc-100 last:border-0 hover:bg-zinc-50/80"
                 >
                   <td className="px-3 py-2 font-medium text-zinc-900">
                     {c.fullName}
@@ -314,15 +300,17 @@ export function DepartmentCandidatesTable() {
                   <td className="whitespace-nowrap px-3 py-2 text-zinc-500">
                     {formatDate(c.updatedAt)}
                   </td>
-                  <td className="px-3 py-2">
+                  <td
+                    className="px-3 py-2"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     <div className="flex flex-wrap gap-1">
                       {STATUS_OPTIONS.map((st) => (
                         <button
                           key={st}
                           type="button"
-                          disabled={
-                            updatingId === c.id || c.status === st
-                          }
+                          disabled={updatingId === c.id || c.status === st}
                           onClick={() => void patchStatus(c.id, st)}
                           className={`rounded-md px-2 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                             c.status === st

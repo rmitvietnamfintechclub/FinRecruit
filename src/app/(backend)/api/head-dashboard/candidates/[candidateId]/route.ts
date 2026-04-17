@@ -51,7 +51,30 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
       status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
     })
       .select(
-        'fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
+        [
+          'fullName',
+          'email',
+          'dob',
+          'phone',
+          'majorAndYear',
+          'facebookLink',
+          'cvLink',
+          'futurePlans',
+          'fintechAspect',
+          'achievementExpectation',
+          'timeCommitment',
+          'explanation',
+          'questionsForUs',
+          'choice1',
+          'choice2',
+          'department',
+          'status',
+          'customAnswers',
+          'generation',
+          'semester',
+          'appliedAt',
+          'updatedAt',
+        ].join(' ')
       )
       .lean()
       .exec();
@@ -75,6 +98,15 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
           _id: candidate._id as mongoose.Types.ObjectId,
           choice2: candidate.choice2 ?? null,
           cvLink: candidate.cvLink,
+          dob: candidate.dob,
+          majorAndYear: candidate.majorAndYear,
+          facebookLink: candidate.facebookLink,
+          futurePlans: candidate.futurePlans,
+          fintechAspect: candidate.fintechAspect,
+          achievementExpectation: candidate.achievementExpectation,
+          timeCommitment: candidate.timeCommitment,
+          explanation: candidate.explanation ?? '',
+          questionsForUs: candidate.questionsForUs ?? '',
         }),
         meta: {
           allowedStatusOptions: [...DASHBOARD_STATUS_OPTIONS],

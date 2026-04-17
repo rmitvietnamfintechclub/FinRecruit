@@ -38,6 +38,21 @@ export type DepartmentHeadCandidateListItem = {
 export type DepartmentHeadCandidateDetail = DepartmentHeadCandidateListItem & {
   cvLink: string;
   customAnswers: ICustomAnswer[];
+  /** Personal information (application form) */
+  personalInformation: {
+    dob: string;
+    majorAndYear: string;
+    facebookLink: string;
+    futurePlans: string;
+  };
+  /** General questions (application form) */
+  generalQuestions: {
+    fintechAspect: string;
+    achievementExpectation: string;
+    timeCommitment: string;
+    explanation: string;
+    questionsForUs: string;
+  };
 };
 
 export type CandidateStatusChangeDecision =
@@ -79,6 +94,15 @@ type CandidateSummaryLike = {
 type CandidateDetailLike = CandidateSummaryLike & {
   cvLink: string;
   customAnswers?: ICustomAnswer[] | null;
+  dob?: string;
+  majorAndYear?: string;
+  facebookLink?: string;
+  futurePlans?: string;
+  fintechAspect?: string;
+  achievementExpectation?: string;
+  timeCommitment?: string;
+  explanation?: string;
+  questionsForUs?: string;
 };
 
 type CandidateRoutingLike = {
@@ -265,6 +289,19 @@ export function serializeCandidateDetail(
     customAnswers: Array.isArray(candidate.customAnswers)
       ? candidate.customAnswers
       : [],
+    personalInformation: {
+      dob: candidate.dob ?? '',
+      majorAndYear: candidate.majorAndYear ?? '',
+      facebookLink: candidate.facebookLink ?? '',
+      futurePlans: candidate.futurePlans ?? '',
+    },
+    generalQuestions: {
+      fintechAspect: candidate.fintechAspect ?? '',
+      achievementExpectation: candidate.achievementExpectation ?? '',
+      timeCommitment: candidate.timeCommitment ?? '',
+      explanation: candidate.explanation ?? '',
+      questionsForUs: candidate.questionsForUs ?? '',
+    },
   };
 }
 
