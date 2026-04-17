@@ -1,10 +1,10 @@
 import type { DepartmentType } from '@/app/(backend)/types';
 
 export const HEAD_DEPARTMENTS = [
-  'Technology',
-  'Business',
-  'Human Resources',
-  'Marketing',
+  'Technology Department',
+  'Business Department',
+  'HR Department',
+  'Marketing Department',
 ] as const satisfies readonly DepartmentType[];
 
 export function isHeadDepartment(

@@ -37,7 +37,7 @@ function getDepartmentForRole(
   }
 
   if (role === 'Executive Board') {
-    return 'All';
+    return 'EBMB';
   }
 
   return 'Unassigned';

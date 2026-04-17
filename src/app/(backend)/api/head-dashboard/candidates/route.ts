@@ -23,10 +23,10 @@ type CandidateListAggregationResult = {
     fullName: string;
     email: string;
     phone: string;
-    department: 'Technology' | 'Business' | 'Human Resources' | 'Marketing';
-    choice1: 'Technology' | 'Business' | 'Human Resources' | 'Marketing';
-    choice2?: 'Technology' | 'Business' | 'Human Resources' | 'Marketing' | null;
-    status: 'Pending' | 'Pass' | 'Fail' | 'Incomplete';
+    department: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
+    choice1: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
+    choice2?: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department' | null;
+    status: 'Pending' | 'Pass' | 'Fail';
     generation: string;
     semester: string;
     appliedAt: Date;
@@ -84,7 +84,6 @@ export const GET = withRBAC(
                 { case: { $eq: ['$status', 'Pending'] }, then: 0 },
                 { case: { $eq: ['$status', 'Pass'] }, then: 1 },
                 { case: { $eq: ['$status', 'Fail'] }, then: 2 },
-                { case: { $eq: ['$status', 'Incomplete'] }, then: 3 },
               ],
               default: 99,
             },
