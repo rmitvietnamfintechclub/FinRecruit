@@ -13,7 +13,20 @@ const UserSchema = new Schema<IUser>(
     },
     department: {
       type: String,
-      enum: ['Technology', 'Business', 'Human Resources', 'Marketing', 'All', 'Unassigned'],
+      enum: [
+        'Technology Department',
+        'Business Department',
+        'HR Department',
+        'Marketing Department',
+        'EBMB',
+        'Unassigned',
+        // Legacy values (older documents / migration)
+        'Technology',
+        'Business',
+        'Human Resources',
+        'Marketing',
+        'All',
+      ],
       default: 'Unassigned',
     },
     isActive: { type: Boolean, default: true },

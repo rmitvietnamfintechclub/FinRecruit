@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
-import { isHeadDepartment } from '@/app/(backend)/libs/departments';
+import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import User from '@/app/(backend)/models/User';
 import type { DepartmentType, RoleType } from '@/app/(backend)/types';
@@ -26,14 +26,10 @@ function isRoleType(value: unknown): value is RoleType {
 
 function getDepartmentForRole(
   role: RoleType,
-  department?: DepartmentType
+  department?: DepartmentType | string
 ): DepartmentType | null {
   if (role === 'Department Head') {
-    if (isHeadDepartment(department)) {
-      return department;
-    }
-
-    return null;
+    return normalizeHeadDepartment(department);
   }
 
   if (role === 'Executive Board') {

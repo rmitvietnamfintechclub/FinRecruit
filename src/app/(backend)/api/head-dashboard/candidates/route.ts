@@ -9,7 +9,9 @@ import {
   sanitizeSearchQuery,
   serializeCandidateListItem,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
-import { isHeadDepartment } from '@/app/(backend)/libs/departments';
+import {
+  normalizeHeadDepartment,
+} from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
@@ -36,9 +38,9 @@ type CandidateListAggregationResult = {
 export const GET = withRBAC(
   'Department Head',
   async (req: NextRequest, { session }) => {
-    const assignedDepartment = session.user.department;
+    const assignedDepartment = normalizeHeadDepartment(session.user.department);
 
-    if (!isHeadDepartment(assignedDepartment)) {
+    if (!assignedDepartment) {
       return NextResponse.json(
         {
           success: false,

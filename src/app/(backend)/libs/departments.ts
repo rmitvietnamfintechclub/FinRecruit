@@ -7,10 +7,35 @@ export const HEAD_DEPARTMENTS = [
   'Marketing Department',
 ] as const satisfies readonly DepartmentType[];
 
-export function isHeadDepartment(
+export type HeadDepartment = (typeof HEAD_DEPARTMENTS)[number];
+
+/** Older User documents may still use short labels (e.g. Technology). */
+const LEGACY_HEAD_TO_CANONICAL: Record<string, HeadDepartment> = {
+  Technology: 'Technology Department',
+  Business: 'Business Department',
+  'Human Resources': 'HR Department',
+  Marketing: 'Marketing Department',
+};
+
+/**
+ * Returns the canonical head-department label, or null if not a head department.
+ */
+export function normalizeHeadDepartment(
   department: string | null | undefined
-): department is (typeof HEAD_DEPARTMENTS)[number] {
-  return HEAD_DEPARTMENTS.includes(
-    department as (typeof HEAD_DEPARTMENTS)[number]
-  );
+): HeadDepartment | null {
+  if (!department) {
+    return null;
+  }
+
+  const key = department.trim();
+
+  if ((HEAD_DEPARTMENTS as readonly string[]).includes(key)) {
+    return key as HeadDepartment;
+  }
+
+  return LEGACY_HEAD_TO_CANONICAL[key] ?? null;
+}
+
+export function isHeadDepartment(department: string | null | undefined): boolean {
+  return normalizeHeadDepartment(department) !== null;
 }

@@ -5,7 +5,7 @@ import {
   DASHBOARD_STATUS_OPTIONS,
   serializeCandidateDetail,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
-import { isHeadDepartment } from '@/app/(backend)/libs/departments';
+import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
@@ -18,9 +18,9 @@ type CandidateDetailRouteContext = {
 export const GET = withRBAC<CandidateDetailRouteContext>(
   'Department Head',
   async (_req: NextRequest, { session, params }) => {
-    const assignedDepartment = session.user.department;
+    const assignedDepartment = normalizeHeadDepartment(session.user.department);
 
-    if (!isHeadDepartment(assignedDepartment)) {
+    if (!assignedDepartment) {
       return NextResponse.json(
         {
           success: false,
