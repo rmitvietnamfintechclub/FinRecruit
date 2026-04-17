@@ -3,11 +3,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import {
   DASHBOARD_STATUS_OPTIONS,
-  isHeadDepartment,
   parseDashboardStatus,
   resolveCandidateStatusChange,
   serializeCandidateListItem,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
+import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
@@ -84,7 +84,7 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
       status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
     })
       .select(
-        'studentId fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
+        'fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
       )
       .lean()
       .exec();
@@ -122,13 +122,8 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
           },
           candidate: serializeCandidateListItem({
             ...candidate,
+            _id: candidate._id as mongoose.Types.ObjectId,
             choice2: candidate.choice2 ?? null,
-            customAnswers:
-              candidate.customAnswers &&
-              typeof candidate.customAnswers === 'object' &&
-              !Array.isArray(candidate.customAnswers)
-                ? (candidate.customAnswers as Record<string, unknown>)
-                : {},
           }),
         },
         { status: 409 }
@@ -160,7 +155,7 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
       }
     )
       .select(
-        'studentId fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
+        'fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
       )
       .lean()
       .exec();
@@ -183,13 +178,8 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
         message: decision.message,
         candidate: serializeCandidateListItem({
           ...updatedCandidate,
+          _id: updatedCandidate._id as mongoose.Types.ObjectId,
           choice2: updatedCandidate.choice2 ?? null,
-          customAnswers:
-            updatedCandidate.customAnswers &&
-            typeof updatedCandidate.customAnswers === 'object' &&
-            !Array.isArray(updatedCandidate.customAnswers)
-              ? (updatedCandidate.customAnswers as Record<string, unknown>)
-              : {},
         }),
       },
       { status: 200 }

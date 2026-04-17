@@ -1,6 +1,10 @@
 import { Types } from 'mongoose';
 import { isHeadDepartment } from '@/app/(backend)/libs/departments';
-import type { DepartmentType, StatusType } from '@/app/(backend)/types';
+import type {
+  DepartmentType,
+  ICustomAnswer,
+  StatusType,
+} from '@/app/(backend)/types';
 
 export const DASHBOARD_STATUS_OPTIONS = ['Pending', 'Pass', 'Fail'] as const;
 
@@ -17,7 +21,6 @@ export type CandidateRoutingInfo = {
 
 export type DepartmentHeadCandidateListItem = {
   id: string;
-  studentId: string;
   fullName: string;
   email: string;
   phone: string;
@@ -34,7 +37,7 @@ export type DepartmentHeadCandidateListItem = {
 
 export type DepartmentHeadCandidateDetail = DepartmentHeadCandidateListItem & {
   cvLink: string;
-  customAnswers: Record<string, unknown>;
+  customAnswers: ICustomAnswer[];
 };
 
 export type CandidateStatusChangeDecision =
@@ -60,7 +63,6 @@ export type CandidateStatusChangeDecision =
 
 type CandidateSummaryLike = {
   _id: Types.ObjectId;
-  studentId: string;
   fullName: string;
   email: string;
   phone: string;
@@ -68,7 +70,6 @@ type CandidateSummaryLike = {
   choice2?: DepartmentType | null;
   department: DepartmentType;
   status: StatusType;
-  customAnswers?: Record<string, unknown> | null;
   generation: string;
   semester: string;
   appliedAt: Date;
@@ -77,6 +78,7 @@ type CandidateSummaryLike = {
 
 type CandidateDetailLike = CandidateSummaryLike & {
   cvLink: string;
+  customAnswers?: ICustomAnswer[] | null;
 };
 
 type CandidateRoutingLike = {
@@ -239,7 +241,6 @@ export function serializeCandidateListItem(
 ): DepartmentHeadCandidateListItem {
   return {
     id: candidate._id.toString(),
-    studentId: candidate.studentId,
     fullName: candidate.fullName,
     email: candidate.email,
     phone: candidate.phone,
@@ -261,7 +262,9 @@ export function serializeCandidateDetail(
   return {
     ...serializeCandidateListItem(candidate),
     cvLink: candidate.cvLink,
-    customAnswers: candidate.customAnswers ?? {},
+    customAnswers: Array.isArray(candidate.customAnswers)
+      ? candidate.customAnswers
+      : [],
   };
 }
 

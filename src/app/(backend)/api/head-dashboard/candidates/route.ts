@@ -4,12 +4,12 @@ import dbConnect from '@/app/(backend)/libs/dbConnect';
 import {
   buildDepartmentHeadCandidateMatch,
   DASHBOARD_STATUS_OPTIONS,
-  isHeadDepartment,
   parseDashboardStatus,
   parsePaginationParams,
   sanitizeSearchQuery,
   serializeCandidateListItem,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
+import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
@@ -19,7 +19,6 @@ type CandidateListAggregationResult = {
   metadata: Array<{ total: number }>;
   items: Array<{
     _id: Types.ObjectId;
-    studentId: string;
     fullName: string;
     email: string;
     phone: string;

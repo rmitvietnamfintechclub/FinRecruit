@@ -3,9 +3,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import {
   DASHBOARD_STATUS_OPTIONS,
-  isHeadDepartment,
   serializeCandidateDetail,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
+import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
@@ -51,7 +51,7 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
       status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
     })
       .select(
-        'studentId fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
+        'fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
       )
       .lean()
       .exec();
@@ -72,13 +72,9 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
         message: 'Candidate details fetched successfully.',
         candidate: serializeCandidateDetail({
           ...candidate,
+          _id: candidate._id as mongoose.Types.ObjectId,
           choice2: candidate.choice2 ?? null,
-          customAnswers:
-            candidate.customAnswers &&
-            typeof candidate.customAnswers === 'object' &&
-            !Array.isArray(candidate.customAnswers)
-              ? (candidate.customAnswers as Record<string, unknown>)
-              : {},
+          cvLink: candidate.cvLink,
         }),
         meta: {
           allowedStatusOptions: [...DASHBOARD_STATUS_OPTIONS],

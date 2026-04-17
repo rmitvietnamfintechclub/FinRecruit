@@ -37,7 +37,6 @@ Canonical department values in the backend:
   "candidates": [
     {
       "id": "candidate_id",
-      "studentId": "s3987654",
       "fullName": "Alex Tran",
       "email": "alex@example.com",
       "phone": "0400000000",
@@ -90,7 +89,6 @@ Canonical department values in the backend:
   "message": "Candidate details fetched successfully.",
   "candidate": {
     "id": "candidate_id",
-    "studentId": "s3987654",
     "fullName": "Alex Tran",
     "email": "alex@example.com",
     "phone": "0400000000",
@@ -103,9 +101,9 @@ Canonical department values in the backend:
     "semester": "A",
     "appliedAt": "2026-04-15T10:00:00.000Z",
     "updatedAt": "2026-04-15T10:00:00.000Z",
-    "customAnswers": {
-      "Why do you want to join?": "..."
-    },
+    "customAnswers": [
+      { "question": "Why do you want to join?", "answer": "..." }
+    ],
     "routing": {
       "currentStage": "choice1",
       "isChoice2Valid": true,
