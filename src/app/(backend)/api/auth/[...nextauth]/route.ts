@@ -10,11 +10,11 @@ import {
 export const runtime = 'nodejs';
 
 type AuthRouteContext = {
-  params: Promise<{ nextauth: string[] }> | { nextauth: string[] };
+  params: Promise<{ nextauth: string[] }>;
 };
 
 async function authHandler(req: NextRequest, context: AuthRouteContext) {
-  const { nextauth } = await Promise.resolve(context.params);
+  const { nextauth } = await context.params;
   const action = nextauth?.[0];
   const isSignOutRequest = action === 'signout' && req.method === 'POST';
   const currentSessionId = req.cookies.get(APP_SESSION_COOKIE_NAME)?.value;

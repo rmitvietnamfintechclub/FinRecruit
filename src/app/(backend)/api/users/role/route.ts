@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
+import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import User from '@/app/(backend)/models/User';
 import type { DepartmentType, RoleType } from '@/app/(backend)/types';
@@ -11,13 +12,6 @@ const ROLE_VALUES: RoleType[] = [
   'Guest',
   'Department Head',
   'Executive Board',
-];
-
-const HEAD_DEPARTMENTS: DepartmentType[] = [
-  'Technology',
-  'Business',
-  'Human Resources',
-  'Marketing',
 ];
 
 type RoleUpdatePayload = {
@@ -35,7 +29,7 @@ function getDepartmentForRole(
   department?: DepartmentType
 ): DepartmentType | null {
   if (role === 'Department Head') {
-    if (department && HEAD_DEPARTMENTS.includes(department)) {
+    if (isHeadDepartment(department)) {
       return department;
     }
 
@@ -43,7 +37,7 @@ function getDepartmentForRole(
   }
 
   if (role === 'Executive Board') {
-    return 'All';
+    return 'EBMB';
   }
 
   return 'Unassigned';

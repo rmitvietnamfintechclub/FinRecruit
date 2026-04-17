@@ -62,20 +62,37 @@ export function authorizationErrorToResponse(error: AuthorizationError) {
 
 type ProtectedRouteContext = Record<string, unknown>;
 
-type ProtectedRouteHandler<TContext extends ProtectedRouteContext> = (
+type ProtectedRouteHandlerWithoutContext = (
+  req: NextRequest,
+  context: { session: ActiveAppSession }
+) => Promise<Response>;
+
+type ProtectedRouteHandlerWithContext<TContext extends ProtectedRouteContext> = (
   req: NextRequest,
   context: TContext & { session: ActiveAppSession }
 ) => Promise<Response>;
 
-export function withRBAC<TContext extends ProtectedRouteContext = ProtectedRouteContext>(
+export function withRBAC(
   requiredRoles: RoleType | RoleType[],
-  handler: ProtectedRouteHandler<TContext>
+  handler: ProtectedRouteHandlerWithoutContext
+): (req: NextRequest) => Promise<Response>;
+export function withRBAC<TContext extends ProtectedRouteContext>(
+  requiredRoles: RoleType | RoleType[],
+  handler: ProtectedRouteHandlerWithContext<TContext>
+): (req: NextRequest, context: TContext) => Promise<Response>;
+export function withRBAC<TContext extends ProtectedRouteContext>(
+  requiredRoles: RoleType | RoleType[],
+  handler:
+    | ProtectedRouteHandlerWithoutContext
+    | ProtectedRouteHandlerWithContext<TContext>
 ) {
   return async (req: NextRequest, context?: TContext) => {
     try {
       const session = await checkRole(requiredRoles, req);
 
-      return await handler(
+      return await (
+        handler as ProtectedRouteHandlerWithContext<TContext>
+      )(
         req,
         Object.assign({}, context, { session }) as TContext & {
           session: ActiveAppSession;
