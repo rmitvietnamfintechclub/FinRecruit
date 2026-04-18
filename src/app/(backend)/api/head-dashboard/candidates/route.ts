@@ -24,6 +24,7 @@ type CandidateListAggregationResult = {
     fullName: string;
     email: string;
     phone: string;
+    dob: string;
     department: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
     choice1: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
     choice2?: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department' | null;
@@ -31,6 +32,7 @@ type CandidateListAggregationResult = {
     generation: string;
     semester: string;
     appliedAt: Date;
+    createdAt: Date;
     updatedAt: Date;
   }>;
 };
@@ -104,7 +106,6 @@ export const GET = withRBAC(
                 customAnswers: 0,
                 cvLink: 0,
                 __v: 0,
-                createdAt: 0,
               },
             },
           ],

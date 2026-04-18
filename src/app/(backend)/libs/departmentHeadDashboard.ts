@@ -1,5 +1,9 @@
 import { Types } from 'mongoose';
-import { isHeadDepartment } from '@/app/(backend)/libs/departments';
+import {
+  departmentHeadCandidateVisibilityFilter,
+  isHeadDepartment,
+  type HeadDepartment,
+} from '@/app/(backend)/libs/departments';
 import type {
   DepartmentType,
   ICustomAnswer,
@@ -24,6 +28,8 @@ export type DepartmentHeadCandidateListItem = {
   fullName: string;
   email: string;
   phone: string;
+  /** Application form date of birth (string as stored). */
+  dob: string;
   department: DepartmentType;
   choice1: DepartmentType;
   choice2: DepartmentType | null;
@@ -31,6 +37,8 @@ export type DepartmentHeadCandidateListItem = {
   generation: string;
   semester: string;
   appliedAt: Date;
+  /** Mongoose `timestamps` — record creation (use for “applied on” in UI). */
+  createdAt: Date;
   updatedAt: Date;
   routing: CandidateRoutingInfo;
 };
@@ -81,6 +89,7 @@ type CandidateSummaryLike = {
   fullName: string;
   email: string;
   phone: string;
+  dob: string;
   choice1: DepartmentType;
   choice2?: DepartmentType | null;
   department: DepartmentType;
@@ -88,6 +97,7 @@ type CandidateSummaryLike = {
   generation: string;
   semester: string;
   appliedAt: Date;
+  createdAt: Date;
   updatedAt: Date;
 };
 
@@ -163,7 +173,7 @@ export function buildDepartmentHeadCandidateMatch({
   status,
 }: DashboardQueryOptions) {
   const match: Record<string, unknown> = {
-    department,
+    ...departmentHeadCandidateVisibilityFilter(department as HeadDepartment),
     status: status ? status : { $in: [...DASHBOARD_STATUS_OPTIONS] },
   };
 
@@ -268,6 +278,7 @@ export function serializeCandidateListItem(
     fullName: candidate.fullName,
     email: candidate.email,
     phone: candidate.phone,
+    dob: candidate.dob ?? '',
     department: candidate.department,
     choice1: candidate.choice1,
     choice2: candidate.choice2 ?? null,
@@ -275,6 +286,7 @@ export function serializeCandidateListItem(
     generation: candidate.generation,
     semester: candidate.semester,
     appliedAt: candidate.appliedAt,
+    createdAt: candidate.createdAt,
     updatedAt: candidate.updatedAt,
     routing: getCandidateRoutingInfo(candidate),
   };

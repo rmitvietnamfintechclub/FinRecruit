@@ -5,7 +5,10 @@ import {
   DASHBOARD_STATUS_OPTIONS,
   serializeCandidateDetail,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
-import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
+import {
+  departmentHeadCandidateVisibilityFilter,
+  normalizeHeadDepartment,
+} from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
@@ -47,7 +50,7 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
 
     const candidate = await Candidate.findOne({
       _id: candidateId,
-      department: assignedDepartment,
+      ...departmentHeadCandidateVisibilityFilter(assignedDepartment),
       status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
     })
       .select(

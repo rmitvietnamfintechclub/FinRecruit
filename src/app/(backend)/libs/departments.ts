@@ -39,3 +39,18 @@ export function normalizeHeadDepartment(
 export function isHeadDepartment(department: string | null | undefined): boolean {
   return normalizeHeadDepartment(department) !== null;
 }
+
+/**
+ * MongoDB fragment: candidates a Department Head may access — either routed to
+ * their department, or still Unassigned with first application choice = that dept.
+ */
+export function departmentHeadCandidateVisibilityFilter(
+  assignedDepartment: HeadDepartment
+): { $or: Record<string, unknown>[] } {
+  return {
+    $or: [
+      { department: assignedDepartment },
+      { department: 'Unassigned', choice1: assignedDepartment },
+    ],
+  };
+}

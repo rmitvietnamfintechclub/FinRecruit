@@ -7,7 +7,10 @@ import {
   resolveCandidateStatusChange,
   serializeCandidateListItem,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
-import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
+import {
+  departmentHeadCandidateVisibilityFilter,
+  normalizeHeadDepartment,
+} from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
@@ -80,11 +83,11 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
 
     const candidate = await Candidate.findOne({
       _id: candidateId,
-      department: assignedDepartment,
+      ...departmentHeadCandidateVisibilityFilter(assignedDepartment),
       status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
     })
       .select(
-        'fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
+        'fullName email phone dob cvLink choice1 choice2 department status customAnswers generation semester appliedAt createdAt updatedAt'
       )
       .lean()
       .exec();
@@ -143,7 +146,7 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
     const updatedCandidate = await Candidate.findOneAndUpdate(
       {
         _id: candidateId,
-        department: assignedDepartment,
+        ...departmentHeadCandidateVisibilityFilter(assignedDepartment),
         status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
       },
       {
@@ -155,7 +158,7 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
       }
     )
       .select(
-        'fullName email phone cvLink choice1 choice2 department status customAnswers generation semester appliedAt updatedAt'
+        'fullName email phone dob cvLink choice1 choice2 department status customAnswers generation semester appliedAt createdAt updatedAt'
       )
       .lean()
       .exec();
