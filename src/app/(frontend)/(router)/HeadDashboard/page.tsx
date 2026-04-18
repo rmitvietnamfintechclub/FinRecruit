@@ -256,9 +256,10 @@ export default function HeadDashboardPage() {
 
       {/* Data Grid Container */}
       <div className="mt-4">
-        {/* --- NEW: Pass the full 'candidates' array down to keep the modal synced! --- */}
+        {/* --- Pass the full 'candidates' array down to keep the modal synced! --- */}
         <CandidateTable 
           candidates={displayedCandidates} 
+          allCandidates={candidates}
           onUpdateStatus={handleUpdateStatusRequest} 
         />
         
@@ -274,12 +275,11 @@ export default function HeadDashboardPage() {
 
         {visibleCount < filteredCandidates.length && (
           <div className="mt-8 flex justify-center">
-            <button
-              onClick={() => setVisibleCount((prev) => prev + 3)}
-              className="inline-flex items-center gap-2 rounded-xl bg-card border border-border px-8 py-3 text-sm font-bold text-blue-600 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:bg-blue-50 dark:hover:bg-blue-900/20"
+            <button 
+              onClick={() => setVisibleCount(filteredCandidates.length)} 
+              className="inline-flex items-center gap-2 rounded-xl bg-card border border-border px-8 py-3 text-sm font-bold text-blue-600 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md hover:bg-blue-50"
             >
-              <i className="fa-solid fa-angle-down"></i>
-              Load More Candidates
+              <i className="fa-solid fa-angle-down"></i> Load All Candidates
             </button>
           </div>
         )}
@@ -287,7 +287,7 @@ export default function HeadDashboardPage() {
 
       {/* Confirmation Modal Overlay */}
       {confirmAction && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm transition-opacity duration-300">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm transition-opacity duration-300">
           <div className="w-full max-w-md rounded-[20px] bg-card border border-border p-8 shadow-2xl transition-transform duration-300 scale-100 font-sans">
             <h3 className="text-2xl font-bold tracking-tight text-foreground mb-4">
               Confirm Status Change

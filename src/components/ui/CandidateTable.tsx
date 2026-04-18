@@ -6,6 +6,7 @@ import CandidateModal from './CandidateModal';
 
 interface CandidateTableProps {
   candidates: ICandidateFrontend[]; // The filtered list for the grid
+  allCandidates: ICandidateFrontend[];
   onUpdateStatus: (id: string, newStatus: 'Pass' | 'Fail' | 'Pending') => void;
 }
 
