@@ -2,9 +2,9 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { buildAuthOptions } from '@/app/(backend)/libs/auth';
 import { getHomePathForRole } from '@/lib/role-routes';
-import { HeadDashboardShell } from '@/app/(frontend)/(router)/HeadDashboard/HeadDashboardShell';
+import { ExecutiveDashboardShell } from '@/app/(frontend)/(router)/MasterViewDashboard/ExecutiveDashboardShell';
 
-export default async function HeadDashboardLayout({
+export default async function MasterViewDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -15,35 +15,22 @@ export default async function HeadDashboardLayout({
     redirect('/loginPage');
   }
 
-  if (session.user.role === 'Guest') {
-    redirect('/waiting-room');
-  }
-
-  if (session.user.role === 'Executive Board') {
-    redirect('/MasterViewDashboard');
-  }
-
-  if (session.user.role !== 'Department Head') {
+  if (session.user.role !== 'Executive Board') {
     redirect(getHomePathForRole(session.user.role ?? null));
   }
 
-  const dept = session.user.department?.trim() || '—';
   const userName =
     session.user.name?.trim() ||
     session.user.email?.split('@')[0] ||
     '—';
-  const initial =
+  const userInitial =
     (session.user.name && session.user.name.trim()[0]?.toUpperCase()) ||
     session.user.email?.[0]?.toUpperCase() ||
     '?';
 
   return (
-    <HeadDashboardShell
-      departmentLabel={dept}
-      userName={userName}
-      userInitial={initial}
-    >
+    <ExecutiveDashboardShell userName={userName} userInitial={userInitial}>
       {children}
-    </HeadDashboardShell>
+    </ExecutiveDashboardShell>
   );
 }

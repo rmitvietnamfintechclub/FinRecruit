@@ -8,9 +8,17 @@ import CandidateModal from './CandidateModal';
 interface CandidateTableProps {
   candidates: HeadDashboardListCandidate[];
   onUpdateStatus: (id: string, newStatus: 'Pass' | 'Fail' | 'Pending') => void;
+  /** Executive MasterView: no PATCH status API yet — hide quick actions + pass readOnly to modal */
+  readOnly?: boolean;
+  detailApi?: 'head' | 'executive';
 }
 
-export default function CandidateTable({ candidates, onUpdateStatus }: CandidateTableProps) {
+export default function CandidateTable({
+  candidates,
+  onUpdateStatus,
+  readOnly = false,
+  detailApi = 'head',
+}: CandidateTableProps) {
   const [selectedCandidate, setSelectedCandidate] =
     useState<HeadDashboardListCandidate | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -90,9 +98,9 @@ export default function CandidateTable({ candidates, onUpdateStatus }: Candidate
                   <i className="fa-solid fa-graduation-cap"></i>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/70 mb-0.5">Academic Info</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/70 mb-0.5">Current Department</p>
                   <p className="truncate text-sm font-bold text-foreground">
-                    {candidate.choice1}{' '}
+                    {candidate.department}{' '}
                     <span className="font-medium text-muted-foreground">
                       • {candidate.generation}
                     </span>
@@ -129,26 +137,31 @@ export default function CandidateTable({ candidates, onUpdateStatus }: Candidate
 
             {/* Card Footer */}
             <div className="flex items-center justify-between border-t border-border pt-5 mt-auto">
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => onUpdateStatus(candidate.id, 'Pass')}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-600 transition-colors hover:bg-green-500 hover:text-white tooltip-trigger shadow-sm dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-600 dark:hover:text-white"
-                  title="Quick Pass"
-                >
-                  <i className="fa-solid fa-check"></i>
-                </button>
-                <button 
-                  onClick={() => onUpdateStatus(candidate.id, 'Fail')}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-500 hover:text-white tooltip-trigger shadow-sm dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white"
-                  title="Quick Fail"
-                >
-                  <i className="fa-solid fa-xmark"></i>
-                </button>
-              </div>
-              
-              <button 
+              {!readOnly && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateStatus(candidate.id, 'Pass')}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-600 transition-colors hover:bg-green-500 hover:text-white tooltip-trigger shadow-sm dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-600 dark:hover:text-white"
+                    title="Quick Pass"
+                  >
+                    <i className="fa-solid fa-check"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateStatus(candidate.id, 'Fail')}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-500 hover:text-white tooltip-trigger shadow-sm dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white"
+                    title="Quick Fail"
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
                 onClick={() => handleViewDetails(candidate)}
-                className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-50 px-5 text-sm font-bold text-blue-600 transition-colors hover:bg-blue-600 hover:text-white shadow-sm dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white"
+                className={`inline-flex h-10 items-center justify-center rounded-xl bg-blue-50 px-5 text-sm font-bold text-blue-600 transition-colors hover:bg-blue-600 hover:text-white shadow-sm dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white ${readOnly ? 'ml-auto' : ''}`}
               >
                 Review Profile
               </button>
@@ -157,11 +170,13 @@ export default function CandidateTable({ candidates, onUpdateStatus }: Candidate
         ))}
       </div>
 
-      <CandidateModal 
+      <CandidateModal
         candidate={displayedSelectedCandidate}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdateStatus={onUpdateStatus}
+        detailApi={detailApi}
+        readOnly={readOnly}
       />
     </>
   );

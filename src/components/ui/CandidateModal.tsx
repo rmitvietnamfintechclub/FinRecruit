@@ -5,11 +5,18 @@ import type {
   HeadDashboardCandidateDetailApi,
   HeadDashboardListCandidate,
 } from '@/types/headDashboard';
+import { mapExecutiveDetailToHeadDetail } from '@/lib/executiveMasterViewMapping';
 
-type DetailResponse = {
+type HeadDetailResponse = {
   success: boolean;
   message?: string;
   candidate?: HeadDashboardCandidateDetailApi;
+};
+
+type ExecutiveDetailResponse = {
+  success: boolean;
+  message?: string;
+  data?: Record<string, unknown>;
 };
 
 interface CandidateModalProps {
@@ -17,6 +24,10 @@ interface CandidateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateStatus: (id: string, newStatus: 'Pass' | 'Fail' | 'Pending') => void;
+  /** Default: head-dashboard detail API */
+  detailApi?: 'head' | 'executive';
+  /** Hide status actions (Executive has no PATCH status API yet) */
+  readOnly?: boolean;
 }
 
 function buildPlansText(d: HeadDashboardCandidateDetailApi): string {
@@ -38,32 +49,51 @@ export const CandidateModal: FC<CandidateModalProps> = ({
   isOpen,
   onClose,
   onUpdateStatus,
+  detailApi = 'head',
+  readOnly = false,
 }) => {
   const [detail, setDetail] = useState<HeadDashboardCandidateDetailApi | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const fetchDetail = useCallback(async (id: string) => {
-    setLoadingDetail(true);
-    setDetailError(null);
-    try {
-      const res = await fetch(`/api/head-dashboard/candidates/${id}`, {
-        credentials: 'include',
-      });
-      const json = (await res.json()) as DetailResponse;
-      if (!res.ok || !json.success) {
-        setDetailError(json.message ?? `Error ${res.status}`);
+  const fetchDetail = useCallback(
+    async (id: string) => {
+      setLoadingDetail(true);
+      setDetailError(null);
+      try {
+        if (detailApi === 'executive') {
+          const res = await fetch(`/api/executive/candidates/${id}`, {
+            credentials: 'include',
+          });
+          const json = (await res.json()) as ExecutiveDetailResponse;
+          if (!res.ok || !json.success || !json.data) {
+            setDetailError(json.message ?? `Error ${res.status}`);
+            setDetail(null);
+            return;
+          }
+          setDetail(mapExecutiveDetailToHeadDetail(json.data));
+          return;
+        }
+
+        const res = await fetch(`/api/head-dashboard/candidates/${id}`, {
+          credentials: 'include',
+        });
+        const json = (await res.json()) as HeadDetailResponse;
+        if (!res.ok || !json.success) {
+          setDetailError(json.message ?? `Error ${res.status}`);
+          setDetail(null);
+          return;
+        }
+        setDetail(json.candidate ?? null);
+      } catch (e) {
+        setDetailError(e instanceof Error ? e.message : 'Failed to load profile.');
         setDetail(null);
-        return;
+      } finally {
+        setLoadingDetail(false);
       }
-      setDetail(json.candidate ?? null);
-    } catch (e) {
-      setDetailError(e instanceof Error ? e.message : 'Failed to load profile.');
-      setDetail(null);
-    } finally {
-      setLoadingDetail(false);
-    }
-  }, []);
+    },
+    [detailApi]
+  );
 
   useEffect(() => {
     if (isOpen && candidate?.id) {
@@ -358,29 +388,31 @@ export const CandidateModal: FC<CandidateModalProps> = ({
           </div>
         </div>
 
-        <div className="z-10 flex shrink-0 items-center justify-center gap-6 border-t border-border bg-card p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-          <button
-            type="button"
-            onClick={() => onUpdateStatus(candidate.id, 'Fail')}
-            className="w-40 rounded-xl border-2 border-red-200 bg-red-50 px-6 py-3 text-sm font-black text-red-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md"
-          >
-            Fail
-          </button>
-          <button
-            type="button"
-            onClick={() => onUpdateStatus(candidate.id, 'Pending')}
-            className="w-40 rounded-xl border-2 border-yellow-200 bg-yellow-50 px-6 py-3 text-sm font-black text-yellow-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-yellow-500 hover:bg-yellow-500 hover:text-white hover:shadow-md"
-          >
-            Pending
-          </button>
-          <button
-            type="button"
-            onClick={() => onUpdateStatus(candidate.id, 'Pass')}
-            className="w-40 rounded-xl border-2 border-green-200 bg-green-50 px-6 py-3 text-sm font-black text-green-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-green-500 hover:bg-green-500 hover:text-white hover:shadow-md"
-          >
-            Pass
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="z-10 flex shrink-0 items-center justify-center gap-6 border-t border-border bg-card p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+            <button
+              type="button"
+              onClick={() => onUpdateStatus(candidate.id, 'Fail')}
+              className="w-40 rounded-xl border-2 border-red-200 bg-red-50 px-6 py-3 text-sm font-black text-red-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md"
+            >
+              Fail
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdateStatus(candidate.id, 'Pending')}
+              className="w-40 rounded-xl border-2 border-yellow-200 bg-yellow-50 px-6 py-3 text-sm font-black text-yellow-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-yellow-500 hover:bg-yellow-500 hover:text-white hover:shadow-md"
+            >
+              Pending
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdateStatus(candidate.id, 'Pass')}
+              className="w-40 rounded-xl border-2 border-green-200 bg-green-50 px-6 py-3 text-sm font-black text-green-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-green-500 hover:bg-green-500 hover:text-white hover:shadow-md"
+            >
+              Pass
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -51,6 +51,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (pathname.startsWith('/masterview')) {
+    const url = request.nextUrl.clone();
+    url.pathname =
+      pathname === '/masterview'
+        ? '/MasterViewDashboard'
+        : `/MasterViewDashboard${pathname.slice('/masterview'.length)}`;
+    return NextResponse.redirect(url);
+  }
+
   if (pathname.startsWith('/HeadDashboard')) {
     if (!isLoggedIn) {
       return NextResponse.redirect(new URL('/loginPage', request.url));
@@ -59,12 +68,12 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/waiting-room', request.url));
     }
     if (role === 'Executive Board') {
-      return NextResponse.redirect(new URL('/masterview', request.url));
+      return NextResponse.redirect(new URL('/MasterViewDashboard', request.url));
     }
     return NextResponse.next();
   }
 
-  if (pathname.startsWith('/masterview')) {
+  if (pathname.startsWith('/MasterViewDashboard')) {
     if (!isLoggedIn) {
       return NextResponse.redirect(new URL('/loginPage', request.url));
     }
@@ -73,6 +82,9 @@ export async function middleware(request: NextRequest) {
     }
     if (role === 'Department Head') {
       return NextResponse.redirect(new URL('/HeadDashboard', request.url));
+    }
+    if (role !== 'Executive Board') {
+      return NextResponse.redirect(new URL(getHomePathForRole(role), request.url));
     }
     return NextResponse.next();
   }

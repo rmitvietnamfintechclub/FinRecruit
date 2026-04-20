@@ -33,8 +33,9 @@ export type HeadDashboardListCandidate = {
  */
 export type HeadDashboardCandidateDetailApi = Omit<
   DepartmentHeadCandidateDetail,
-  'appliedAt' | 'updatedAt'
+  'appliedAt' | 'updatedAt' | 'createdAt'
 > & {
   appliedAt: string;
   updatedAt: string;
+  createdAt: string;
 };

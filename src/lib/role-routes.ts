@@ -11,7 +11,7 @@ export function getHomePathForRole(
     return '/HeadDashboard';
   }
   if (role === 'Executive Board') {
-    return '/masterview';
+    return '/MasterViewDashboard';
   }
   return '/loginPage';
 }
