@@ -67,16 +67,61 @@ export default function MasterDashboardPage() {
   const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const [visibleCount, setVisibleCount] = useState(3);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const t = event.target as Node;
+      if (dropdownRef.current && !dropdownRef.current.contains(t)) {
         setIsDeptDropdownOpen(false);
+      }
+      if (exportRef.current && !exportRef.current.contains(t)) {
+        setIsExportOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const downloadExcelExport = useCallback(async (status: 'Pass' | 'Fail') => {
+    setExportError(null);
+    setExporting(true);
+    setIsExportOpen(false);
+    try {
+      const res = await fetch(`/api/executive/export?status=${status}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const errJson = (await res.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        setExportError(errJson?.message ?? `Export failed (${res.status})`);
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition');
+      let filename = `${status}_List_Export.xlsx`;
+      const m = cd?.match(/filename="([^"]+)"/);
+      if (m?.[1]) filename = m[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Export failed.');
+    } finally {
+      setExporting(false);
+    }
   }, []);
 
   const loadStatistics = useCallback(async () => {
@@ -196,10 +241,11 @@ export default function MasterDashboardPage() {
 
   return (
     <div className="relative space-y-8">
-      {(statsError || listError) && (
+      {(statsError || listError || exportError) && (
         <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {statsError && <p>{statsError}</p>}
           {listError && <p>{listError}</p>}
+          {exportError && <p>{exportError}</p>}
         </div>
       )}
 
@@ -281,6 +327,43 @@ export default function MasterDashboardPage() {
         </div>
 
         <div className="flex w-full flex-col items-center gap-4 lg:w-auto sm:flex-row">
+          <div className="relative w-full shrink-0 sm:w-52" ref={exportRef}>
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={() => setIsExportOpen(!isExportOpen)}
+              className="border-input bg-background flex w-full items-center justify-between rounded-xl border py-3 px-4 text-sm font-bold text-foreground shadow-sm transition-all duration-200 hover:bg-muted hover:border-emerald-400 focus:ring-2 focus:ring-emerald-600/50 focus:outline-none disabled:opacity-60"
+            >
+              <span className="flex min-w-0 items-center gap-2 truncate">
+                <i className="fa-solid fa-file-excel shrink-0 text-emerald-600 dark:text-emerald-400" />
+                {exporting ? 'Đang xuất…' : 'Xuất Excel'}
+              </span>
+              <i
+                className={`fa-solid fa-chevron-down text-muted-foreground transition-transform duration-300 ${isExportOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {isExportOpen && !exporting && (
+              <div className="border-border bg-card animate-in fade-in slide-in-from-top-2 absolute top-full right-0 z-30 mt-2 w-full min-w-[200px] rounded-xl border p-1.5 shadow-xl duration-200 sm:w-52">
+                <button
+                  type="button"
+                  onClick={() => void downloadExcelExport('Pass')}
+                  className="flex w-full items-center gap-2 rounded-lg px-4 py-2.5 text-left text-sm font-bold text-green-700 transition-colors hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/40"
+                >
+                  <i className="fa-solid fa-check w-5 shrink-0" />
+                  Pass — thí sinh đạt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void downloadExcelExport('Fail')}
+                  className="flex w-full items-center gap-2 rounded-lg px-4 py-2.5 text-left text-sm font-bold text-red-700 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                >
+                  <i className="fa-solid fa-xmark w-5 shrink-0" />
+                  Fail — thí sinh trượt
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="relative w-full shrink-0 sm:w-56" ref={dropdownRef}>
             <button
               type="button"
