@@ -3,28 +3,25 @@
 import React from 'react';
 import { DashboardAppShell } from '@/components/dashboard/DashboardAppShell';
 
-type HeadDashboardShellProps = {
+type ExecutiveDashboardShellProps = {
   children: React.ReactNode;
-  departmentLabel: string;
-  /** Full name from session, or email local-part if name missing */
   userName: string;
   userInitial: string;
 };
 
-export function HeadDashboardShell({
+export function ExecutiveDashboardShell({
   children,
-  departmentLabel,
   userName,
   userInitial,
-}: HeadDashboardShellProps) {
+}: ExecutiveDashboardShellProps) {
   return (
     <DashboardAppShell
-      title="Department Head Dashboard"
-      badgeLabel={departmentLabel}
-      badgeVariant="yellow"
+      title="MasterView Dashboard"
+      badgeLabel="Executive Board"
+      badgeVariant="purple"
       userName={userName}
       userInitial={userInitial}
-      userSubtitle="Department Head"
+      userSubtitle="Executive Board"
     >
       {children}
     </DashboardAppShell>

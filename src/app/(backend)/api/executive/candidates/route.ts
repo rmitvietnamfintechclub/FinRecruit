@@ -29,6 +29,7 @@ interface CandidateListItem {
   fullName: string;
   email: string;
   phone: string;
+  dob: string;
   department: DepartmentType;
   status: StatusType;
   choice1: string;
@@ -36,6 +37,7 @@ interface CandidateListItem {
   generation: string;
   semester: string;
   appliedAt: Date;
+  createdAt: Date;
   updatedAt: Date;
 }
 
@@ -97,7 +99,7 @@ export const GET = withRBAC(
       // Query database
       const candidates = await Candidate.find(mongoFilter)
         .select(
-          'fullName email phone department status choice1 choice2 generation semester appliedAt updatedAt'
+          'fullName email phone dob department status choice1 choice2 generation semester appliedAt createdAt updatedAt'
         )
         .lean()
         .exec();

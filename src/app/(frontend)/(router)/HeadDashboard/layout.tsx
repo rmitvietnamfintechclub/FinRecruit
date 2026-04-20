@@ -20,7 +20,7 @@ export default async function HeadDashboardLayout({
   }
 
   if (session.user.role === 'Executive Board') {
-    redirect('/masterview');
+    redirect('/MasterViewDashboard');
   }
 
   if (session.user.role !== 'Department Head') {
