@@ -249,11 +249,6 @@ export default function MasterDashboardPage() {
         </div>
       )}
 
-      <p className="text-muted-foreground text-xs">
-        Thay đổi trạng thái Pass/Fail/Pending từ MasterView cần API Executive (hiện chỉ xem và duyệt
-        chi tiết).
-      </p>
-
       <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
         <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
           <div className="h-14 w-14 shrink-0 rounded-xl bg-blue-100 text-2xl text-blue-600 flex items-center justify-center">
@@ -336,7 +331,7 @@ export default function MasterDashboardPage() {
             >
               <span className="flex min-w-0 items-center gap-2 truncate">
                 <i className="fa-solid fa-file-excel shrink-0 text-emerald-600 dark:text-emerald-400" />
-                {exporting ? 'Đang xuất…' : 'Xuất Excel'}
+                {exporting ? 'Exporting…' : 'Export Excel'}
               </span>
               <i
                 className={`fa-solid fa-chevron-down text-muted-foreground transition-transform duration-300 ${isExportOpen ? 'rotate-180' : ''}`}
@@ -350,7 +345,7 @@ export default function MasterDashboardPage() {
                   className="flex w-full items-center gap-2 rounded-lg px-4 py-2.5 text-left text-sm font-bold text-green-700 transition-colors hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/40"
                 >
                   <i className="fa-solid fa-check w-5 shrink-0" />
-                  Pass - thí sinh đạt
+                  Export Pass List
                 </button>
                 <button
                   type="button"
@@ -358,7 +353,7 @@ export default function MasterDashboardPage() {
                   className="flex w-full items-center gap-2 rounded-lg px-4 py-2.5 text-left text-sm font-bold text-red-700 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                 >
                   <i className="fa-solid fa-xmark w-5 shrink-0" />
-                  Fail - thí sinh trượt
+                  Export Fail List
                 </button>
               </div>
             )}
