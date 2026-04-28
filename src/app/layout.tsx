@@ -1,7 +1,7 @@
 // src/app/layout.tsx
 import type { Metadata } from 'next';
 import { Manrope } from 'next/font/google'; // 1. Import Manrope
-import '../../global.css';
+import '../../global.css'; 
 
 export const metadata: Metadata = {
   title: 'Fin-Recruit Dashboard',
@@ -23,7 +23,7 @@ export default function RootLayout({
   return (
     // 3. Apply the font variable to the HTML tag
     <html lang="en" className={manrope.variable}>
-      <body className="font-sans antialiased bg-red text-foreground">
+      <body className="font-sans antialiased bg-background text-foreground">
         {children}
       </body>
     </html>
