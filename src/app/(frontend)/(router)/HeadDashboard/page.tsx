@@ -6,7 +6,10 @@ import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import {
   patchCandidateStatus,
   type DashboardStatus,
+  type ReroutePreview,
 } from '@/app/(frontend)/(router)/HeadDashboard/patchCandidateStatus';
+import { AppNotice } from '@/components/feedback/AppNotice';
+import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 
 const PAGE_SIZE = 9;
 
@@ -71,6 +74,13 @@ export default function HeadDashboardPage() {
   } | null>(null);
 
   const [patching, setPatching] = useState(false);
+  const [patchNotice, setPatchNotice] = useState<string | null>(null);
+  const [rerouteConfirm, setRerouteConfirm] = useState<{
+    id: string;
+    name: string;
+    message: string;
+    preview?: ReroutePreview;
+  } | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -169,21 +179,55 @@ export default function HeadDashboardPage() {
   const executeStatusChange = async () => {
     if (!confirmAction) return;
     setPatching(true);
+    setPatchNotice(null);
     try {
-      const { ok, message } = await patchCandidateStatus(
+      const result = await patchCandidateStatus(
         confirmAction.id,
         confirmAction.newStatus
       );
-      if (!ok) {
-        if (message && message !== 'Đã hủy.') {
-          window.alert(message);
+      if (!result.ok) {
+        if ('needsRerouteConfirm' in result && result.needsRerouteConfirm) {
+          setRerouteConfirm({
+            id: confirmAction.id,
+            name: confirmAction.name,
+            message: result.message,
+            preview: result.reroutePreview,
+          });
+          setConfirmAction(null);
+          return;
+        }
+        if (result.message) {
+          setPatchNotice(result.message);
         }
         return;
       }
       setConfirmAction(null);
       await Promise.all([loadList(1, false), refreshStats()]);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Update failed.');
+      setPatchNotice(e instanceof Error ? e.message : 'Update failed.');
+    } finally {
+      setPatching(false);
+    }
+  };
+
+  const executeReroute = async () => {
+    if (!rerouteConfirm) return;
+    setPatching(true);
+    setPatchNotice(null);
+    try {
+      const result = await patchCandidateStatus(rerouteConfirm.id, 'Fail', {
+        confirmReroute: true,
+      });
+      if (!result.ok) {
+        if (result.message) {
+          setPatchNotice(result.message);
+        }
+        return;
+      }
+      setRerouteConfirm(null);
+      await Promise.all([loadList(1, false), refreshStats()]);
+    } catch (e) {
+      setPatchNotice(e instanceof Error ? e.message : 'Reroute failed.');
     } finally {
       setPatching(false);
     }
@@ -212,19 +256,30 @@ export default function HeadDashboardPage() {
 
   return (
     <div className="relative space-y-8">
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-          <p className="font-semibold">Could not load data</p>
-          <p className="mt-1">{error}</p>
-          <button
-            type="button"
-            onClick={() => void loadList(1, false)}
-            className="mt-3 rounded-lg bg-red-100 px-3 py-1.5 text-red-900 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-100 dark:hover:bg-red-900/70"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      {error ? (
+        <AppNotice
+          variant="error"
+          title="Could not load data"
+          onDismiss={() => setError(null)}
+          action={
+            <button
+              type="button"
+              onClick={() => void loadList(1, false)}
+              className="rounded-lg bg-red-100 px-3 py-1.5 text-sm font-semibold text-red-900 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-100 dark:hover:bg-red-900/70"
+            >
+              Retry
+            </button>
+          }
+        >
+          {error}
+        </AppNotice>
+      ) : null}
+
+      {patchNotice ? (
+        <AppNotice variant="error" onDismiss={() => setPatchNotice(null)}>
+          {patchNotice}
+        </AppNotice>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
         <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
@@ -366,50 +421,70 @@ export default function HeadDashboardPage() {
         )}
       </div>
 
-      {confirmAction && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm transition-opacity duration-300">
-          <div className="bg-card border-border scale-100 rounded-[20px] border p-8 font-sans shadow-2xl transition-transform duration-300">
-            <h3 className="text-foreground mb-4 text-2xl font-bold tracking-tight">
-              Confirm status change
-            </h3>
-            <p className="text-muted-foreground text-[15px] leading-relaxed font-medium">
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title="Confirm status change"
+        description={
+          confirmAction ? (
+            <>
               Change status for{' '}
-              <span className="text-foreground font-bold">{confirmAction.name}</span>{' '}
+              <span className="text-foreground font-semibold">
+                {confirmAction.name}
+              </span>{' '}
               to{' '}
               <span
-                className={`font-black ${
+                className={
                   confirmAction.newStatus === 'Pass'
-                    ? 'text-green-600 dark:text-green-400'
+                    ? 'font-semibold text-green-600 dark:text-green-400'
                     : confirmAction.newStatus === 'Pending'
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : 'text-red-600 dark:text-red-400'
-                }`}
+                      ? 'font-semibold text-yellow-600 dark:text-yellow-400'
+                      : 'font-semibold text-red-600 dark:text-red-400'
+                }
               >
                 {confirmAction.newStatus}
               </span>
               ?
-            </p>
-            <div className="mt-8 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                disabled={patching}
-                onClick={() => setConfirmAction(null)}
-                className="border-border bg-card text-foreground hover:bg-muted rounded-xl border-2 px-6 py-2.5 text-sm font-bold shadow-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={patching}
-                onClick={() => void executeStatusChange()}
-                className="rounded-xl border-2 border-blue-900 bg-blue-900 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:border-blue-800 hover:bg-blue-800 disabled:opacity-60"
-              >
-                {patching ? '…' : 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </>
+          ) : (
+            ''
+          )
+        }
+        confirmLabel="Confirm"
+        onConfirm={() => void executeStatusChange()}
+        onCancel={() => setConfirmAction(null)}
+        loading={patching}
+      />
+
+      <ConfirmDialog
+        open={rerouteConfirm !== null}
+        title="Confirm reroute"
+        variant="destructive"
+        description={
+          rerouteConfirm ? (
+            <>
+              <p>{rerouteConfirm.message}</p>
+              {rerouteConfirm.preview ? (
+                <p className="mt-2">
+                  Target department:{' '}
+                  <span className="text-foreground font-semibold">
+                    {rerouteConfirm.preview.targetDepartment}
+                  </span>{' '}
+                  → status:{' '}
+                  <span className="text-foreground font-semibold">
+                    {rerouteConfirm.preview.resultingStatus}
+                  </span>
+                </p>
+              ) : null}
+            </>
+          ) : (
+            ''
+          )
+        }
+        confirmLabel="Reroute"
+        onConfirm={() => void executeReroute()}
+        onCancel={() => setRerouteConfirm(null)}
+        loading={patching}
+      />
     </div>
   );
 }

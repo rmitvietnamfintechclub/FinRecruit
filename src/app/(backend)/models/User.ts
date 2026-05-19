@@ -29,6 +29,8 @@ const UserSchema = new Schema<IUser>(
       ],
       default: 'Unassigned',
     },
+    generation: { type: String, default: '', trim: true },
+    semester: { type: String, default: '', trim: true },
     isActive: { type: Boolean, default: true },
   },
   {

@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
-import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import User from '@/app/(backend)/models/User';
 import type { DepartmentType, RoleType } from '@/app/(backend)/types';
 
@@ -39,7 +39,7 @@ function getDepartmentForRole(
   return 'Unassigned';
 }
 
-export const PATCH = withRBAC('Executive Board', async (req: NextRequest) => {
+export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) => {
   let body: RoleUpdatePayload;
 
   try {

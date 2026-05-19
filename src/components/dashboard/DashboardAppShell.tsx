@@ -130,7 +130,7 @@ export function DashboardAppShell({
 
           {showLogout ? (
             <LogoutButton
-              label="Đăng xuất"
+              label="Sign out"
               className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
             />
           ) : null}

@@ -83,10 +83,10 @@ export default function CandidateTable({
               <div className="-mt-2 mb-4">
                 <span
                   className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-violet-800 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300"
-                  title={`Thí sinh đã qua vòng ban lựa chọn 1 (${candidate.choice1}), hiện xét tại ban của bạn.`}
+                  title={`Candidate passed choice 1 (${candidate.choice1}); now under review in your department.`}
                 >
                   <i className="fa-solid fa-shuffle shrink-0" aria-hidden />
-                  Lựa chọn 2
+                  Choice 2
                 </span>
               </div>
             )}

@@ -19,7 +19,21 @@ export interface IUser extends Document {
   avatar?: string | null;
   role: RoleType;
   department: DepartmentType;
+  generation: string;
+  semester: string;
   isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IRecruitmentSemester {
+  code: string;
+}
+
+export interface IRecruitmentGeneration extends Document {
+  _id: Types.ObjectId;
+  name: string;
+  semesters: IRecruitmentSemester[];
   createdAt: Date;
   updatedAt: Date;
 }
