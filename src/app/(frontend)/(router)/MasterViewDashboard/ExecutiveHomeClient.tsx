@@ -148,7 +148,7 @@ export function ExecutiveHomeClient() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Members by department (Heads)</CardTitle>
+          <CardTitle>Heads by department</CardTitle>
           <CardDescription>
             Active Department Head accounts per department.
           </CardDescription>
