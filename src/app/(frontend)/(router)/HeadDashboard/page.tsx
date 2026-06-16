@@ -1,12 +1,16 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import CandidateTable from '@/components/ui/CandidateTable';
+import CandidateTable, { type CandidateViewMode } from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import {
   patchCandidateStatus,
   type DashboardStatus,
+  type ReroutePreview,
 } from '@/app/(frontend)/(router)/HeadDashboard/patchCandidateStatus';
+import { AppNotice } from '@/components/feedback/AppNotice';
+import { CohortBanner } from '@/components/feedback/CohortBanner';
+import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 
 const PAGE_SIZE = 9;
 
@@ -27,6 +31,12 @@ const AnimatedNumber = ({ value }: { value: number }) => {
   );
 };
 
+type ActiveCohort = {
+  generation: string;
+  semester: string;
+  isRecruitmentActive: boolean;
+};
+
 type ListApiResponse = {
   success: boolean;
   message?: string;
@@ -37,6 +47,7 @@ type ListApiResponse = {
     limit: number;
     totalPages: number;
     emptyState?: string | null;
+    activeCohort?: ActiveCohort;
     filters?: {
       search?: string;
       status?: string | null;
@@ -56,6 +67,8 @@ export default function HeadDashboardPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [listEmptyHint, setListEmptyHint] = useState<string | null>(null);
+  const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
+  const [assignedDepartment, setAssignedDepartment] = useState<string | null>(null);
 
   const [stats, setStats] = useState({
     total: 0,
@@ -70,7 +83,15 @@ export default function HeadDashboardPage() {
     newStatus: DashboardStatus;
   } | null>(null);
 
+  const [viewMode, setViewMode] = useState<CandidateViewMode>('list');
   const [patching, setPatching] = useState(false);
+  const [patchNotice, setPatchNotice] = useState<string | null>(null);
+  const [rerouteConfirm, setRerouteConfirm] = useState<{
+    id: string;
+    name: string;
+    message: string;
+    preview?: ReroutePreview;
+  } | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -140,6 +161,12 @@ export default function HeadDashboardPage() {
         setListEmptyHint(
           rows.length === 0 ? json.meta?.emptyState ?? null : null
         );
+        if (json.meta?.activeCohort) {
+          setActiveCohort(json.meta.activeCohort);
+        }
+        if (json.meta?.filters?.department) {
+          setAssignedDepartment(json.meta.filters.department);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load candidates.');
         if (!append) setCandidates([]);
@@ -169,21 +196,55 @@ export default function HeadDashboardPage() {
   const executeStatusChange = async () => {
     if (!confirmAction) return;
     setPatching(true);
+    setPatchNotice(null);
     try {
-      const { ok, message } = await patchCandidateStatus(
+      const result = await patchCandidateStatus(
         confirmAction.id,
         confirmAction.newStatus
       );
-      if (!ok) {
-        if (message && message !== 'Đã hủy.') {
-          window.alert(message);
+      if (!result.ok) {
+        if ('needsRerouteConfirm' in result && result.needsRerouteConfirm) {
+          setRerouteConfirm({
+            id: confirmAction.id,
+            name: confirmAction.name,
+            message: result.message,
+            preview: result.reroutePreview,
+          });
+          setConfirmAction(null);
+          return;
+        }
+        if (result.message) {
+          setPatchNotice(result.message);
         }
         return;
       }
       setConfirmAction(null);
       await Promise.all([loadList(1, false), refreshStats()]);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Update failed.');
+      setPatchNotice(e instanceof Error ? e.message : 'Update failed.');
+    } finally {
+      setPatching(false);
+    }
+  };
+
+  const executeReroute = async () => {
+    if (!rerouteConfirm) return;
+    setPatching(true);
+    setPatchNotice(null);
+    try {
+      const result = await patchCandidateStatus(rerouteConfirm.id, 'Fail', {
+        confirmReroute: true,
+      });
+      if (!result.ok) {
+        if (result.message) {
+          setPatchNotice(result.message);
+        }
+        return;
+      }
+      setRerouteConfirm(null);
+      await Promise.all([loadList(1, false), refreshStats()]);
+    } catch (e) {
+      setPatchNotice(e instanceof Error ? e.message : 'Reroute failed.');
     } finally {
       setPatching(false);
     }
@@ -212,19 +273,39 @@ export default function HeadDashboardPage() {
 
   return (
     <div className="relative space-y-8">
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-          <p className="font-semibold">Could not load data</p>
-          <p className="mt-1">{error}</p>
-          <button
-            type="button"
-            onClick={() => void loadList(1, false)}
-            className="mt-3 rounded-lg bg-red-100 px-3 py-1.5 text-red-900 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-100 dark:hover:bg-red-900/70"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      {error ? (
+        <AppNotice
+          variant="error"
+          title="Could not load data"
+          onDismiss={() => setError(null)}
+          action={
+            <button
+              type="button"
+              onClick={() => void loadList(1, false)}
+              className="rounded-lg bg-red-100 px-3 py-1.5 text-sm font-semibold text-red-900 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-100 dark:hover:bg-red-900/70"
+            >
+              Retry
+            </button>
+          }
+        >
+          {error}
+        </AppNotice>
+      ) : null}
+
+      {patchNotice ? (
+        <AppNotice variant="error" onDismiss={() => setPatchNotice(null)}>
+          {patchNotice}
+        </AppNotice>
+      ) : null}
+
+      <CohortBanner
+        cohort={activeCohort}
+        scopeLabel={
+          assignedDepartment
+            ? `Department Head view · ${assignedDepartment}`
+            : undefined
+        }
+      />
 
       <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
         <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
@@ -314,17 +395,52 @@ export default function HeadDashboardPage() {
           ))}
         </div>
 
-        <div className="relative w-full max-w-sm">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-            <i className="fa-solid fa-magnifying-glass text-muted-foreground" />
+        <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:items-center lg:w-auto">
+          <div className="relative w-full sm:w-72">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+              <i className="fa-solid fa-magnifying-glass text-muted-foreground" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-600/50 w-full rounded-xl border py-3 pl-11 pr-4 text-sm shadow-sm transition-all focus:border-blue-600 focus:ring-2 focus:outline-none"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Search by name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-600/50 w-full rounded-xl border py-3 pl-11 pr-4 text-sm shadow-sm transition-all focus:border-blue-600 focus:ring-2 focus:outline-none"
-          />
+
+          <div
+            className="bg-muted/40 flex w-fit shrink-0 items-center gap-1 rounded-xl p-1.5"
+            role="group"
+            aria-label="Candidate layout"
+          >
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              aria-pressed={viewMode === 'grid'}
+              title="Card view"
+              className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                viewMode === 'grid'
+                  ? 'scale-105 bg-blue-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+              }`}
+            >
+              <i className="fa-solid fa-grip" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              aria-pressed={viewMode === 'list'}
+              title="List view"
+              className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                viewMode === 'list'
+                  ? 'scale-105 bg-blue-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+              }`}
+            >
+              <i className="fa-solid fa-list" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -332,6 +448,7 @@ export default function HeadDashboardPage() {
         <CandidateTable
           candidates={candidates}
           onUpdateStatus={handleUpdateStatusRequest}
+          viewMode={viewMode}
         />
 
         {candidates.length === 0 && !loading && (
@@ -366,50 +483,70 @@ export default function HeadDashboardPage() {
         )}
       </div>
 
-      {confirmAction && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm transition-opacity duration-300">
-          <div className="bg-card border-border scale-100 rounded-[20px] border p-8 font-sans shadow-2xl transition-transform duration-300">
-            <h3 className="text-foreground mb-4 text-2xl font-bold tracking-tight">
-              Confirm status change
-            </h3>
-            <p className="text-muted-foreground text-[15px] leading-relaxed font-medium">
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title="Confirm status change"
+        description={
+          confirmAction ? (
+            <>
               Change status for{' '}
-              <span className="text-foreground font-bold">{confirmAction.name}</span>{' '}
+              <span className="text-foreground font-semibold">
+                {confirmAction.name}
+              </span>{' '}
               to{' '}
               <span
-                className={`font-black ${
+                className={
                   confirmAction.newStatus === 'Pass'
-                    ? 'text-green-600 dark:text-green-400'
+                    ? 'font-semibold text-green-600 dark:text-green-400'
                     : confirmAction.newStatus === 'Pending'
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : 'text-red-600 dark:text-red-400'
-                }`}
+                      ? 'font-semibold text-yellow-600 dark:text-yellow-400'
+                      : 'font-semibold text-red-600 dark:text-red-400'
+                }
               >
                 {confirmAction.newStatus}
               </span>
               ?
-            </p>
-            <div className="mt-8 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                disabled={patching}
-                onClick={() => setConfirmAction(null)}
-                className="border-border bg-card text-foreground hover:bg-muted rounded-xl border-2 px-6 py-2.5 text-sm font-bold shadow-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={patching}
-                onClick={() => void executeStatusChange()}
-                className="rounded-xl border-2 border-blue-900 bg-blue-900 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:border-blue-800 hover:bg-blue-800 disabled:opacity-60"
-              >
-                {patching ? '…' : 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </>
+          ) : (
+            ''
+          )
+        }
+        confirmLabel="Confirm"
+        onConfirm={() => void executeStatusChange()}
+        onCancel={() => setConfirmAction(null)}
+        loading={patching}
+      />
+
+      <ConfirmDialog
+        open={rerouteConfirm !== null}
+        title="Confirm reroute"
+        variant="destructive"
+        description={
+          rerouteConfirm ? (
+            <>
+              <p>{rerouteConfirm.message}</p>
+              {rerouteConfirm.preview ? (
+                <p className="mt-2">
+                  Target department:{' '}
+                  <span className="text-foreground font-semibold">
+                    {rerouteConfirm.preview.targetDepartment}
+                  </span>{' '}
+                  → status:{' '}
+                  <span className="text-foreground font-semibold">
+                    {rerouteConfirm.preview.resultingStatus}
+                  </span>
+                </p>
+              ) : null}
+            </>
+          ) : (
+            ''
+          )
+        }
+        confirmLabel="Reroute"
+        onConfirm={() => void executeReroute()}
+        onCancel={() => setRerouteConfirm(null)}
+        loading={patching}
+      />
     </div>
   );
 }

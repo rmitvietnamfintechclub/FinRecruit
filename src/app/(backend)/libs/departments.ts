@@ -18,6 +18,21 @@ const LEGACY_HEAD_TO_CANONICAL: Record<string, HeadDepartment> = {
 };
 
 /**
+ * All raw `department` field values that should be treated as belonging to the
+ * given canonical head department. Use for $in queries that must also catch
+ * legacy values from older User documents.
+ */
+export function getDepartmentAliases(canonical: HeadDepartment): string[] {
+  const aliases: string[] = [canonical];
+  for (const [legacy, mapped] of Object.entries(LEGACY_HEAD_TO_CANONICAL)) {
+    if (mapped === canonical) {
+      aliases.push(legacy);
+    }
+  }
+  return aliases;
+}
+
+/**
  * Returns the canonical head-department label, or null if not a head department.
  */
 export function normalizeHeadDepartment(

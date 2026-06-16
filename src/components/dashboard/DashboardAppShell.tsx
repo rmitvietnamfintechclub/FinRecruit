@@ -41,6 +41,9 @@ export type DashboardAppShellProps = {
   userName: string;
   userInitial: string;
   userSubtitle: string;
+  /** Avatar URL from the session (e.g. Google OAuth picture). Falls back to
+   * the colored initial circle when missing or when the image fails to load. */
+  userAvatar?: string | null;
   showLogout?: boolean;
 };
 
@@ -52,8 +55,11 @@ export function DashboardAppShell({
   userName,
   userInitial,
   userSubtitle,
+  userAvatar,
   showLogout = true,
 }: DashboardAppShellProps) {
+  const [avatarBroken, setAvatarBroken] = useState(false);
+  const showImage = Boolean(userAvatar) && !avatarBroken;
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window === 'undefined') return false;
     const savedTheme = localStorage.getItem('theme');
@@ -130,7 +136,7 @@ export function DashboardAppShell({
 
           {showLogout ? (
             <LogoutButton
-              label="Đăng xuất"
+              label="Sign out"
               className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
             />
           ) : null}
@@ -147,11 +153,24 @@ export function DashboardAppShell({
             </p>
           </div>
 
-          <div
-            className={`flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full font-bold text-white shadow-md transition-opacity hover:opacity-90 ${AVATAR_STYLES[badgeVariant]}`}
-          >
-            {userInitial}
-          </div>
+          {showImage ? (
+            // eslint-disable-next-line @next/next/no-img-element -- dynamic OAuth URL (Google CDN), not in next.config images domain list
+            <img
+              src={userAvatar ?? ''}
+              alt={userName}
+              referrerPolicy="no-referrer"
+              onError={() => setAvatarBroken(true)}
+              className="h-10 w-10 shrink-0 cursor-pointer rounded-full border border-border object-cover shadow-md transition-opacity hover:opacity-90"
+              title={userName}
+            />
+          ) : (
+            <div
+              className={`flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full font-bold text-white shadow-md transition-opacity hover:opacity-90 ${AVATAR_STYLES[badgeVariant]}`}
+              title={userName}
+            >
+              {userInitial}
+            </div>
+          )}
         </div>
       </header>
 

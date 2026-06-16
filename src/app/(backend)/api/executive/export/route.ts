@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
+import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 import type { ActiveAppSession } from '@/app/(backend)/libs/session';
@@ -38,8 +39,15 @@ export const GET = withRBAC(
       // Connect to database
       await dbConnect();
 
+      // Implicit cohort filter: only export candidates from the active cohort.
+      const active = await getActiveConfig();
+
       // Query database
-      const candidates = await Candidate.find({ status: statusParam })
+      const candidates = await Candidate.find({
+        status: statusParam,
+        generation: active.currentGeneration,
+        semester: active.currentSemester,
+      })
         .select('fullName email department')
         .sort({ department: 1 })
         .lean()

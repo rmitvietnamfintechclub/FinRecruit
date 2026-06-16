@@ -211,10 +211,10 @@ export const CandidateModal: FC<CandidateModalProps> = ({
               role="status"
             >
               <i className="fa-solid fa-shuffle mr-2 text-violet-700 dark:text-violet-400" aria-hidden />
-              <span className="font-bold">Lựa chọn 2</span>
+              <span className="font-bold">Choice 2</span>
               <span className="text-violet-900 dark:text-violet-100">
                 {' '}
-                — Thí sinh đã qua vòng ban lựa chọn 1 ({choice1Label}), hiện xét tại ban của bạn.
+                — Candidate passed choice 1 ({choice1Label}); now under review in your department.
               </span>
             </div>
           )}

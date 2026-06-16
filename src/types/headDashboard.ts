@@ -22,7 +22,7 @@ export type HeadDashboardListCandidate = {
   generation: string;
   semester: string;
   appliedAt: string;
-  /** Mongoose `createdAt` — ngày tạo bản ghi (hiển thị “Applied on”). */
+  /** Mongoose `createdAt` — record creation date (displayed as "Applied on"). */
   createdAt: string;
   updatedAt: string;
   routing: CandidateRoutingInfo;

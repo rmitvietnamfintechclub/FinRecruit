@@ -4,10 +4,13 @@ import { ICandidate } from '@/app/(backend)/types';
 // Disable per-question _id to keep embedded documents lean
 const CustomAnswerSchema = new Schema({
   question: { type: String, required: true },
-  answer: { type: String, default: "" } // Allow empty when the candidate skips the question
+  answer: { type: String, default: "" } 
 }, { _id: false }); 
 
 const CandidateSchema = new Schema<ICandidate>({
+  // --- MS Forms response identifier ---
+  msFormResponseId: { type: String, required: true },
+
   // --- Personal information ---
   fullName: { type: String, required: true },
   email: { type: String, required: true }, 
@@ -22,7 +25,6 @@ const CandidateSchema = new Schema<ICandidate>({
   fintechAspect: { type: String, required: true },
   achievementExpectation: { type: String, required: true },
   timeCommitment: { type: String, required: true },
-  // Keep default "" so Logic App empty strings do not break validation
   explanation: { type: String, default: "" },
   questionsForUs: { type: String, default: "" },
 
@@ -50,15 +52,14 @@ const CandidateSchema = new Schema<ICandidate>({
   isRerouted: { type: Boolean, default: false },
   reviewerEmail: { type: String },
 
-  // --- Supplementary ---
+  // --- Supplementary (branched form questions) ---
   customAnswers: [CustomAnswerSchema], 
 
   // --- Metadata ---
-  generation: { type: String, required: true },
-  semester: { type: String, required: true },
+  generation: { type: String},
+  semester: { type: String},
   appliedAt: { type: Date, default: Date.now }
 }, {
-  // Auto-manage createdAt and updatedAt to match ICandidate
   timestamps: true
 });
 

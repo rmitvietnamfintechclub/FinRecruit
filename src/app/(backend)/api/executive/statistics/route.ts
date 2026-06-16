@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
+import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 import type { DepartmentType } from '@/app/(backend)/types';
@@ -15,6 +16,10 @@ const ALL_DEPARTMENTS: DepartmentType[] = [
   'Marketing Department'
 ];
 
+type CohortFilter = { generation: string; semester: string };
+
+type CohortMeta = CohortFilter & { isRecruitmentActive: boolean };
+
 interface StatusCount {
   total: number;
   pass: number;
@@ -27,6 +32,8 @@ interface EvaluationStats {
   data: {
     overall: StatusCount;
     byDepartment: Partial<Record<DepartmentType, StatusCount>>;
+    /** The active cohort applied as an implicit filter on these stats. */
+    activeCohort: CohortMeta;
     timestamp: string;
     lastUpdated: string;
   };
@@ -38,8 +45,14 @@ interface ErrorResponse {
   error?: string;
 }
 
-async function getEvaluationStats(): Promise<StatusCount> {
+async function getEvaluationStats(cohort: CohortFilter): Promise<StatusCount> {
   const stats = await Candidate.aggregate([
+    {
+      $match: {
+        generation: cohort.generation,
+        semester: cohort.semester,
+      },
+    },
     {
       $group: {
         _id: null,
@@ -73,10 +86,17 @@ async function getEvaluationStats(): Promise<StatusCount> {
   return stats[0];
 }
 
-async function getEvaluationStatsByDepartment(dept: DepartmentType): Promise<StatusCount> {
+async function getEvaluationStatsByDepartment(
+  dept: DepartmentType,
+  cohort: CohortFilter
+): Promise<StatusCount> {
   const stats = await Candidate.aggregate([
     {
-      $match: { department: dept },
+      $match: {
+        department: dept,
+        generation: cohort.generation,
+        semester: cohort.semester,
+      },
     },
     {
       $group: {
@@ -119,14 +139,20 @@ export const GET = withRBAC(
       // Connect to database
       await dbConnect();
 
+      const active = await getActiveConfig();
+      const cohort: CohortFilter = {
+        generation: active.currentGeneration,
+        semester: active.currentSemester,
+      };
+
       // Get overall statistics
-      const overall = await getEvaluationStats();
+      const overall = await getEvaluationStats(cohort);
 
       // Get statistics by department
       const byDepartment: Partial<Record<DepartmentType, StatusCount>> = {};
 
       for (const dept of ALL_DEPARTMENTS) {
-        byDepartment[dept] = await getEvaluationStatsByDepartment(dept);
+        byDepartment[dept] = await getEvaluationStatsByDepartment(dept, cohort);
       }
 
       const now = new Date().toISOString();
@@ -136,6 +162,10 @@ export const GET = withRBAC(
         data: {
           overall,
           byDepartment,
+          activeCohort: {
+            ...cohort,
+            isRecruitmentActive: active.isRecruitmentActive,
+          },
           timestamp: now,
           lastUpdated: now,
         },

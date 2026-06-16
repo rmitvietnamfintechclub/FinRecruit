@@ -9,6 +9,7 @@ type HeadDashboardShellProps = {
   /** Full name from session, or email local-part if name missing */
   userName: string;
   userInitial: string;
+  userAvatar?: string | null;
 };
 
 export function HeadDashboardShell({
@@ -16,6 +17,7 @@ export function HeadDashboardShell({
   departmentLabel,
   userName,
   userInitial,
+  userAvatar,
 }: HeadDashboardShellProps) {
   return (
     <DashboardAppShell
@@ -24,6 +26,7 @@ export function HeadDashboardShell({
       badgeVariant="yellow"
       userName={userName}
       userInitial={userInitial}
+      userAvatar={userAvatar}
       userSubtitle="Department Head"
     >
       {children}

@@ -125,6 +125,12 @@ type DashboardQueryOptions = {
   department: DepartmentType;
   search?: string;
   status?: DashboardStatus | null;
+  /**
+   * Optional active-cohort filter. When provided, only candidates matching the
+   * given generation/semester are returned. Pass `null`/omit to skip cohort
+   * scoping entirely.
+   */
+  cohort?: { generation: string; semester: string } | null;
 };
 
 export function parseDashboardStatus(
@@ -171,11 +177,17 @@ export function buildDepartmentHeadCandidateMatch({
   department,
   search,
   status,
+  cohort,
 }: DashboardQueryOptions) {
   const match: Record<string, unknown> = {
     ...departmentHeadCandidateVisibilityFilter(department as HeadDepartment),
     status: status ? status : { $in: [...DASHBOARD_STATUS_OPTIONS] },
   };
+
+  if (cohort) {
+    match.generation = cohort.generation;
+    match.semester = cohort.semester;
+  }
 
   if (search) {
     match.fullName = { $regex: escapeRegex(search), $options: 'i' };

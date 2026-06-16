@@ -50,6 +50,26 @@ export async function checkRole(
   return session;
 }
 
+/**
+ * Requires {@link checkRole} and an active user account (`session.user.isActive`).
+ * Use for Executive Board endpoints that manage users or grant access.
+ */
+export async function checkActiveRole(
+  requiredRoles: RoleType | RoleType[],
+  req?: NextRequest
+) {
+  const session = await checkRole(requiredRoles, req);
+
+  if (!session.user.isActive) {
+    throw new AuthorizationError(
+      'Inactive accounts cannot perform this action. Only active Executive Board members may manage users and grant access.',
+      403
+    );
+  }
+
+  return session;
+}
+
 export function authorizationErrorToResponse(error: AuthorizationError) {
   return NextResponse.json(
     {
@@ -89,6 +109,42 @@ export function withRBAC<TContext extends ProtectedRouteContext>(
   return async (req: NextRequest, context?: TContext) => {
     try {
       const session = await checkRole(requiredRoles, req);
+
+      return await (
+        handler as ProtectedRouteHandlerWithContext<TContext>
+      )(
+        req,
+        Object.assign({}, context, { session }) as TContext & {
+          session: ActiveAppSession;
+        }
+      );
+    } catch (error) {
+      if (error instanceof AuthorizationError) {
+        return authorizationErrorToResponse(error);
+      }
+
+      throw error;
+    }
+  };
+}
+
+export function withActiveRBAC(
+  requiredRoles: RoleType | RoleType[],
+  handler: ProtectedRouteHandlerWithoutContext
+): (req: NextRequest) => Promise<Response>;
+export function withActiveRBAC<TContext extends ProtectedRouteContext>(
+  requiredRoles: RoleType | RoleType[],
+  handler: ProtectedRouteHandlerWithContext<TContext>
+): (req: NextRequest, context: TContext) => Promise<Response>;
+export function withActiveRBAC<TContext extends ProtectedRouteContext>(
+  requiredRoles: RoleType | RoleType[],
+  handler:
+    | ProtectedRouteHandlerWithoutContext
+    | ProtectedRouteHandlerWithContext<TContext>
+) {
+  return async (req: NextRequest, context?: TContext) => {
+    try {
+      const session = await checkActiveRole(requiredRoles, req);
 
       return await (
         handler as ProtectedRouteHandlerWithContext<TContext>
