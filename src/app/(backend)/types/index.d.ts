@@ -44,6 +44,7 @@ export interface ICustomAnswer {
 }
 
 export interface ICandidate {
+  msFormResponseId: string;
   _id?: string; 
   // --- Personal information ---
   fullName: string;

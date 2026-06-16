@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import CandidateTable from '@/components/ui/CandidateTable';
+import CandidateTable, { type CandidateViewMode } from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import {
   patchCandidateStatus,
@@ -9,6 +9,7 @@ import {
   type ReroutePreview,
 } from '@/app/(frontend)/(router)/HeadDashboard/patchCandidateStatus';
 import { AppNotice } from '@/components/feedback/AppNotice';
+import { CohortBanner } from '@/components/feedback/CohortBanner';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 
 const PAGE_SIZE = 9;
@@ -30,6 +31,12 @@ const AnimatedNumber = ({ value }: { value: number }) => {
   );
 };
 
+type ActiveCohort = {
+  generation: string;
+  semester: string;
+  isRecruitmentActive: boolean;
+};
+
 type ListApiResponse = {
   success: boolean;
   message?: string;
@@ -40,6 +47,7 @@ type ListApiResponse = {
     limit: number;
     totalPages: number;
     emptyState?: string | null;
+    activeCohort?: ActiveCohort;
     filters?: {
       search?: string;
       status?: string | null;
@@ -59,6 +67,8 @@ export default function HeadDashboardPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [listEmptyHint, setListEmptyHint] = useState<string | null>(null);
+  const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
+  const [assignedDepartment, setAssignedDepartment] = useState<string | null>(null);
 
   const [stats, setStats] = useState({
     total: 0,
@@ -73,6 +83,7 @@ export default function HeadDashboardPage() {
     newStatus: DashboardStatus;
   } | null>(null);
 
+  const [viewMode, setViewMode] = useState<CandidateViewMode>('list');
   const [patching, setPatching] = useState(false);
   const [patchNotice, setPatchNotice] = useState<string | null>(null);
   const [rerouteConfirm, setRerouteConfirm] = useState<{
@@ -150,6 +161,12 @@ export default function HeadDashboardPage() {
         setListEmptyHint(
           rows.length === 0 ? json.meta?.emptyState ?? null : null
         );
+        if (json.meta?.activeCohort) {
+          setActiveCohort(json.meta.activeCohort);
+        }
+        if (json.meta?.filters?.department) {
+          setAssignedDepartment(json.meta.filters.department);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load candidates.');
         if (!append) setCandidates([]);
@@ -281,6 +298,15 @@ export default function HeadDashboardPage() {
         </AppNotice>
       ) : null}
 
+      <CohortBanner
+        cohort={activeCohort}
+        scopeLabel={
+          assignedDepartment
+            ? `Department Head view · ${assignedDepartment}`
+            : undefined
+        }
+      />
+
       <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
         <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-2xl text-blue-600">
@@ -369,17 +395,52 @@ export default function HeadDashboardPage() {
           ))}
         </div>
 
-        <div className="relative w-full max-w-sm">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-            <i className="fa-solid fa-magnifying-glass text-muted-foreground" />
+        <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:items-center lg:w-auto">
+          <div className="relative w-full sm:w-72">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+              <i className="fa-solid fa-magnifying-glass text-muted-foreground" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-600/50 w-full rounded-xl border py-3 pl-11 pr-4 text-sm shadow-sm transition-all focus:border-blue-600 focus:ring-2 focus:outline-none"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Search by name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-600/50 w-full rounded-xl border py-3 pl-11 pr-4 text-sm shadow-sm transition-all focus:border-blue-600 focus:ring-2 focus:outline-none"
-          />
+
+          <div
+            className="bg-muted/40 flex w-fit shrink-0 items-center gap-1 rounded-xl p-1.5"
+            role="group"
+            aria-label="Candidate layout"
+          >
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              aria-pressed={viewMode === 'grid'}
+              title="Card view"
+              className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                viewMode === 'grid'
+                  ? 'scale-105 bg-blue-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+              }`}
+            >
+              <i className="fa-solid fa-grip" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              aria-pressed={viewMode === 'list'}
+              title="List view"
+              className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                viewMode === 'list'
+                  ? 'scale-105 bg-blue-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+              }`}
+            >
+              <i className="fa-solid fa-list" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -387,6 +448,7 @@ export default function HeadDashboardPage() {
         <CandidateTable
           candidates={candidates}
           onUpdateStatus={handleUpdateStatusRequest}
+          viewMode={viewMode}
         />
 
         {candidates.length === 0 && !loading && (

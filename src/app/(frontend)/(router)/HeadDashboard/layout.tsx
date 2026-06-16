@@ -42,6 +42,7 @@ export default async function HeadDashboardLayout({
       departmentLabel={dept}
       userName={userName}
       userInitial={initial}
+      userAvatar={session.user.image ?? null}
     >
       {children}
     </HeadDashboardShell>

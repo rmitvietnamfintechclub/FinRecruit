@@ -9,6 +9,7 @@ type ExecutiveDashboardShellProps = {
   children: React.ReactNode;
   userName: string;
   userInitial: string;
+  userAvatar?: string | null;
 };
 
 type NavItem = {
@@ -28,6 +29,7 @@ export function ExecutiveDashboardShell({
   children,
   userName,
   userInitial,
+  userAvatar,
 }: ExecutiveDashboardShellProps) {
   const pathname = usePathname();
 
@@ -38,6 +40,7 @@ export function ExecutiveDashboardShell({
       badgeVariant="purple"
       userName={userName}
       userInitial={userInitial}
+      userAvatar={userAvatar}
       userSubtitle="Executive Board"
     >
       <nav className="border-border bg-card mb-6 flex flex-wrap gap-2 rounded-xl border p-2 shadow-sm">

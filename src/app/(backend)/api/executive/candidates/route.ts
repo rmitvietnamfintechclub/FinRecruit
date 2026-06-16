@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
+import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 import type { DepartmentType, StatusType } from '@/app/(backend)/types';
@@ -46,12 +47,20 @@ interface QueryFilters {
   status?: StatusType;
 }
 
+interface ActiveCohortInfo {
+  generation: string;
+  semester: string;
+  isRecruitmentActive: boolean;
+}
+
 interface CandidateListResponse {
   success: true;
   data: {
     candidates: CandidateListItem[];
     count: number;
     filters: QueryFilters;
+    /** The active cohort applied as an implicit filter on this query. */
+    activeCohort: ActiveCohortInfo;
     timestamp: string;
   };
 }
@@ -85,8 +94,14 @@ export const GET = withRBAC(
       // Connect to database
       await dbConnect();
 
+      // Implicit cohort filter: only show candidates of the active SystemConfig cohort.
+      const active = await getActiveConfig();
+
       // Build mongodb filter
-      const mongoFilter: Record<string, unknown> = {};
+      const mongoFilter: Record<string, unknown> = {
+        generation: active.currentGeneration,
+        semester: active.currentSemester,
+      };
 
       if (filters.department) {
         mongoFilter.department = filters.department;
@@ -112,6 +127,11 @@ export const GET = withRBAC(
           candidates: candidates as CandidateListItem[],
           count: candidates.length,
           filters,
+          activeCohort: {
+            generation: active.currentGeneration,
+            semester: active.currentSemester,
+            isRecruitmentActive: active.isRecruitmentActive,
+          },
           timestamp: now,
         },
       };

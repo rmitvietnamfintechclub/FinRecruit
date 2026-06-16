@@ -1,10 +1,8 @@
 import mongoose from 'mongoose';
 import { NextResponse, type NextRequest } from 'next/server';
-import dbConnect from '@/app/(backend)/libs/dbConnect';
-import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
-import User from '@/app/(backend)/models/User';
 import type { DepartmentType, RoleType } from '@/app/(backend)/types';
+import { patchUserInDb } from '@/lib/user-management/db-user-management';
 
 export const runtime = 'nodejs';
 
@@ -24,21 +22,10 @@ function isRoleType(value: unknown): value is RoleType {
   return typeof value === 'string' && ROLE_VALUES.includes(value as RoleType);
 }
 
-function getDepartmentForRole(
-  role: RoleType,
-  department?: DepartmentType | string
-): DepartmentType | null {
-  if (role === 'Department Head') {
-    return normalizeHeadDepartment(department);
-  }
-
-  if (role === 'Executive Board') {
-    return 'EBMB';
-  }
-
-  return 'Unassigned';
-}
-
+/**
+ * Legacy endpoint. Delegates to {@link patchUserInDb} so every role change
+ * is funnelled through the same anti-headless / sole-EB guards as PATCH /api/users.
+ */
 export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) => {
   let body: RoleUpdatePayload;
 
@@ -46,10 +33,7 @@ export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) 
     body = (await req.json()) as RoleUpdatePayload;
   } catch {
     return NextResponse.json(
-      {
-        success: false,
-        message: 'Invalid JSON payload.',
-      },
+      { success: false, message: 'Invalid JSON payload.' },
       { status: 400 }
     );
   }
@@ -58,71 +42,24 @@ export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) 
 
   if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
     return NextResponse.json(
-      {
-        success: false,
-        message: 'A valid userId is required.',
-      },
+      { success: false, message: 'A valid userId is required.' },
       { status: 400 }
     );
   }
 
   if (!isRoleType(role)) {
     return NextResponse.json(
-      {
-        success: false,
-        message: 'A valid role is required.',
-      },
+      { success: false, message: 'A valid role is required.' },
       { status: 400 }
     );
   }
 
-  const normalizedDepartment = getDepartmentForRole(role, department);
+  const result = await patchUserInDb({ userId, role, department });
 
-  if (!normalizedDepartment) {
+  if (!result.ok) {
     return NextResponse.json(
-      {
-        success: false,
-        message:
-          'A valid department must be provided when assigning the Department Head role.',
-      },
-      { status: 400 }
-    );
-  }
-
-  await dbConnect();
-
-  const updatePayload: {
-    role: RoleType;
-    department: DepartmentType;
-    isActive?: boolean;
-  } = {
-    role,
-    department: normalizedDepartment,
-  };
-
-  if (role === 'Department Head' || role === 'Executive Board') {
-    updatePayload.isActive = true;
-  }
-
-  const updatedUser = await User.findByIdAndUpdate(
-    userId,
-    updatePayload,
-    {
-      returnDocument: 'after',
-      runValidators: true,
-    }
-  )
-    .select('name email role department isActive')
-    .lean()
-    .exec();
-
-  if (!updatedUser) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: 'User not found.',
-      },
-      { status: 404 }
+      { success: false, message: result.message },
+      { status: result.status }
     );
   }
 
@@ -131,12 +68,12 @@ export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) 
       success: true,
       message: 'User role updated successfully.',
       user: {
-        id: updatedUser._id.toString(),
-        name: updatedUser.name ?? null,
-        email: updatedUser.email,
-        role: updatedUser.role,
-        department: updatedUser.department,
-        isActive: updatedUser.isActive,
+        id: result.user.id,
+        name: result.user.name,
+        email: result.user.email,
+        role: result.user.role,
+        department: result.user.department,
+        isActive: result.user.isActive,
       },
     },
     { status: 200 }

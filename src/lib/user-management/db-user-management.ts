@@ -1,12 +1,7 @@
 import mongoose from 'mongoose';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import { HEAD_DEPARTMENTS } from '@/app/(backend)/libs/departments';
-import {
-  getActiveConfig,
-  listGenerations,
-  UM_DEFAULT_GENERATION,
-  UM_DEFAULT_SEMESTER,
-} from '@/app/(backend)/libs/system-config/service';
+import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import User from '@/app/(backend)/models/User';
 import type { DepartmentType, RoleType } from '@/app/(backend)/types';
 import {
@@ -26,27 +21,6 @@ async function getDefaultsFromConfig(): Promise<{
   return {
     semester: active.currentSemester,
     generation: active.currentGeneration,
-  };
-}
-
-async function buildCohortOptions(): Promise<{
-  generations: string[];
-  semesters: string[];
-}> {
-  const catalog = await listGenerations();
-  const generations = catalog.map((g) => g.name);
-  const semesterSet = new Set<string>();
-  for (const g of catalog) {
-    for (const s of g.semesters) {
-      semesterSet.add(s.code);
-    }
-  }
-  const active = await getActiveConfig();
-  if (active.currentGeneration) generations.unshift(active.currentGeneration);
-  if (active.currentSemester) semesterSet.add(active.currentSemester);
-  return {
-    generations: [...new Set(generations)],
-    semesters: [...semesterSet],
   };
 }
 
@@ -100,19 +74,10 @@ function serializeRow(row: ManagementUserRow): SerializedManagementUser {
   };
 }
 
-export async function getUserManagementPayloadFromDb(params: {
-  semester?: string | null;
-  generation?: string | null;
-}): Promise<UserManagementPayload> {
+export async function getUserManagementPayloadFromDb(): Promise<UserManagementPayload> {
   await dbConnect();
 
   const configDefaults = await getDefaultsFromConfig();
-  const semester =
-    params.semester?.trim() || configDefaults.semester;
-  const generation =
-    params.generation?.trim() || configDefaults.generation;
-
-  const cohortOptions = await buildCohortOptions();
 
   const docs = await User.find({})
     .select(
@@ -124,25 +89,23 @@ export async function getUserManagementPayloadFromDb(params: {
 
   const rows = docs.map((d) => leanDocToRow(d, configDefaults));
 
+  // Cohort-independent: every Head + EB across all generations / semesters.
   const filtered = rows.filter(
     (u) =>
-      u.semester === semester &&
-      u.generation === generation &&
-      (u.role === 'Department Head' || u.role === 'Executive Board')
+      u.role === 'Department Head' || u.role === 'Executive Board'
   );
 
+  const sortByNewest = (a: ManagementUserRow, b: ManagementUserRow) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+
   const waitingGuests = rows
-    .filter(
-      (u) =>
-        u.role === 'Guest' &&
-        u.isActive &&
-        u.department === 'Unassigned'
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
-    .slice(0, 5)
+    .filter((u) => u.role === 'Guest' && u.isActive)
+    .sort(sortByNewest)
+    .map(serializeRow);
+
+  const inactiveAccounts = rows
+    .filter((u) => !u.isActive)
+    .sort(sortByNewest)
     .map(serializeRow);
 
   const activeEbDocs = await User.find({
@@ -160,19 +123,8 @@ export async function getUserManagementPayloadFromDb(params: {
 
   return {
     success: true,
-    semesters:
-      cohortOptions.semesters.length > 0
-        ? cohortOptions.semesters
-        : [configDefaults.semester],
-    generations:
-      cohortOptions.generations.length > 0
-        ? cohortOptions.generations
-        : [configDefaults.generation],
-    defaultSemester: configDefaults.semester,
-    defaultGeneration: configDefaults.generation,
-    appliedSemester: semester,
-    appliedGeneration: generation,
     waitingGuests,
+    inactiveAccounts,
     users: filtered.map(serializeRow),
     soleActiveExecutiveId,
   };
@@ -247,13 +199,19 @@ export async function patchUserInDb(
   } else if (nextRole === 'Executive Board') {
     nextDept = 'EBMB';
   } else if (nextRole === 'Guest') {
-    if (input.department !== undefined) {
-      nextDept = input.department;
-    }
+    // Application has no "Member" tier: a Guest never holds a head department.
+    nextDept = 'Unassigned';
   }
 
   let nextIsActive = input.isActive ?? current.isActive;
-  if (nextRole === 'Department Head' || nextRole === 'Executive Board') {
+  // Only force-active when the role *changes* into Head/EB (a fresh promotion
+  // implies the user takes their seat immediately). Toggling status on an
+  // existing Head/EB stays possible — the sole-EB guard below catches the only
+  // dangerous case (locking the last admin out).
+  if (
+    roleChanged &&
+    (nextRole === 'Department Head' || nextRole === 'Executive Board')
+  ) {
     nextIsActive = true;
   }
 
@@ -263,11 +221,25 @@ export async function patchUserInDb(
       isActive: nextIsActive,
     })
   ) {
+    // Surface the rejection in server logs so ops can correlate failed admin
+    // edits with the sole-EB guard. The userId / requested role transition is
+    // safe to log — they're already in the audit trail anyway.
+    console.warn(
+      '[user-management] sole-EB guard blocked patch',
+      JSON.stringify({
+        userId: input.userId,
+        email: current.email,
+        prevRole,
+        prevIsActive: current.isActive,
+        attemptedRole: nextRole,
+        attemptedIsActive: nextIsActive,
+      })
+    );
     return {
       ok: false,
       status: 409,
       message:
-        'Cannot remove or deactivate the last active Executive Board member.',
+        'Cannot remove or deactivate the last active Executive Board admin. The system requires at least one active Executive Board to remain.',
     };
   }
 

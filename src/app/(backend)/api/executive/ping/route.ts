@@ -5,8 +5,8 @@ import type { ActiveAppSession } from '@/app/(backend)/libs/session';
 export const runtime = 'nodejs';
 
 /**
- * Example API: chỉ user có app session + role Executive Board.
- * Xem checklist: docs/API_RBAC_CHECKLIST.md
+ * Example API: only accessible to users with an app session + Executive Board role.
+ * See checklist: docs/API_RBAC_CHECKLIST.md
  */
 export const GET = withRBAC(
   'Executive Board', // more role if you want

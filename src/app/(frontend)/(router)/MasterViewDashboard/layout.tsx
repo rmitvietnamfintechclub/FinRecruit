@@ -29,7 +29,11 @@ export default async function MasterViewDashboardLayout({
     '?';
 
   return (
-    <ExecutiveDashboardShell userName={userName} userInitial={userInitial}>
+    <ExecutiveDashboardShell
+      userName={userName}
+      userInitial={userInitial}
+      userAvatar={session.user.image ?? null}
+    >
       {children}
     </ExecutiveDashboardShell>
   );

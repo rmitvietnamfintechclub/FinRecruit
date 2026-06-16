@@ -5,12 +5,16 @@ import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import { emailLocalPart } from '@/lib/utils';
 import CandidateModal from './CandidateModal';
 
+export type CandidateViewMode = 'grid' | 'list';
+
 interface CandidateTableProps {
   candidates: HeadDashboardListCandidate[];
   onUpdateStatus: (id: string, newStatus: 'Pass' | 'Fail' | 'Pending') => void;
   /** Executive MasterView: no PATCH status API yet — hide quick actions + pass readOnly to modal */
   readOnly?: boolean;
   detailApi?: 'head' | 'executive';
+  /** Layout for the candidate list. Defaults to `'grid'` (card layout). */
+  viewMode?: CandidateViewMode;
 }
 
 export default function CandidateTable({
@@ -18,6 +22,7 @@ export default function CandidateTable({
   onUpdateStatus,
   readOnly = false,
   detailApi = 'head',
+  viewMode = 'grid',
 }: CandidateTableProps) {
   const [selectedCandidate, setSelectedCandidate] =
     useState<HeadDashboardListCandidate | null>(null);
@@ -35,6 +40,22 @@ export default function CandidateTable({
     setIsModalOpen(true);
   };
 
+  const statusBadgeClass = (status: HeadDashboardListCandidate['status']) =>
+    `inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider shadow-sm border ${
+      status === 'Pass'
+        ? 'border-green-200 bg-green-100 text-green-700 dark:border-green-900/50 dark:bg-green-900/30 dark:text-green-400'
+        : status === 'Pending'
+          ? 'border-yellow-200 bg-yellow-100 text-yellow-700 dark:border-yellow-900/50 dark:bg-yellow-900/30 dark:text-yellow-400'
+          : 'border-red-200 bg-red-100 text-red-700 dark:border-red-900/50 dark:bg-red-900/30 dark:text-red-400'
+    }`;
+
+  const statusIconClass = (status: HeadDashboardListCandidate['status']) =>
+    status === 'Pass'
+      ? 'fa-solid fa-check'
+      : status === 'Pending'
+        ? 'fa-solid fa-clock'
+        : 'fa-solid fa-xmark';
+
   return (
     <>
       <style>{`
@@ -46,8 +67,128 @@ export default function CandidateTable({
           animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
           opacity: 0; 
         }
+        @keyframes slideInLeftFade {
+          0% { opacity: 0; transform: translateX(-20px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+        .animate-row-entry {
+          animation: slideInLeftFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          opacity: 0;
+        }
       `}</style>
-      
+
+      {viewMode === 'list' ? (
+        <div className="bg-card border-border overflow-hidden rounded-2xl border shadow-sm">
+          {/* List Header (md+) */}
+          <div className="text-muted-foreground bg-muted/40 hidden md:grid md:grid-cols-[1.7fr_1.3fr_1fr_0.9fr_minmax(220px,auto)] gap-4 px-5 py-3 text-[10px] font-black uppercase tracking-wider">
+            <div>Candidate</div>
+            <div>Department</div>
+            <div>Applied</div>
+            <div>Status</div>
+            <div className="text-right">Actions</div>
+          </div>
+          <ul className="divide-border divide-y">
+            {candidates.map((candidate, index) => (
+              <li
+                key={candidate.id}
+                className="animate-row-entry group hover:bg-muted/40 grid grid-cols-1 gap-3 px-5 py-4 transition-colors duration-200 md:grid-cols-[1.7fr_1.3fr_1fr_0.9fr_minmax(220px,auto)] md:items-center md:gap-4"
+                style={{ animationDelay: `${index * 40}ms` }}
+              >
+                {/* Candidate */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600/80 text-base shadow-sm dark:bg-blue-900/30 dark:text-blue-400">
+                    <i className="fa-solid fa-user" />
+                  </div>
+                  <div className="min-w-0">
+                    <p
+                      className="text-foreground truncate text-sm font-black"
+                      title={candidate.fullName}
+                    >
+                      {candidate.fullName}
+                    </p>
+                    <p className="text-muted-foreground truncate text-xs font-bold">
+                      {emailLocalPart(candidate.email)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Department */}
+                <div className="min-w-0">
+                  <p className="text-muted-foreground/70 md:hidden text-[10px] font-black uppercase tracking-wider mb-0.5">
+                    Department
+                  </p>
+                  <p className="text-foreground truncate text-sm font-bold">
+                    {candidate.department}
+                  </p>
+                  <p className="text-muted-foreground truncate text-xs font-medium">
+                    {candidate.generation}
+                    {candidate.routing.currentStage === 'choice2' ? (
+                      <span
+                        className="ml-2 inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300"
+                        title={`Candidate passed choice 1 (${candidate.choice1}); now under review in your department.`}
+                      >
+                        <i className="fa-solid fa-shuffle" aria-hidden />
+                        Choice 2
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+
+                {/* Applied date */}
+                <div className="min-w-0">
+                  <p className="text-muted-foreground/70 md:hidden text-[10px] font-black uppercase tracking-wider mb-0.5">
+                    Applied
+                  </p>
+                  <p className="text-foreground truncate text-sm font-bold">
+                    {candidate.createdAt
+                      ? new Date(candidate.createdAt).toLocaleDateString('en-GB')
+                      : '—'}
+                  </p>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <span className={statusBadgeClass(candidate.status)}>
+                    <i className={statusIconClass(candidate.status)} />
+                    {candidate.status}
+                  </span>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-start gap-2 md:justify-end">
+                  {!readOnly && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateStatus(candidate.id, 'Pass')}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-green-50 text-green-600 shadow-sm transition-colors hover:bg-green-500 hover:text-white dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-600 dark:hover:text-white"
+                        title="Quick Pass"
+                      >
+                        <i className="fa-solid fa-check" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateStatus(candidate.id, 'Fail')}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 shadow-sm transition-colors hover:bg-red-500 hover:text-white dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white"
+                        title="Quick Fail"
+                      >
+                        <i className="fa-solid fa-xmark" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleViewDetails(candidate)}
+                    className="inline-flex h-9 items-center justify-center rounded-xl bg-blue-50 px-4 text-xs font-bold text-blue-600 shadow-sm transition-colors hover:bg-blue-600 hover:text-white dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white"
+                  >
+                    Review Profile
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {candidates.map((candidate, index) => (
           <div 
@@ -169,6 +310,7 @@ export default function CandidateTable({
           </div>
         ))}
       </div>
+      )}
 
       <CandidateModal
         candidate={displayedSelectedCandidate}

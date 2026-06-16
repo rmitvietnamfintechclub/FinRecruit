@@ -8,7 +8,6 @@ export const UM_DEFAULT_GENERATION = 'Gen 12';
 
 export type DisplayRoleLabel =
   | 'Guest'
-  | 'Member'
   | 'Department Head'
   | 'Executive Board'
   | 'Alumni'
@@ -36,9 +35,6 @@ export function displayRoleLabel(row: ManagementUserRow): DisplayRoleLabel {
   }
   if (row.role === 'Department Head') {
     return 'Department Head';
-  }
-  if (row.role === 'Guest' && row.department !== 'Unassigned') {
-    return 'Member';
   }
   return 'Guest';
 }
@@ -88,10 +84,10 @@ function seedUsers(): ManagementUserRow[] {
       createdAt: '2024-03-01T09:00:00.000Z',
     }),
     mk('64f0a1b2c3d4e5f678901004', {
-      name: 'Member Staff',
-      email: 'member@finrecruit.test',
+      name: 'Head Marketing',
+      email: 'head.marketing@finrecruit.test',
       avatar: null,
-      role: 'Guest',
+      role: 'Department Head',
       department: 'Marketing Department',
       isActive: true,
       semester: UM_DEFAULT_SEMESTER,
@@ -201,15 +197,22 @@ export function getHeadDepartmentOptions() {
 
 export type UserManagementPayload = {
   success: true;
-  semesters: string[];
-  generations: string[];
-  defaultSemester: string;
-  defaultGeneration: string;
-  /** Filters used for this response */
-  appliedSemester: string;
-  appliedGeneration: string;
+  /**
+   * Active Guests (cohort-independent): they are awaiting role assignment.
+   */
   waitingGuests: SerializedManagementUser[];
+  /**
+   * Inactive accounts (any role, cohort-independent). Surfaced so admins can
+   * reactivate or fully remove them later.
+   */
+  inactiveAccounts: SerializedManagementUser[];
+  /** Active Department Heads + Executive Board members (cohort-independent). */
   users: SerializedManagementUser[];
+  /**
+   * Id of the **only** active Executive Board admin when the count is exactly
+   * 1. The UI uses this to lock destructive controls and prevent locking
+   * everyone out of admin.
+   */
   soleActiveExecutiveId: string | null;
 };
 
@@ -243,31 +246,24 @@ function serializeRow(row: ManagementUserRow): SerializedManagementUser {
   };
 }
 
-export function getUserManagementPayload(params: {
-  semester?: string | null;
-  generation?: string | null;
-}): UserManagementPayload {
-  const semester = params.semester?.trim() || UM_DEFAULT_SEMESTER;
-  const generation = params.generation?.trim() || UM_DEFAULT_GENERATION;
+export function getUserManagementPayload(): UserManagementPayload {
+  const sortByNewest = (a: ManagementUserRow, b: ManagementUserRow) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 
+  // Cohort-independent: every active Head + EB regardless of generation/semester.
   const filtered = store.filter(
-    (u) => u.semester === semester && u.generation === generation
+    (u) =>
+      u.role === 'Department Head' || u.role === 'Executive Board'
   );
 
   const waitingGuests = store
-    .filter(
-      (u) =>
-        u.role === 'Guest' &&
-        u.isActive &&
-        u.department === 'Unassigned' &&
-        u.semester === semester &&
-        u.generation === generation
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
-    .slice(0, 5)
+    .filter((u) => u.role === 'Guest' && u.isActive)
+    .sort(sortByNewest)
+    .map(serializeRow);
+
+  const inactiveAccounts = store
+    .filter((u) => !u.isActive)
+    .sort(sortByNewest)
     .map(serializeRow);
 
   const activeEbs = store.filter(
@@ -278,14 +274,9 @@ export function getUserManagementPayload(params: {
 
   return {
     success: true,
-    semesters: [...UM_SEMESTERS],
-    generations: [...UM_GENERATIONS],
-    defaultSemester: UM_DEFAULT_SEMESTER,
-    defaultGeneration: UM_DEFAULT_GENERATION,
-    appliedSemester: semester,
-    appliedGeneration: generation,
     waitingGuests,
-    users: filtered.map(serializeRow),
+    inactiveAccounts,
+    users: filtered.sort(sortByNewest).map(serializeRow),
     soleActiveExecutiveId,
   };
 }
@@ -341,7 +332,9 @@ export function patchUserManagement(
   }
 
   const current = store[idx];
-  const nextRole = input.role ?? current.role;
+  const prevRole = current.role;
+  const nextRole = input.role ?? prevRole;
+  const roleChanged = input.role !== undefined && input.role !== prevRole;
   let nextDept = input.department ?? current.department;
 
   if (nextRole === 'Department Head') {
@@ -357,13 +350,14 @@ export function patchUserManagement(
   } else if (nextRole === 'Executive Board') {
     nextDept = 'EBMB';
   } else if (nextRole === 'Guest') {
-    if (input.department !== undefined) {
-      nextDept = input.department;
-    }
+    nextDept = 'Unassigned';
   }
 
   let nextIsActive = input.isActive ?? current.isActive;
-  if (nextRole === 'Department Head' || nextRole === 'Executive Board') {
+  if (
+    roleChanged &&
+    (nextRole === 'Department Head' || nextRole === 'Executive Board')
+  ) {
     nextIsActive = true;
   }
 
@@ -375,7 +369,7 @@ export function patchUserManagement(
       ok: false,
       status: 409,
       message:
-        'Cannot remove or deactivate the last active Executive Board member.',
+        'Cannot remove or deactivate the last active Executive Board admin. The system requires at least one active Executive Board to remain.',
     };
   }
 

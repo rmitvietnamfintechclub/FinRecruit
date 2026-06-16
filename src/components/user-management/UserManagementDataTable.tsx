@@ -31,7 +31,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -49,13 +48,25 @@ export type PatchPayload = {
   isActive?: boolean;
 };
 
+export type ConfirmRequest = {
+  title: string;
+  description?: React.ReactNode;
+  confirmLabel?: string;
+  variant?: 'default' | 'destructive';
+  onConfirm: () => void | Promise<void>;
+};
+
 type UserManagementDataTableProps = {
   data: SerializedManagementUser[];
   soleActiveExecutiveId: string | null;
   onPatch: (patch: PatchPayload) => Promise<void>;
   pendingUserId: string | null;
-  roleFilter: string;
-  statusFilter: string;
+  /** Trigger the shared ConfirmModal (rendered by the parent). */
+  requestConfirm: (request: ConfirmRequest) => void;
+  /** Bulk-deactivate the given user ids. Parent wires this to onPatch + notice. */
+  onBulkInactive: (userIds: string[]) => Promise<void>;
+  /** Optional helper text rendered next to the bulk-action label. */
+  bulkScopeLabel?: string;
 };
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -73,28 +84,25 @@ export function UserManagementDataTable({
   soleActiveExecutiveId,
   onPatch,
   pendingUserId,
-  roleFilter,
-  statusFilter,
+  requestConfirm,
+  onBulkInactive,
+  bulkScopeLabel,
 }: UserManagementDataTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: 'user', desc: false },
   ]);
-  const [rowSelection, setRowSelection] = React.useState({});
+  const [rowSelection, setRowSelection] = React.useState<
+    Record<string, boolean>
+  >({});
 
-  const filteredData = React.useMemo(() => {
-    return data.filter((row) => {
-      if (roleFilter !== 'all' && row.displayRole !== roleFilter) {
-        return false;
-      }
-      if (statusFilter === 'active' && !row.isActive) {
-        return false;
-      }
-      if (statusFilter === 'inactive' && row.isActive) {
-        return false;
-      }
-      return true;
-    });
-  }, [data, roleFilter, statusFilter]);
+  const isSoleActiveExecutive = React.useCallback(
+    (r: SerializedManagementUser) =>
+      soleActiveExecutiveId !== null &&
+      r.id === soleActiveExecutiveId &&
+      r.role === 'Executive Board' &&
+      r.isActive,
+    [soleActiveExecutiveId]
+  );
 
   const columns = React.useMemo<ColumnDef<SerializedManagementUser>[]>(
     () => [
@@ -190,49 +198,13 @@ export function UserManagementDataTable({
         },
       },
       {
-        accessorKey: 'generation',
-        header: 'Generation',
-      },
-      {
-        accessorKey: 'semester',
-        header: 'Semester',
-      },
-      {
-        id: 'status',
-        header: 'Status',
-        cell: ({ row }) => {
-          const r = row.original;
-          const soleLock =
-            soleActiveExecutiveId !== null &&
-            r.id === soleActiveExecutiveId &&
-            r.role === 'Executive Board' &&
-            r.isActive;
-          const disabled = pendingUserId === r.id || soleLock;
-          return (
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={r.isActive}
-                disabled={disabled}
-                onCheckedChange={(checked) =>
-                  onPatch({
-                    userId: r.id,
-                    isActive: checked,
-                  })
-                }
-              />
-              <span className="text-xs text-muted-foreground">
-                {r.isActive ? 'Active' : 'Inactive'}
-              </span>
-            </div>
-          );
-        },
-      },
-      {
         id: 'actions',
         enableSorting: false,
         cell: ({ row }) => {
           const r = row.original;
           const busy = pendingUserId === r.id;
+          const soleEbLock = isSoleActiveExecutive(r);
+
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -247,48 +219,61 @@ export function UserManagementDataTable({
                   <MoreHorizontal className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Change role</DropdownMenuLabel>
                 <DropdownMenuItem
+                  disabled={soleEbLock}
+                  title={
+                    soleEbLock
+                      ? 'Cannot demote the last active Executive Board admin.'
+                      : undefined
+                  }
                   onClick={() =>
-                    onPatch({
-                      userId: r.id,
-                      role: 'Guest',
-                      department: 'Unassigned',
-                      isActive: true,
+                    requestConfirm({
+                      title: `Demote ${r.email} to Guest?`,
+                      description: `${r.name?.trim() || r.email} will lose ${r.role} access and return to the Waiting Room.`,
+                      confirmLabel: 'Demote',
+                      variant: 'destructive',
+                      onConfirm: () =>
+                        onPatch({
+                          userId: r.id,
+                          role: 'Guest',
+                          department: 'Unassigned',
+                          isActive: true,
+                        }),
                     })
                   }
                 >
-                  Guest
+                  Demote to Guest
                 </DropdownMenuItem>
                 <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>Member (Guest + PB)</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {HEAD_DEPARTMENTS.map((d) => (
-                      <DropdownMenuItem
-                        key={d}
-                        onClick={() =>
-                          onPatch({
-                            userId: r.id,
-                            role: 'Guest',
-                            department: d,
-                            isActive: true,
-                          })
-                        }
-                      >
-                        {d}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    Department Head
+                  <DropdownMenuSubTrigger
+                    disabled={soleEbLock}
+                    className={
+                      soleEbLock ? 'opacity-50' : undefined
+                    }
+                    title={
+                      soleEbLock
+                        ? 'Cannot demote the last active Executive Board admin.'
+                        : undefined
+                    }
+                  >
+                    Move to Department Head
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
                     {HEAD_DEPARTMENTS.map((d) => (
                       <DropdownMenuItem
                         key={d}
+                        disabled={
+                          soleEbLock ||
+                          (r.role === 'Department Head' &&
+                            r.department === d)
+                        }
+                        title={
+                          soleEbLock
+                            ? 'Cannot demote the last active Executive Board admin.'
+                            : undefined
+                        }
                         onClick={() =>
                           onPatch({
                             userId: r.id,
@@ -303,6 +288,9 @@ export function UserManagementDataTable({
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
                 <DropdownMenuItem
+                  disabled={
+                    soleEbLock || r.role === 'Executive Board'
+                  }
                   onClick={() =>
                     onPatch({
                       userId: r.id,
@@ -310,37 +298,29 @@ export function UserManagementDataTable({
                     })
                   }
                 >
-                  Executive Board
+                  Promote to Executive Board
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Assign department</DropdownMenuLabel>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>Member · PB</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {HEAD_DEPARTMENTS.map((d) => (
-                      <DropdownMenuItem
-                        key={d}
-                        onClick={() =>
-                          onPatch({
-                            userId: r.id,
-                            role: 'Guest',
-                            department: d,
-                            isActive: true,
-                          })
-                        }
-                      >
-                        {d}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"
+                  disabled={soleEbLock}
+                  title={
+                    soleEbLock
+                      ? 'Cannot revoke the last active Executive Board admin.'
+                      : undefined
+                  }
                   onClick={() =>
-                    onPatch({
-                      userId: r.id,
-                      isActive: false,
+                    requestConfirm({
+                      title: `Revoke access for ${r.email}?`,
+                      description:
+                        'They will become inactive and lose dashboard access. You can reactivate them later from the Inactive accounts section.',
+                      confirmLabel: 'Revoke access',
+                      variant: 'destructive',
+                      onConfirm: () =>
+                        onPatch({
+                          userId: r.id,
+                          isActive: false,
+                        }),
                     })
                   }
                 >
@@ -352,12 +332,12 @@ export function UserManagementDataTable({
         },
       },
     ],
-    [onPatch, pendingUserId, soleActiveExecutiveId]
+    [isSoleActiveExecutive, onPatch, pendingUserId, requestConfirm]
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API
   const table = useReactTable({
-    data: filteredData,
+    data,
     columns,
     state: { sorting, rowSelection },
     onSortingChange: setSorting,
@@ -367,25 +347,84 @@ export function UserManagementDataTable({
     getRowId: (row) => row.id,
   });
 
-  const selectedCount = Object.keys(rowSelection).filter(
-    (k) => (rowSelection as Record<string, boolean>)[k]
-  ).length;
+  const selectedIds = React.useMemo(
+    () => Object.keys(rowSelection).filter((k) => rowSelection[k]),
+    [rowSelection]
+  );
+
+  const selectionContainsSoleEb = React.useMemo(() => {
+    if (!soleActiveExecutiveId) return false;
+    return selectedIds.includes(soleActiveExecutiveId);
+  }, [selectedIds, soleActiveExecutiveId]);
+
+  const selectableForBulkInactive = React.useMemo(() => {
+    return selectedIds.filter((id) => {
+      if (id === soleActiveExecutiveId) return false;
+      const u = data.find((x) => x.id === id);
+      return u?.isActive === true;
+    });
+  }, [selectedIds, soleActiveExecutiveId, data]);
+
+  const handleBulkInactive = () => {
+    if (selectableForBulkInactive.length === 0) return;
+    requestConfirm({
+      title: `Deactivate ${selectableForBulkInactive.length} accounts?`,
+      description: (
+        <>
+          The selected accounts will become inactive and lose dashboard access.
+          You can reactivate them later from the Inactive accounts section.
+          {selectionContainsSoleEb ? (
+            <p className="mt-2 font-semibold text-amber-700 dark:text-amber-400">
+              Note: the last active Executive Board admin is in your selection
+              and will be skipped automatically.
+            </p>
+          ) : null}
+        </>
+      ),
+      confirmLabel: `Deactivate ${selectableForBulkInactive.length}`,
+      variant: 'destructive',
+      onConfirm: async () => {
+        await onBulkInactive(selectableForBulkInactive);
+        setRowSelection({});
+      },
+    });
+  };
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <span className="font-semibold text-foreground">Bulk (Phase 2)</span>
-        <Button type="button" size="sm" variant="outline" disabled title="Phase 2">
-          Move to Alumni
-        </Button>
-        <Button type="button" size="sm" variant="outline" disabled title="Phase 2">
+        <span className="font-semibold text-foreground">
+          Bulk actions
+          {bulkScopeLabel ? (
+            <span className="ml-1 font-normal text-muted-foreground">
+              · {bulkScopeLabel}
+            </span>
+          ) : null}
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="destructive"
+          disabled={selectableForBulkInactive.length === 0}
+          onClick={handleBulkInactive}
+        >
           Bulk inactive
+          {selectableForBulkInactive.length > 0
+            ? ` (${selectableForBulkInactive.length})`
+            : ''}
         </Button>
-        {selectedCount > 0 ? (
+        {selectedIds.length > 0 ? (
           <span className="text-muted-foreground">
-            {selectedCount} row(s) selected
+            {selectedIds.length} row(s) selected
+            {selectionContainsSoleEb
+              ? ' · sole Executive Board will be skipped'
+              : ''}
           </span>
-        ) : null}
+        ) : (
+          <span className="text-muted-foreground">
+            Select rows to enable bulk actions.
+          </span>
+        )}
       </div>
 
       <div className="bg-card border-border overflow-hidden rounded-xl border shadow-sm">
@@ -407,7 +446,10 @@ export function UserManagementDataTable({
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && 'selected'}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
@@ -424,7 +466,7 @@ export function UserManagementDataTable({
                   colSpan={columns.length}
                   className="h-24 text-center text-muted-foreground"
                 >
-                  No users match the current filters.
+                  No accounts to display.
                 </TableCell>
               </TableRow>
             )}

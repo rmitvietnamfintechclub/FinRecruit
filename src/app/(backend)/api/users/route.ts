@@ -20,11 +20,8 @@ function isDepartmentType(value: unknown): value is DepartmentType {
   return typeof value === 'string';
 }
 
-export const GET = withActiveRBAC('Executive Board', async (req: NextRequest) => {
-  const url = new URL(req.url);
-  const semester = url.searchParams.get('semester');
-  const generation = url.searchParams.get('generation');
-  const payload = await getUserManagementPayloadFromDb({ semester, generation });
+export const GET = withActiveRBAC('Executive Board', async () => {
+  const payload = await getUserManagementPayloadFromDb();
   return NextResponse.json(payload);
 });
 

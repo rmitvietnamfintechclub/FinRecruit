@@ -65,6 +65,20 @@ export function SystemConfigClient() {
     semester: string;
   } | null>(null);
 
+  // Animation hints — short-lived highlight keys flipped on after a successful
+  // mutation so the relevant row plays an enter / activate keyframe once.
+  const [highlightGenId, setHighlightGenId] = useState<string | null>(null);
+  const [highlightSemKey, setHighlightSemKey] = useState<string | null>(null);
+  const [highlightActive, setHighlightActive] = useState<string | null>(null);
+
+  const flashHighlight = useCallback(
+    (setter: (v: string | null) => void, key: string, durationMs = 1400) => {
+      setter(key);
+      window.setTimeout(() => setter(null), durationMs);
+    },
+    []
+  );
+
   const showSuccess = useCallback((msg: string) => {
     setSuccess(msg);
     window.setTimeout(() => setSuccess(null), 3500);
@@ -108,7 +122,14 @@ export function SystemConfigClient() {
     [generations]
   );
 
-  async function postJson(body: Record<string, unknown>, successMsg: string) {
+  type PostJsonResult =
+    | { ok: true; data: Payload }
+    | { ok: false; message: string };
+
+  async function postJson(
+    body: Record<string, unknown>,
+    successMsg: string
+  ): Promise<PostJsonResult> {
     setBusy(true);
     setError(null);
     try {
@@ -120,17 +141,38 @@ export function SystemConfigClient() {
       });
       const json = (await res.json()) as Payload;
       if (!res.ok || !json.success) {
-        setError(json.message ?? `Request failed (${res.status})`);
-        return false;
+        const message = json.message ?? `Request failed (${res.status})`;
+        setError(message);
+        return { ok: false, message };
       }
       showSuccess(successMsg);
       await load();
-      return true;
+      return { ok: true, data: json };
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Request failed.');
-      return false;
+      const message = e instanceof Error ? e.message : 'Request failed.';
+      setError(message);
+      return { ok: false, message };
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function createGeneration(rawName: string) {
+    const name = rawName.trim();
+    if (!name) return;
+    const result = await postJson(
+      { action: 'create-generation', name },
+      `Created ${name}`
+    );
+    if (!result.ok) return;
+    setNewGenName('');
+    const created = (result.data.generations ?? []).find(
+      (g) => g.name.toLowerCase() === name.toLowerCase()
+    );
+    if (created) {
+      // Open the new generation card so the highlight is actually visible.
+      setExpandedIds((prev) => new Set([...prev, created.id]));
+      flashHighlight(setHighlightGenId, created.id);
     }
   }
 
@@ -142,10 +184,17 @@ export function SystemConfigClient() {
     if (!activateConfirm) return;
     const { generation, semester } = activateConfirm;
     setActivateConfirm(null);
-    await postJson(
+    const result = await postJson(
       { action: 'activate', generation, semester },
       `Activated ${generation} / ${semester}`
     );
+    if (result.ok) {
+      flashHighlight(
+        setHighlightActive,
+        `${generation.toLowerCase()}|${semester.toLowerCase()}`,
+        1800
+      );
+    }
   }
 
   async function patchRecruitment(isRecruitmentActive: boolean) {
@@ -200,6 +249,10 @@ export function SystemConfigClient() {
       setSemesterCodes((prev) => ({ ...prev, [generationId]: '' }));
       showSuccess(`Added semester ${code} to ${generationName}`);
       await load();
+      flashHighlight(
+        setHighlightSemKey,
+        `${generationId}|${code.toLowerCase()}`
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to add semester.');
     } finally {
@@ -220,6 +273,100 @@ export function SystemConfigClient() {
 
   return (
     <div className="space-y-6">
+      <style>{`
+        @keyframes systemConfigRowEnter {
+          0% {
+            opacity: 0;
+            transform: translateY(-6px) scale(0.985);
+          }
+          60% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        @keyframes systemConfigRowActivate {
+          0% {
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
+            transform: scale(1);
+          }
+          35% {
+            box-shadow: 0 0 0 10px rgba(34, 197, 94, 0.18);
+            transform: scale(1.012);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+            transform: scale(1);
+          }
+        }
+        @keyframes systemConfigHeroSwap {
+          0% {
+            opacity: 0;
+            transform: translateY(8px);
+            filter: blur(2px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+            filter: blur(0);
+          }
+        }
+        @keyframes systemConfigBadgePop {
+          0% {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          60% {
+            transform: scale(1.05);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .sc-row-enter {
+          animation: systemConfigRowEnter 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        .sc-row-activate {
+          animation: systemConfigRowActivate 1500ms ease-out both;
+        }
+        .sc-hero-swap {
+          animation: systemConfigHeroSwap 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        .sc-badge-pop {
+          animation: systemConfigBadgePop 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        .sc-collapsible {
+          display: grid;
+          grid-template-rows: 0fr;
+          opacity: 0;
+          transition:
+            grid-template-rows 280ms cubic-bezier(0.16, 1, 0.3, 1),
+            opacity 220ms ease;
+        }
+        .sc-collapsible[data-open='true'] {
+          grid-template-rows: 1fr;
+          opacity: 1;
+        }
+        .sc-collapsible > .sc-collapsible-inner {
+          overflow: hidden;
+          min-height: 0;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sc-row-enter,
+          .sc-row-activate,
+          .sc-hero-swap,
+          .sc-badge-pop {
+            animation: none !important;
+          }
+          .sc-collapsible {
+            transition: none !important;
+          }
+        }
+      `}</style>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-2xl font-black tracking-tight text-foreground">
@@ -261,8 +408,8 @@ export function SystemConfigClient() {
           className={cn(
             'lg:col-span-2 overflow-hidden border-2',
             recruitmentOn
-              ? 'border-green-500/30 bg-gradient-to-br from-green-500/5 to-card'
-              : 'border-red-500/20 bg-gradient-to-br from-red-500/5 to-card'
+              ? 'border-green-500/30 bg-linear-to-br from-green-500/5 to-card'
+              : 'border-red-500/20 bg-linear-to-br from-red-500/5 to-card'
           )}
         >
           <CardHeader className="border-b border-border/60 pb-4">
@@ -301,7 +448,10 @@ export function SystemConfigClient() {
                     <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">
                       Generation
                     </p>
-                    <p className="mt-1 text-2xl font-black text-purple-700 dark:text-purple-300">
+                    <p
+                      key={active?.currentGeneration ?? '—'}
+                      className="sc-hero-swap mt-1 text-2xl font-black text-purple-700 dark:text-purple-300"
+                    >
                       {active?.currentGeneration || '—'}
                     </p>
                   </div>
@@ -309,7 +459,10 @@ export function SystemConfigClient() {
                     <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">
                       Semester
                     </p>
-                    <p className="mt-1 text-2xl font-black text-purple-700 dark:text-purple-300">
+                    <p
+                      key={active?.currentSemester ?? '—'}
+                      className="sc-hero-swap mt-1 text-2xl font-black text-purple-700 dark:text-purple-300"
+                    >
                       {active?.currentSemester || '—'}
                     </p>
                   </div>
@@ -380,12 +533,7 @@ export function SystemConfigClient() {
                 onChange={(e) => setNewGenName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && newGenName.trim()) {
-                    void postJson(
-                      { action: 'create-generation', name: newGenName.trim() },
-                      `Created ${newGenName.trim()}`
-                    ).then((ok) => {
-                      if (ok) setNewGenName('');
-                    });
+                    void createGeneration(newGenName);
                   }
                 }}
                 className={inputClass}
@@ -394,14 +542,7 @@ export function SystemConfigClient() {
             <Button
               disabled={busy || !newGenName.trim()}
               className="shrink-0 sm:mb-0.5"
-              onClick={() => {
-                void postJson(
-                  { action: 'create-generation', name: newGenName.trim() },
-                  `Created ${newGenName.trim()}`
-                ).then((ok) => {
-                  if (ok) setNewGenName('');
-                });
-              }}
+              onClick={() => void createGeneration(newGenName)}
             >
               <i className="fa-solid fa-plus mr-2" />
               Add generation
@@ -426,14 +567,16 @@ export function SystemConfigClient() {
               {generations.map((g) => {
                 const expanded = expandedIds.has(g.id);
                 const isActiveGen = active?.currentGeneration === g.name;
+                const justAddedGen = highlightGenId === g.id;
                 return (
                   <div
                     key={g.id}
                     className={cn(
-                      'overflow-hidden rounded-xl border transition-colors',
+                      'overflow-hidden rounded-xl border transition-[border-color,background-color,box-shadow] duration-300',
                       isActiveGen
                         ? 'border-purple-500/50 bg-purple-500/5 ring-1 ring-purple-500/20'
-                        : 'border-border bg-card'
+                        : 'border-border bg-card',
+                      justAddedGen && 'sc-row-enter'
                     )}
                   >
                     <button
@@ -443,7 +586,7 @@ export function SystemConfigClient() {
                     >
                       <i
                         className={cn(
-                          'fa-solid fa-chevron-right text-muted-foreground shrink-0 text-xs transition-transform',
+                          'fa-solid fa-chevron-right text-muted-foreground shrink-0 text-xs transition-transform duration-300',
                           expanded && 'rotate-90'
                         )}
                       />
@@ -451,7 +594,10 @@ export function SystemConfigClient() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-base font-black">{g.name}</span>
                           {isActiveGen ? (
-                            <Badge className="bg-purple-600 text-white hover:bg-purple-600/90">
+                            <Badge
+                              key={g.name}
+                              className="sc-badge-pop bg-purple-600 text-white hover:bg-purple-600/90"
+                            >
                               Generation active
                             </Badge>
                           ) : null}
@@ -462,96 +608,108 @@ export function SystemConfigClient() {
                       </div>
                     </button>
 
-                    {expanded ? (
-                      <div className="border-t border-border/60 bg-muted/20 px-4 pb-4 pt-3">
-                        {g.semesters.length === 0 ? (
-                          <p className="text-muted-foreground mb-3 text-sm">
-                            No semesters yet — add a code below.
-                          </p>
-                        ) : (
-                          <ul className="mb-4 space-y-2">
-                            {g.semesters.map((s) => {
-                              const activeRow = isActiveSemester(
-                                active,
-                                g.name,
-                                s.code
-                              );
-                              return (
-                                <li
-                                  key={s.code}
-                                  className={cn(
-                                    'flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3',
-                                    activeRow
-                                      ? 'border-green-500/50 bg-green-500/10'
-                                      : 'border-border bg-background'
-                                  )}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <span className="font-mono text-sm font-bold">
-                                      {s.code}
-                                    </span>
-                                    {activeRow ? (
-                                      <Badge className="bg-green-600 text-white hover:bg-green-600/90">
-                                        Active
-                                      </Badge>
-                                    ) : null}
-                                  </div>
-                                  {!activeRow ? (
-                                    <Button
-                                      size="sm"
-                                      disabled={busy}
-                                      onClick={() =>
-                                        requestActivateCohort(g.name, s.code)
-                                      }
-                                    >
-                                      Activate
-                                    </Button>
-                                  ) : (
-                                    <span className="text-muted-foreground text-xs font-semibold">
-                                      Current cohort
-                                    </span>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
+                    <div className="sc-collapsible" data-open={expanded}>
+                      <div className="sc-collapsible-inner">
+                        <div className="border-t border-border/60 bg-muted/20 px-4 pb-4 pt-3">
+                          {g.semesters.length === 0 ? (
+                            <p className="text-muted-foreground mb-3 text-sm">
+                              No semesters yet — add a code below.
+                            </p>
+                          ) : (
+                            <ul className="mb-4 space-y-2">
+                              {g.semesters.map((s) => {
+                                const activeRow = isActiveSemester(
+                                  active,
+                                  g.name,
+                                  s.code
+                                );
+                                const semKey = `${g.id}|${s.code.toLowerCase()}`;
+                                const activeKey = `${g.name.toLowerCase()}|${s.code.toLowerCase()}`;
+                                const justAddedSem = highlightSemKey === semKey;
+                                const justActivated =
+                                  highlightActive === activeKey;
+                                return (
+                                  <li
+                                    key={s.code}
+                                    className={cn(
+                                      'flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-[border-color,background-color,box-shadow] duration-300',
+                                      activeRow
+                                        ? 'border-green-500/50 bg-green-500/10'
+                                        : 'border-border bg-background',
+                                      justAddedSem && 'sc-row-enter',
+                                      justActivated && 'sc-row-activate'
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <span className="font-mono text-sm font-bold">
+                                        {s.code}
+                                      </span>
+                                      {activeRow ? (
+                                        <Badge
+                                          key={`${s.code}-active`}
+                                          className="sc-badge-pop bg-green-600 text-white hover:bg-green-600/90"
+                                        >
+                                          Active
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                    {!activeRow ? (
+                                      <Button
+                                        size="sm"
+                                        disabled={busy}
+                                        onClick={() =>
+                                          requestActivateCohort(g.name, s.code)
+                                        }
+                                      >
+                                        Activate
+                                      </Button>
+                                    ) : (
+                                      <span className="text-muted-foreground text-xs font-semibold">
+                                        Current cohort
+                                      </span>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
 
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                          <div className="min-w-0 flex-1 space-y-1.5">
-                            <label className="text-xs font-bold text-muted-foreground">
-                              Add semester for {g.name}
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="vd. 2026B"
-                              value={semesterCodes[g.id] ?? ''}
-                              disabled={busy}
-                              onChange={(e) =>
-                                setSemesterCodes((prev) => ({
-                                  ...prev,
-                                  [g.id]: e.target.value,
-                                }))
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  void addSemester(g.id, g.name);
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <label className="text-xs font-bold text-muted-foreground">
+                                Add semester for {g.name}
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="vd. 2026B"
+                                value={semesterCodes[g.id] ?? ''}
+                                disabled={busy}
+                                onChange={(e) =>
+                                  setSemesterCodes((prev) => ({
+                                    ...prev,
+                                    [g.id]: e.target.value,
+                                  }))
                                 }
-                              }}
-                              className={inputClass}
-                            />
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    void addSemester(g.id, g.name);
+                                  }
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <Button
+                              variant="outline"
+                              disabled={busy || !(semesterCodes[g.id] ?? '').trim()}
+                              className="shrink-0"
+                              onClick={() => void addSemester(g.id, g.name)}
+                            >
+                              Add
+                            </Button>
                           </div>
-                          <Button
-                            variant="outline"
-                            disabled={busy || !(semesterCodes[g.id] ?? '').trim()}
-                            className="shrink-0"
-                            onClick={() => void addSemester(g.id, g.name)}
-                          >
-                            Add
-                          </Button>
                         </div>
                       </div>
-                    ) : null}
+                    </div>
                   </div>
                 );
               })}

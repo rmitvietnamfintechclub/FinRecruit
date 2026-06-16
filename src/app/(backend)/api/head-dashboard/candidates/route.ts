@@ -12,6 +12,7 @@ import {
 import {
   normalizeHeadDepartment,
 } from '@/app/(backend)/libs/departments';
+import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
@@ -71,10 +72,18 @@ export const GET = withRBAC(
 
     await dbConnect();
 
+    // Implicit cohort scoping: only candidates from the active SystemConfig cohort.
+    const active = await getActiveConfig();
+    const cohort = {
+      generation: active.currentGeneration,
+      semester: active.currentSemester,
+    };
+
     const match = buildDepartmentHeadCandidateMatch({
       department: assignedDepartment,
       search,
       status,
+      cohort,
     });
 
     const aggregateResults = (await Candidate.aggregate([
@@ -143,10 +152,14 @@ export const GET = withRBAC(
             status,
             department: assignedDepartment,
           },
+          activeCohort: {
+            ...cohort,
+            isRecruitmentActive: active.isRecruitmentActive,
+          },
           allowedStatusOptions: [...DASHBOARD_STATUS_OPTIONS],
           emptyState:
             hasNoDepartmentCandidates
-              ? 'No candidates have been routed to your department yet.'
+              ? `No candidates have been routed to your department for ${cohort.semester} · ${cohort.generation} yet.`
               : hasNoFilteredResults
                 ? 'No results found for the current search or filter.'
                 : null,

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import CandidateTable from '@/components/ui/CandidateTable';
+import CandidateTable, { type CandidateViewMode } from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import type { DepartmentType } from '@/app/(backend)/types';
 import {
@@ -13,6 +13,7 @@ import {
   type MasterViewDeptFilter,
 } from '@/lib/executiveMasterViewMapping';
 import { AppNotice } from '@/components/feedback/AppNotice';
+import { CohortBanner } from '@/components/feedback/CohortBanner';
 import { emailLocalPart } from '@/lib/utils';
 
 type StatusCount = {
@@ -25,6 +26,12 @@ type StatusCount = {
 type StatisticsPayload = {
   overall: StatusCount;
   byDepartment: Partial<Record<DepartmentType, StatusCount>>;
+};
+
+type ActiveCohort = {
+  generation: string;
+  semester: string;
+  isRecruitmentActive: boolean;
 };
 
 const AnimatedNumber = ({ value }: { value: number }) => {
@@ -57,6 +64,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 export default function MasterCandidatesPage() {
   const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>([]);
   const [statistics, setStatistics] = useState<StatisticsPayload | null>(null);
+  const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [loadingList, setLoadingList] = useState(true);
@@ -75,6 +83,7 @@ export default function MasterCandidatesPage() {
   const [exportError, setExportError] = useState<string | null>(null);
 
   const [visibleCount, setVisibleCount] = useState(3);
+  const [viewMode, setViewMode] = useState<CandidateViewMode>('list');
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -133,7 +142,7 @@ export default function MasterCandidatesPage() {
       const res = await fetch('/api/executive/statistics', { credentials: 'include' });
       const json = (await res.json()) as {
         success?: boolean;
-        data?: StatisticsPayload;
+        data?: StatisticsPayload & { activeCohort?: ActiveCohort };
         message?: string;
       };
       if (!res.ok || !json.success || !json.data) {
@@ -145,6 +154,9 @@ export default function MasterCandidatesPage() {
         overall: json.data.overall,
         byDepartment: json.data.byDepartment,
       });
+      if (json.data.activeCohort) {
+        setActiveCohort(json.data.activeCohort);
+      }
     } catch (e) {
       setStatsError(e instanceof Error ? e.message : 'Failed to load statistics.');
       setStatistics(null);
@@ -169,7 +181,10 @@ export default function MasterCandidatesPage() {
       );
       const json = (await res.json()) as {
         success?: boolean;
-        data?: { candidates: ExecutiveListRow[] };
+        data?: {
+          candidates: ExecutiveListRow[];
+          activeCohort?: ActiveCohort;
+        };
         message?: string;
       };
       if (!res.ok || !json.success || !json.data?.candidates) {
@@ -179,6 +194,9 @@ export default function MasterCandidatesPage() {
       }
       const rows = json.data.candidates.map((c) => mapExecutiveListItemToHeadRow(c));
       setCandidates(rows);
+      if (json.data.activeCohort) {
+        setActiveCohort(json.data.activeCohort);
+      }
     } catch (e) {
       setListError(e instanceof Error ? e.message : 'Failed to load candidates.');
       setCandidates([]);
@@ -260,11 +278,7 @@ export default function MasterCandidatesPage() {
         </AppNotice>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-muted-foreground text-xs">
-          Pass/Fail/Pending status changes from MasterView require an Executive API (view and
-          detail only for now).
-        </p>
+      <div className="flex justify-end">
         <Link
           href="/MasterViewDashboard"
           className="shrink-0 text-sm font-bold text-blue-600 hover:underline dark:text-blue-400"
@@ -272,6 +286,8 @@ export default function MasterCandidatesPage() {
           ← Executive overview
         </Link>
       </div>
+
+      <CohortBanner cohort={activeCohort} scopeLabel="Executive Board view · all departments" />
 
       <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
         <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
@@ -439,6 +455,39 @@ export default function MasterCandidatesPage() {
               className="border-input bg-background placeholder:text-muted-foreground w-full rounded-xl border py-3 pr-4 pl-11 text-sm text-foreground shadow-sm transition-all hover:border-blue-400 focus:ring-2 focus:ring-blue-600/50 focus:outline-none"
             />
           </div>
+
+          <div
+            className="bg-muted/40 flex w-fit shrink-0 items-center gap-1 rounded-xl p-1.5"
+            role="group"
+            aria-label="Candidate layout"
+          >
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              aria-pressed={viewMode === 'grid'}
+              title="Card view"
+              className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                viewMode === 'grid'
+                  ? 'scale-105 bg-blue-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+              }`}
+            >
+              <i className="fa-solid fa-grip" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              aria-pressed={viewMode === 'list'}
+              title="List view"
+              className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                viewMode === 'list'
+                  ? 'scale-105 bg-blue-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+              }`}
+            >
+              <i className="fa-solid fa-list" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -451,6 +500,7 @@ export default function MasterCandidatesPage() {
             onUpdateStatus={noopStatus}
             readOnly
             detailApi="executive"
+            viewMode={viewMode}
           />
         )}
 

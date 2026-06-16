@@ -1,4 +1,4 @@
-/** Edge-safe: không import mongoose. */
+/** Edge-safe: does not import mongoose. */
 export type AppRole = 'Guest' | 'Department Head' | 'Executive Board';
 
 export function getHomePathForRole(
