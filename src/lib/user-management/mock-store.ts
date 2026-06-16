@@ -311,12 +311,27 @@ function wouldDeactivateSoleExecutive(
   return countActiveExecutiveBoard(userId) === 0;
 }
 
+/**
+ * Snapshot of the admin who initiated a user-management change. Forwarded
+ * from API routes so the audit log can attribute role grants without
+ * `patchUserInDb` having to reach into the request context itself.
+ */
+export type PatchUserManagementActor = {
+  userId?: string;
+  email?: string;
+  role?: RoleType;
+  ipAddress?: string;
+  userAgent?: string;
+};
+
 export type PatchUserManagementInput = {
   userId: string;
   /** Full replace of role + department rules */
   role?: RoleType;
   department?: DepartmentType;
   isActive?: boolean;
+  /** Optional — only `patchUserInDb` (DB-backed) currently consumes this. */
+  actor?: PatchUserManagementActor;
 };
 
 export type PatchUserManagementResult =

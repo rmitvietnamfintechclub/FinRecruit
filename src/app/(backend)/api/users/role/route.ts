@@ -22,11 +22,17 @@ function isRoleType(value: unknown): value is RoleType {
   return typeof value === 'string' && ROLE_VALUES.includes(value as RoleType);
 }
 
+function getClientIp(req: NextRequest): string | undefined {
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0]?.trim() || undefined;
+  return req.headers.get('x-real-ip') ?? undefined;
+}
+
 /**
  * Legacy endpoint. Delegates to {@link patchUserInDb} so every role change
  * is funnelled through the same anti-headless / sole-EB guards as PATCH /api/users.
  */
-export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) => {
+export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest, { session }) => {
   let body: RoleUpdatePayload;
 
   try {
@@ -54,7 +60,18 @@ export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) 
     );
   }
 
-  const result = await patchUserInDb({ userId, role, department });
+  const result = await patchUserInDb({
+    userId,
+    role,
+    department,
+    actor: {
+      userId: session.user.id,
+      email: session.user.email,
+      role: session.user.role,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers.get('user-agent') ?? undefined,
+    },
+  });
 
   if (!result.ok) {
     return NextResponse.json(

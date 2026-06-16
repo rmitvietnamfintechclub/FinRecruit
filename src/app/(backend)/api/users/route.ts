@@ -32,7 +32,13 @@ type PatchBody = {
   isActive?: boolean;
 };
 
-export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) => {
+function getClientIp(req: NextRequest): string | undefined {
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0]?.trim() || undefined;
+  return req.headers.get('x-real-ip') ?? undefined;
+}
+
+export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest, { session }) => {
   let body: PatchBody;
   try {
     body = (await req.json()) as PatchBody;
@@ -79,6 +85,13 @@ export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest) 
     role,
     department,
     isActive,
+    actor: {
+      userId: session.user.id,
+      email: session.user.email,
+      role: session.user.role,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers.get('user-agent') ?? undefined,
+    },
   });
 
   if (!result.ok) {

@@ -23,6 +23,7 @@ const NAV: NavItem[] = [
   { href: '/MasterViewDashboard/candidates', label: 'Candidates' },
   { href: '/MasterViewDashboard/user-management', label: 'Users' },
   { href: '/MasterViewDashboard/system-config', label: 'System Config' },
+  { href: '/MasterViewDashboard/system-logs', label: 'System Logs' },
 ];
 
 export function ExecutiveDashboardShell({

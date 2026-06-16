@@ -91,13 +91,42 @@ export interface ISystemConfig extends Document {
   isRecruitmentActive: boolean;
 }
 
+export type AuditLogLevel = 'info' | 'warning' | 'error';
+
+export type AuditLogCategory =
+  | 'candidate'
+  | 'role'
+  | 'system-config'
+  | 'security'
+  | 'system';
+
+export interface IAuditLogActor {
+  userId?: string;
+  email?: string;
+  role?: RoleType;
+}
+
+export interface IAuditLogTarget {
+  userId?: string;
+  email?: string;
+  candidateId?: string;
+  msFormResponseId?: string;
+  /** Optional human-readable label used by the System Logs UI when the target
+   * is not an existing user / candidate (e.g. a generation name). */
+  label?: string;
+}
+
 export interface IAuditLog extends Document {
   _id: Types.ObjectId;
+  level: AuditLogLevel;
+  category: AuditLogCategory;
   action: string;
-  performedBy: string;
-  targetUser?: string;
-  targetCandidateId?: string;
-  details?: string;
+  message: string;
+  performedBy?: IAuditLogActor;
+  target?: IAuditLogTarget;
+  metadata?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
   timestamp: Date;
 }
 

@@ -2,7 +2,6 @@
 
 import Image from 'next/image';
 import { signIn, useSession } from 'next-auth/react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useDashboardTheme } from '@/hooks/use-dashboard-theme';

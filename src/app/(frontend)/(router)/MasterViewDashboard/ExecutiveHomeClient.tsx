@@ -293,7 +293,7 @@ export function ExecutiveHomeClient() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           href="/MasterViewDashboard/candidates"
           className="border-border bg-card hover:border-blue-400 flex flex-col rounded-2xl border p-6 shadow-sm transition-colors"
@@ -322,6 +322,16 @@ export function ExecutiveHomeClient() {
           <span className="font-black">System Config</span>
           <span className="text-muted-foreground mt-1 text-sm">
             Generation, semester, recruitment toggle
+          </span>
+        </Link>
+        <Link
+          href="/MasterViewDashboard/system-logs"
+          className="border-border bg-card hover:border-amber-400 flex flex-col rounded-2xl border p-6 shadow-sm transition-colors"
+        >
+          <i className="fa-solid fa-clipboard-list mb-3 text-2xl text-amber-600" />
+          <span className="font-black">System Logs</span>
+          <span className="text-muted-foreground mt-1 text-sm">
+            Audit trail · role grants, failed intakes, config changes
           </span>
         </Link>
       </div>
