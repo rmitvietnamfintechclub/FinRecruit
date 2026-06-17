@@ -412,7 +412,7 @@ export function UserManagementClient({
         </AppNotice>
       ) : null}
 
-      <section className="bg-card border-border rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-0.5">
+      <section className="bg-card border-border rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-0.5 sm:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-yellow-100 text-2xl text-yellow-600 dark:bg-yellow-900/40 dark:text-yellow-400">
@@ -540,7 +540,7 @@ export function UserManagementClient({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="bg-card border-border space-y-4 rounded-2xl border p-6 shadow-sm">
+        <section className="bg-card border-border space-y-4 rounded-2xl border p-4 shadow-sm sm:p-6">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-2xl text-violet-700 dark:bg-violet-900/40 dark:text-violet-400">
               <i className="fa-solid fa-shield-halved" aria-hidden />
@@ -573,7 +573,7 @@ export function UserManagementClient({
           />
         </section>
 
-        <section className="bg-card border-border space-y-4 rounded-2xl border p-6 shadow-sm">
+        <section className="bg-card border-border space-y-4 rounded-2xl border p-4 shadow-sm sm:p-6">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-2xl text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
               <i className="fa-solid fa-people-group" aria-hidden />
@@ -607,7 +607,7 @@ export function UserManagementClient({
         </section>
       </div>
 
-      <section className="bg-card border-border rounded-2xl border p-6 shadow-sm">
+      <section className="bg-card border-border rounded-2xl border p-4 shadow-sm sm:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-2xl text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-400">

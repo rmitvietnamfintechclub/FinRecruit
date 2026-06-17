@@ -44,7 +44,7 @@ export default function LoginPage() {
       />
 
       <main className="flex flex-1 items-center justify-center bg-muted/30 px-4 py-10 sm:px-6">
-        <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-sm ring-1 ring-foreground/10 sm:p-10">
+        <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm ring-1 ring-foreground/10 sm:p-8 lg:p-10">
           <div className="flex flex-col items-center text-center">
             <Image
               src="/ftc_logo.png"

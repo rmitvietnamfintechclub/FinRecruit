@@ -51,7 +51,7 @@ export function CohortBanner({ cohort, scopeLabel }: CohortBannerProps) {
 
   return (
     <section
-      className={`bg-card border-border relative overflow-hidden rounded-2xl border p-6 shadow-sm ring-1 ${recruitmentTone.ring}`}
+      className={`bg-card border-border relative overflow-hidden rounded-2xl border p-4 shadow-sm ring-1 sm:p-6 ${recruitmentTone.ring}`}
       aria-label="Active recruitment cohort"
     >
       <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-400/5" />
@@ -70,7 +70,7 @@ export function CohortBanner({ cohort, scopeLabel }: CohortBannerProps) {
               <span className="text-muted-foreground">·</span>{' '}
               {cohort.generation}
             </p>
-            <p className="mt-1.5 text-sm font-semibold text-muted-foreground">
+            <p className="mt-1.5 line-clamp-2 text-sm font-semibold text-muted-foreground">
               {scopeLabel
                 ? scopeLabel
                 : 'Showing only candidates matching this cohort. Change it from System Config to switch.'}

@@ -427,7 +427,7 @@ export function UserManagementDataTable({
         )}
       </div>
 
-      <div className="bg-card border-border overflow-hidden rounded-xl border shadow-sm">
+      <div className="bg-card border-border overflow-x-auto rounded-xl border shadow-sm">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (

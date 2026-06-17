@@ -44,7 +44,7 @@ export function ExecutiveDashboardShell({
       userAvatar={userAvatar}
       userSubtitle="Executive Board"
     >
-      <nav className="border-border bg-card mb-6 flex flex-wrap gap-2 rounded-xl border p-2 shadow-sm">
+      <nav className="border-border bg-card mb-4 flex gap-2 overflow-x-auto rounded-xl border p-2 shadow-sm sm:mb-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {NAV.map((item) => {
           const active = item.exact
             ? pathname === item.href
@@ -53,7 +53,7 @@ export function ExecutiveDashboardShell({
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
+              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition-colors sm:px-4 sm:text-sm ${
                 active
                   ? 'bg-purple-600 text-white shadow-sm'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'

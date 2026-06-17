@@ -369,7 +369,7 @@ export function SystemConfigClient() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl font-black tracking-tight text-foreground">
+          <h2 className="text-xl font-black tracking-tight text-foreground sm:text-2xl">
             System Config
           </h2>
           <p className="text-muted-foreground mt-1 max-w-2xl text-sm">

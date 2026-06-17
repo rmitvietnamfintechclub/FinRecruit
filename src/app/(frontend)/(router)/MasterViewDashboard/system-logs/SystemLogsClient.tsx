@@ -241,7 +241,7 @@ export function SystemLogsClient() {
       </div>
 
       <div>
-        <h2 className="text-2xl font-black tracking-tight">System Logs</h2>
+        <h2 className="text-xl font-black tracking-tight sm:text-2xl">System Logs</h2>
         <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
           Audit trail of role grants, system-config changes, candidate intake
           failures, and security events. Entries are kept for 90 days.
@@ -395,13 +395,13 @@ export function SystemLogsClient() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-3 text-left font-bold">Time</th>
-                      <th className="px-4 py-3 text-left font-bold">Level</th>
-                      <th className="px-4 py-3 text-left font-bold">Category</th>
-                      <th className="px-4 py-3 text-left font-bold">Action</th>
-                      <th className="px-4 py-3 text-left font-bold">Message</th>
-                      <th className="px-4 py-3 text-left font-bold">Performed by</th>
-                      <th className="px-4 py-3 text-left font-bold">Target</th>
+                      <th className="hidden px-3 py-3 text-left font-bold sm:table-cell sm:px-4">Time</th>
+                      <th className="px-3 py-3 text-left font-bold sm:px-4">Level</th>
+                      <th className="hidden px-3 py-3 text-left font-bold md:table-cell sm:px-4">Category</th>
+                      <th className="hidden px-3 py-3 text-left font-bold lg:table-cell sm:px-4">Action</th>
+                      <th className="px-3 py-3 text-left font-bold sm:px-4">Message</th>
+                      <th className="hidden px-3 py-3 text-left font-bold lg:table-cell sm:px-4">Performed by</th>
+                      <th className="hidden px-3 py-3 text-left font-bold xl:table-cell sm:px-4">Target</th>
                       <th className="px-4 py-3"></th>
                     </tr>
                   </thead>
@@ -418,10 +418,10 @@ export function SystemLogsClient() {
                             )}
                             onClick={() => toggleExpanded(log.id)}
                           >
-                            <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                            <td className="hidden whitespace-nowrap px-3 py-3 text-xs text-muted-foreground sm:table-cell sm:px-4">
                               {formatDate(log.timestamp)}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-3 py-3 sm:px-4">
                               <Badge
                                 variant="outline"
                                 className={cn('uppercase', lvl.badge)}
@@ -435,20 +435,23 @@ export function SystemLogsClient() {
                                 {log.level}
                               </Badge>
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-muted-foreground">
+                            <td className="hidden whitespace-nowrap px-3 py-3 text-xs font-semibold text-muted-foreground md:table-cell sm:px-4">
                               {CATEGORY_LABEL[log.category] ?? log.category}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3">
+                            <td className="hidden whitespace-nowrap px-3 py-3 lg:table-cell sm:px-4">
                               <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-bold">
                                 {log.action}
                               </code>
                             </td>
-                            <td className="px-4 py-3">
-                              <p className="line-clamp-2 max-w-md font-semibold text-foreground">
+                            <td className="px-3 py-3 sm:px-4">
+                              <p className="line-clamp-3 font-semibold text-foreground sm:line-clamp-2 sm:max-w-md">
                                 {log.message}
                               </p>
+                              <p className="mt-1 text-[11px] text-muted-foreground sm:hidden">
+                                {formatDate(log.timestamp)}
+                              </p>
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-xs">
+                            <td className="hidden whitespace-nowrap px-3 py-3 text-xs lg:table-cell sm:px-4">
                               <span className="font-semibold text-foreground">
                                 {actorLabel(log.performedBy)}
                               </span>
@@ -458,10 +461,10 @@ export function SystemLogsClient() {
                                 </span>
                               ) : null}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                            <td className="hidden whitespace-nowrap px-3 py-3 text-xs text-muted-foreground xl:table-cell sm:px-4">
                               {targetLabel(log.target)}
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-3 py-3 text-right sm:px-4">
                               <i
                                 className={cn(
                                   'fa-solid fa-chevron-right text-xs text-muted-foreground transition-transform',

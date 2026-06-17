@@ -78,7 +78,7 @@ export default function CandidateTable({
       `}</style>
 
       {viewMode === 'list' ? (
-        <div className="bg-card border-border overflow-hidden rounded-2xl border shadow-sm">
+        <div className="bg-card border-border overflow-x-auto rounded-2xl border shadow-sm">
           {/* List Header (md+) */}
           <div className="text-muted-foreground bg-muted/40 hidden md:grid md:grid-cols-[1.7fr_1.3fr_1fr_0.9fr_minmax(220px,auto)] gap-4 px-5 py-3 text-[10px] font-black uppercase tracking-wider">
             <div>Candidate</div>
@@ -155,7 +155,7 @@ export default function CandidateTable({
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center justify-start gap-2 md:justify-end">
+                <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
                   {!readOnly && (
                     <>
                       <button
@@ -193,7 +193,7 @@ export default function CandidateTable({
         {candidates.map((candidate, index) => (
           <div 
             key={candidate.id} 
-            className="animate-card-entry group relative flex flex-col rounded-[24px] border border-border bg-card p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-blue-200 dark:hover:border-blue-800"
+            className="animate-card-entry group relative flex flex-col rounded-[24px] border border-border bg-card p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-blue-200 sm:p-6 lg:p-7 dark:hover:border-blue-800"
             style={{ animationDelay: `${index * 100}ms` }}
           >
             {/* Card Header */}

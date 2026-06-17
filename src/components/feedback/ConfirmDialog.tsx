@@ -64,12 +64,12 @@ export function ConfirmDialog({
             </div>
           </div>
         </div>
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             disabled={loading}
             onClick={onCancel}
-            className="border-border bg-card text-foreground hover:bg-muted rounded-xl border px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60"
+            className="border-border bg-card text-foreground hover:bg-muted w-full rounded-xl border px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60 sm:w-auto"
           >
             {cancelLabel}
           </button>
@@ -78,7 +78,7 @@ export function ConfirmDialog({
             disabled={loading}
             onClick={onConfirm}
             className={cn(
-              'rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-60',
+              'w-full rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-60 sm:w-auto',
               variant === 'destructive'
                 ? 'bg-red-600 hover:bg-red-700'
                 : 'border-2 border-blue-900 bg-blue-900 hover:border-blue-800 hover:bg-blue-800'

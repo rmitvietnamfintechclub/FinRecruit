@@ -289,50 +289,50 @@ export default function MasterCandidatesPage() {
 
       <CohortBanner cohort={activeCohort} scopeLabel="Executive Board view · all departments" />
 
-      <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
-        <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
-          <div className="h-14 w-14 shrink-0 rounded-xl bg-blue-100 text-2xl text-blue-600 flex items-center justify-center">
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
+        <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl text-blue-600 sm:h-14 sm:w-14 sm:text-2xl">
             <i className="fa-solid fa-users"></i>
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-blue-600/80">Total</p>
-            <p className="text-3xl font-black leading-none text-blue-600 mt-2">
+            <p className="mt-1.5 text-2xl font-black leading-none text-blue-600 sm:mt-2 sm:text-3xl">
               {loadingStats ? '—' : <AnimatedNumber value={stats.total} />}
             </p>
             <p className="text-sm font-semibold text-blue-600/80 mt-1.5">Applicants</p>
           </div>
         </div>
-        <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
-          <div className="h-14 w-14 shrink-0 rounded-xl bg-yellow-100 text-2xl text-yellow-600 flex items-center justify-center">
+        <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-yellow-100 text-xl text-yellow-600 sm:h-14 sm:w-14 sm:text-2xl">
             <i className="fa-solid fa-clock"></i>
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-yellow-600/80">Pending</p>
-            <p className="text-3xl font-black leading-none text-yellow-600 mt-2">
+            <p className="mt-1.5 text-2xl font-black leading-none text-yellow-600 sm:mt-2 sm:text-3xl">
               {loadingStats ? '—' : <AnimatedNumber value={stats.pending} />}
             </p>
             <p className="text-sm font-semibold text-yellow-600/80 mt-1.5">In Review</p>
           </div>
         </div>
-        <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
-          <div className="h-14 w-14 shrink-0 rounded-xl bg-green-100 text-2xl text-green-600 flex items-center justify-center">
+        <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-xl text-green-600 sm:h-14 sm:w-14 sm:text-2xl">
             <i className="fa-solid fa-check"></i>
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-green-600/80">Passed</p>
-            <p className="text-3xl font-black leading-none text-green-600 mt-2">
+            <p className="mt-1.5 text-2xl font-black leading-none text-green-600 sm:mt-2 sm:text-3xl">
               {loadingStats ? '—' : <AnimatedNumber value={stats.passed} />}
             </p>
             <p className="text-sm font-semibold text-green-600/80 mt-1.5">Qualified</p>
           </div>
         </div>
-        <div className="bg-card border-border flex items-center gap-5 rounded-2xl border p-6 shadow-sm transition-transform hover:-translate-y-1">
-          <div className="h-14 w-14 shrink-0 rounded-xl bg-red-100 text-2xl text-red-600 flex items-center justify-center">
+        <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-100 text-xl text-red-600 sm:h-14 sm:w-14 sm:text-2xl">
             <i className="fa-solid fa-xmark"></i>
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-red-600/80">Failed</p>
-            <p className="text-3xl font-black leading-none text-red-600 mt-2">
+            <p className="mt-1.5 text-2xl font-black leading-none text-red-600 sm:mt-2 sm:text-3xl">
               {loadingStats ? '—' : <AnimatedNumber value={stats.failed} />}
             </p>
             <p className="text-sm font-semibold text-red-600/80 mt-1.5">Rejected</p>
@@ -341,7 +341,7 @@ export default function MasterCandidatesPage() {
       </div>
 
       <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-        <div className="bg-muted/40 flex w-fit shrink-0 items-center gap-2 rounded-xl p-1.5">
+        <div className="bg-muted/40 -mx-1 flex w-full max-w-full items-center gap-1.5 overflow-x-auto rounded-xl p-1.5 sm:mx-0 sm:w-fit sm:gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {filterOptions.map((option) => (
             <button
               key={option}
@@ -350,7 +350,7 @@ export default function MasterCandidatesPage() {
                 setStatusFilter(option);
                 setVisibleCount(3);
               }}
-              className={`rounded-lg px-6 py-2.5 text-sm font-bold transition-all duration-200 ${
+              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 sm:px-6 sm:py-2.5 sm:text-sm ${
                 statusFilter === option
                   ? 'scale-105 bg-blue-600 text-white shadow-md'
                   : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'

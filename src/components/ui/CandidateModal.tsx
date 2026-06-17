@@ -155,12 +155,12 @@ export const CandidateModal: FC<CandidateModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 transition-opacity duration-300">
       <div className="flex h-[90vh] w-full max-w-4xl scale-100 transform flex-col overflow-hidden rounded-3xl border border-border bg-card font-sans shadow-2xl transition-transform duration-300">
-        <div className="flex shrink-0 items-center justify-between border-b border-border bg-card p-8">
-          <h1 className="text-3xl font-black tracking-tight text-blue-950 dark:text-blue-400">
+        <div className="flex shrink-0 flex-col gap-3 border-b border-border bg-card p-4 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+          <h1 className="min-w-0 text-xl font-black tracking-tight text-blue-950 sm:text-2xl lg:text-3xl dark:text-blue-400">
             Application Form —{' '}
             <span className="font-bold text-foreground">{display.fullName}</span>
           </h1>
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black tracking-wider uppercase shadow-sm ${
                 display.status === 'Pass'
@@ -198,7 +198,7 @@ export const CandidateModal: FC<CandidateModalProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-card p-8">
+        <div className="flex-1 overflow-y-auto bg-card p-4 sm:p-6 lg:p-8">
           {loadingDetail && (
             <p className="text-muted-foreground text-sm">Loading full profile…</p>
           )}
@@ -389,25 +389,25 @@ export const CandidateModal: FC<CandidateModalProps> = ({
         </div>
 
         {!readOnly && (
-          <div className="z-10 flex shrink-0 items-center justify-center gap-6 border-t border-border bg-card p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+          <div className="z-10 flex shrink-0 flex-col gap-3 border-t border-border bg-card p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] sm:flex-row sm:items-center sm:justify-center sm:gap-4 sm:p-6">
             <button
               type="button"
               onClick={() => onUpdateStatus(candidate.id, 'Fail')}
-              className="w-40 rounded-xl border-2 border-red-200 bg-red-50 px-6 py-3 text-sm font-black text-red-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md"
+              className="w-full rounded-xl border-2 border-red-200 bg-red-50 px-6 py-3 text-sm font-black text-red-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md sm:w-36 lg:w-40"
             >
               Fail
             </button>
             <button
               type="button"
               onClick={() => onUpdateStatus(candidate.id, 'Pending')}
-              className="w-40 rounded-xl border-2 border-yellow-200 bg-yellow-50 px-6 py-3 text-sm font-black text-yellow-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-yellow-500 hover:bg-yellow-500 hover:text-white hover:shadow-md"
+              className="w-full rounded-xl border-2 border-yellow-200 bg-yellow-50 px-6 py-3 text-sm font-black text-yellow-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-yellow-500 hover:bg-yellow-500 hover:text-white hover:shadow-md sm:w-36 lg:w-40"
             >
               Pending
             </button>
             <button
               type="button"
               onClick={() => onUpdateStatus(candidate.id, 'Pass')}
-              className="w-40 rounded-xl border-2 border-green-200 bg-green-50 px-6 py-3 text-sm font-black text-green-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-green-500 hover:bg-green-500 hover:text-white hover:shadow-md"
+              className="w-full rounded-xl border-2 border-green-200 bg-green-50 px-6 py-3 text-sm font-black text-green-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-green-500 hover:bg-green-500 hover:text-white hover:shadow-md sm:w-36 lg:w-40"
             >
               Pass
             </button>
