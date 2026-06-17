@@ -56,7 +56,7 @@ export async function patchCandidateStatus(
       needsRerouteConfirm: true,
       message:
         json.message ??
-        'Confirm reroute this candidate to their choice 2 department?',
+        'Mark as Fail and send this candidate to their second-choice department for review?',
       reroutePreview: json.reroutePreview,
     };
   }

@@ -6,6 +6,10 @@ import type {
   HeadDashboardListCandidate,
 } from '@/types/headDashboard';
 import type { ICustomAnswer } from '@/app/(backend)/types';
+import {
+  SECOND_CHOICE_BANNER_TITLE,
+  secondChoiceBannerMessage,
+} from '@/lib/candidateRoutingCopy';
 import { mapExecutiveDetailToHeadDetail } from '@/lib/executiveMasterViewMapping';
 
 type HeadDetailResponse = {
@@ -202,10 +206,10 @@ export const CandidateModal: FC<CandidateModalProps> = ({
               role="status"
             >
               <i className="fa-solid fa-shuffle mr-2 text-violet-700 dark:text-violet-400" aria-hidden />
-              <span className="font-bold">Choice 2</span>
+              <span className="font-bold">{SECOND_CHOICE_BANNER_TITLE}</span>
               <span className="text-violet-900 dark:text-violet-100">
                 {' '}
-                — Candidate passed choice 1 ({choice1Label}); now under review in your department.
+                — {secondChoiceBannerMessage(choice1Label)}
               </span>
             </div>
           )}
@@ -363,15 +367,25 @@ export const CandidateModal: FC<CandidateModalProps> = ({
             {detail && (
               <section className="text-muted-foreground rounded-xl border border-dashed border-border px-4 py-3 text-xs">
                 <p>
-                  <span className="font-semibold text-foreground">Choice 1:</span>{' '}
+                  <span className="font-semibold text-foreground">
+                    {isSecondChoiceStage
+                      ? 'First choice (did not pass):'
+                      : 'First choice:'}
+                  </span>{' '}
                   {detail.choice1}
                 </p>
                 <p className="mt-1">
-                  <span className="font-semibold text-foreground">Choice 2:</span>{' '}
+                  <span className="font-semibold text-foreground">
+                    {isSecondChoiceStage
+                      ? 'Second choice (under review):'
+                      : 'Second choice:'}
+                  </span>{' '}
                   {detail.choice2 ?? '—'}
                 </p>
                 <p className="mt-1">
-                  <span className="font-semibold text-foreground">Current department:</span>{' '}
+                  <span className="font-semibold text-foreground">
+                    Currently assigned to:
+                  </span>{' '}
                   {detail.department}
                 </p>
               </section>

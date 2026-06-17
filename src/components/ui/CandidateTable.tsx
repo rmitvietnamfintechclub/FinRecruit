@@ -7,6 +7,10 @@ import {
   formatFullDateTime,
   formatRelativeTime,
 } from '@/lib/formatRelativeTime';
+import {
+  SECOND_CHOICE_BADGE_LABEL,
+  secondChoiceTooltip,
+} from '@/lib/candidateRoutingCopy';
 import { useRelativeNowTick } from '@/hooks/useRelativeNowTick';
 import CandidateModal from './CandidateModal';
 
@@ -139,10 +143,10 @@ export default function CandidateTable({
                     {candidate.routing.currentStage === 'choice2' ? (
                       <span
                         className="ml-2 inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300"
-                        title={`Candidate passed choice 1 (${candidate.choice1}); now under review in your department.`}
+                        title={secondChoiceTooltip(candidate.choice1)}
                       >
                         <i className="fa-solid fa-shuffle" aria-hidden />
-                        Choice 2
+                        {SECOND_CHOICE_BADGE_LABEL}
                       </span>
                     ) : null}
                   </p>
@@ -239,10 +243,10 @@ export default function CandidateTable({
               <div className="-mt-2 mb-4">
                 <span
                   className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-violet-800 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300"
-                  title={`Candidate passed choice 1 (${candidate.choice1}); now under review in your department.`}
+                  title={secondChoiceTooltip(candidate.choice1)}
                 >
                   <i className="fa-solid fa-shuffle shrink-0" aria-hidden />
-                  Choice 2
+                  {SECOND_CHOICE_BADGE_LABEL}
                 </span>
               </div>
             )}

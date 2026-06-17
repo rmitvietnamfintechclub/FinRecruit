@@ -4,6 +4,10 @@ import {
   isHeadDepartment,
   type HeadDepartment,
 } from '@/app/(backend)/libs/departments';
+import {
+  rerouteConfirmMessage,
+  rerouteSuccessMessage,
+} from '@/lib/candidateRoutingCopy';
 import type {
   DepartmentType,
   ICustomAnswer,
@@ -256,7 +260,7 @@ export function resolveCandidateStatusChange(
       return {
         kind: 'reroute-confirmation-required',
         targetDepartment: routing.rerouteTargetDepartment,
-        message: `Confirmation required to route candidate to ${routing.rerouteTargetDepartment}.`,
+        message: rerouteConfirmMessage(routing.rerouteTargetDepartment),
         code: 'REROUTE_CONFIRMATION_REQUIRED',
       };
     }
@@ -265,7 +269,7 @@ export function resolveCandidateStatusChange(
       kind: 'reroute',
       targetDepartment: routing.rerouteTargetDepartment,
       nextStatus: 'Pending',
-      message: `Candidate successfully routed to ${routing.rerouteTargetDepartment}.`,
+      message: rerouteSuccessMessage(routing.rerouteTargetDepartment),
       code: 'CANDIDATE_REROUTED',
     };
   }

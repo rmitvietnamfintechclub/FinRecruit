@@ -570,7 +570,7 @@ export default function HeadDashboardPage() {
 
       <ConfirmDialog
         open={rerouteConfirm !== null}
-        title="Confirm reroute"
+        title="Send for second-choice review?"
         variant="destructive"
         description={
           rerouteConfirm ? (
@@ -578,14 +578,15 @@ export default function HeadDashboardPage() {
               <p>{rerouteConfirm.message}</p>
               {rerouteConfirm.preview ? (
                 <p className="mt-2">
-                  Target department:{' '}
+                  Second-choice department:{' '}
                   <span className="text-foreground font-semibold">
                     {rerouteConfirm.preview.targetDepartment}
-                  </span>{' '}
-                  → status:{' '}
+                  </span>
+                  . New status:{' '}
                   <span className="text-foreground font-semibold">
                     {rerouteConfirm.preview.resultingStatus}
                   </span>
+                  .
                 </p>
               ) : null}
             </>
@@ -593,7 +594,7 @@ export default function HeadDashboardPage() {
             ''
           )
         }
-        confirmLabel="Reroute"
+        confirmLabel="Send for 2nd review"
         onConfirm={() => void executeReroute()}
         onCancel={() => setRerouteConfirm(null)}
         loading={patching}
