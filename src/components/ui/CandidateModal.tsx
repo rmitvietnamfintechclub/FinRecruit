@@ -5,6 +5,7 @@ import type {
   HeadDashboardCandidateDetailApi,
   HeadDashboardListCandidate,
 } from '@/types/headDashboard';
+import type { ICustomAnswer } from '@/app/(backend)/types';
 import { mapExecutiveDetailToHeadDetail } from '@/lib/executiveMasterViewMapping';
 
 type HeadDetailResponse = {
@@ -30,18 +31,13 @@ interface CandidateModalProps {
   readOnly?: boolean;
 }
 
-function buildPlansText(d: HeadDashboardCandidateDetailApi): string {
-  const g = d.generalQuestions;
-  const p = d.personalInformation;
-  const blocks = [
-    p.futurePlans && `Plans (2026–2027): ${p.futurePlans}`,
-    g.fintechAspect && `Fintech aspect: ${g.fintechAspect}`,
-    g.achievementExpectation && `Expectations: ${g.achievementExpectation}`,
-    g.timeCommitment && `Time commitment: ${g.timeCommitment}`,
-    g.explanation && `Additional explanation: ${g.explanation}`,
-    g.questionsForUs && `Questions for us: ${g.questionsForUs}`,
-  ].filter(Boolean);
-  return blocks.length > 0 ? blocks.join('\n\n') : 'No general answers submitted.';
+function AnswerCard({ row }: { row: ICustomAnswer }) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/30 px-4 py-3">
+      <p className="text-xs font-semibold text-muted-foreground">{row.question}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{row.answer}</p>
+    </div>
+  );
 }
 
 export const CandidateModal: FC<CandidateModalProps> = ({
@@ -115,7 +111,6 @@ export const CandidateModal: FC<CandidateModalProps> = ({
         majorLine: detail.personalInformation.majorAndYear,
         fbLink: detail.personalInformation.facebookLink,
         cvLink: detail.cvLink,
-        plans_text: buildPlansText(detail),
         status: detail.status,
         generation: detail.generation,
         semester: detail.semester,
@@ -131,7 +126,6 @@ export const CandidateModal: FC<CandidateModalProps> = ({
         majorLine: candidate.choice1,
         fbLink: '',
         cvLink: '',
-        plans_text: 'Loading full profile…',
         status: candidate.status,
         generation: candidate.generation,
         semester: candidate.semester,
@@ -140,12 +134,11 @@ export const CandidateModal: FC<CandidateModalProps> = ({
         department: candidate.department,
       };
 
-  const deptExtra =
-    detail?.customAnswers?.filter(
-      (x) =>
-        x.question?.trim() &&
-        String(x.answer ?? '').trim() !== ''
-    ) ?? [];
+  const generalAnswers = detail?.generalAnswers ?? [];
+  const departmentExplanation = detail?.departmentExplanation ?? null;
+  const deptCustomAnswers = detail?.customAnswers ?? [];
+  const showDepartmentSection =
+    Boolean(departmentExplanation) || deptCustomAnswers.length > 0;
 
   const routingSource = detail ?? candidate;
   const isSecondChoiceStage =
@@ -341,29 +334,32 @@ export const CandidateModal: FC<CandidateModalProps> = ({
               <h2 className="mb-6 flex items-center gap-3 text-xl font-bold tracking-tight text-blue-950 dark:text-blue-400">
                 II. General questions
               </h2>
-              <div className="border-border bg-muted/40 text-foreground shadow-inner whitespace-pre-wrap rounded-2xl border p-6 text-sm leading-relaxed font-medium">
-                {display.plans_text}
-              </div>
+              {generalAnswers.length > 0 ? (
+                <div className="space-y-4">
+                  {generalAnswers.map((row, i) => (
+                    <AnswerCard key={`${row.question}-${i}`} row={row} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  {loadingDetail
+                    ? 'Loading general answers…'
+                    : 'No general answers submitted.'}
+                </p>
+              )}
             </section>
 
-            {deptExtra.length > 0 && (
+            {showDepartmentSection && (
               <section className="border-t border-border pt-8">
                 <h2 className="mb-6 text-xl font-bold tracking-tight text-blue-950 dark:text-blue-400">
                   III. Department questions
                 </h2>
                 <div className="space-y-4">
-                  {deptExtra.map((row, i) => (
-                    <div
-                      key={`${row.question}-${i}`}
-                      className="rounded-2xl border border-border bg-muted/30 px-4 py-3"
-                    >
-                      <p className="text-xs font-semibold text-muted-foreground">
-                        {row.question}
-                      </p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
-                        {row.answer}
-                      </p>
-                    </div>
+                  {departmentExplanation ? (
+                    <AnswerCard row={departmentExplanation} />
+                  ) : null}
+                  {deptCustomAnswers.map((row, i) => (
+                    <AnswerCard key={`${row.question}-${i}`} row={row} />
                   ))}
                 </div>
               </section>

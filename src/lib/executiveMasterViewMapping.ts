@@ -1,4 +1,9 @@
 import type { ICustomAnswer } from '@/app/(backend)/types';
+import {
+  normalizeCustomAnswers,
+  normalizeDepartmentExplanation,
+  normalizeGeneralAnswers,
+} from '@/lib/candidate-answers';
 import type {
   CandidateRoutingInfo,
   CandidateRoutingStage,
@@ -162,26 +167,22 @@ export function mapExecutiveDetailToHeadDetail(
     updatedAt: toIsoString(raw.updatedAt),
   });
 
-  const customAnswers: ICustomAnswer[] = Array.isArray(raw.customAnswers)
-    ? (raw.customAnswers as ICustomAnswer[])
-    : [];
+  const customAnswers = normalizeCustomAnswers({
+    customAnswers: Array.isArray(raw.customAnswers)
+      ? (raw.customAnswers as ICustomAnswer[])
+      : [],
+  });
 
   return {
     ...listBase,
     cvLink: String(raw.cvLink ?? ''),
+    generalAnswers: normalizeGeneralAnswers(raw),
+    departmentExplanation: normalizeDepartmentExplanation(raw),
     customAnswers,
     personalInformation: {
       dob: String(raw.dob ?? ''),
       majorAndYear: String(raw.majorAndYear ?? ''),
       facebookLink: String(raw.facebookLink ?? ''),
-      futurePlans: String(raw.futurePlans ?? ''),
-    },
-    generalQuestions: {
-      fintechAspect: String(raw.fintechAspect ?? ''),
-      achievementExpectation: String(raw.achievementExpectation ?? ''),
-      timeCommitment: String(raw.timeCommitment ?? ''),
-      explanation: String(raw.explanation ?? ''),
-      questionsForUs: String(raw.questionsForUs ?? ''),
     },
   };
 }

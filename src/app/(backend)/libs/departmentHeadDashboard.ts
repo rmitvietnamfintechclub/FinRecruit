@@ -9,6 +9,11 @@ import type {
   ICustomAnswer,
   StatusType,
 } from '@/app/(backend)/types';
+import {
+  normalizeCustomAnswers,
+  normalizeDepartmentExplanation,
+  normalizeGeneralAnswers,
+} from '@/lib/candidate-answers';
 
 export const DASHBOARD_STATUS_OPTIONS = ['Pending', 'Pass', 'Fail'] as const;
 
@@ -45,22 +50,14 @@ export type DepartmentHeadCandidateListItem = {
 
 export type DepartmentHeadCandidateDetail = DepartmentHeadCandidateListItem & {
   cvLink: string;
-  customAnswers: ICustomAnswer[];
-  /** Personal information (application form) */
   personalInformation: {
     dob: string;
     majorAndYear: string;
     facebookLink: string;
-    futurePlans: string;
   };
-  /** General questions (application form) */
-  generalQuestions: {
-    fintechAspect: string;
-    achievementExpectation: string;
-    timeCommitment: string;
-    explanation: string;
-    questionsForUs: string;
-  };
+  generalAnswers: ICustomAnswer[];
+  departmentExplanation: ICustomAnswer | null;
+  customAnswers: ICustomAnswer[];
 };
 
 export type CandidateStatusChangeDecision =
@@ -103,10 +100,13 @@ type CandidateSummaryLike = {
 
 type CandidateDetailLike = CandidateSummaryLike & {
   cvLink: string;
+  generalAnswers?: ICustomAnswer[] | null;
+  departmentExplanation?: ICustomAnswer | null;
   customAnswers?: ICustomAnswer[] | null;
   dob?: string;
   majorAndYear?: string;
   facebookLink?: string;
+  // legacy fields (read fallback only)
   futurePlans?: string;
   fintechAspect?: string;
   achievementExpectation?: string;
@@ -307,25 +307,19 @@ export function serializeCandidateListItem(
 export function serializeCandidateDetail(
   candidate: CandidateDetailLike
 ): DepartmentHeadCandidateDetail {
+  const doc = candidate as Record<string, unknown>;
+
   return {
     ...serializeCandidateListItem(candidate),
     cvLink: candidate.cvLink,
-    customAnswers: Array.isArray(candidate.customAnswers)
-      ? candidate.customAnswers
-      : [],
     personalInformation: {
       dob: candidate.dob ?? '',
       majorAndYear: candidate.majorAndYear ?? '',
       facebookLink: candidate.facebookLink ?? '',
-      futurePlans: candidate.futurePlans ?? '',
     },
-    generalQuestions: {
-      fintechAspect: candidate.fintechAspect ?? '',
-      achievementExpectation: candidate.achievementExpectation ?? '',
-      timeCommitment: candidate.timeCommitment ?? '',
-      explanation: candidate.explanation ?? '',
-      questionsForUs: candidate.questionsForUs ?? '',
-    },
+    generalAnswers: normalizeGeneralAnswers(doc),
+    departmentExplanation: normalizeDepartmentExplanation(doc),
+    customAnswers: normalizeCustomAnswers(candidate),
   };
 }
 

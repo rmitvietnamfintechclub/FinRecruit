@@ -54,15 +54,10 @@ export interface ICandidate {
   majorAndYear: string;
   facebookLink: string;
   cvLink: string;
-  futurePlans: string;
-  
-  // --- General questions ---
-  fintechAspect: string;
-  achievementExpectation: string;
-  timeCommitment: string;
-  explanation: string;
-  questionsForUs: string;
-  
+
+  generalAnswers: ICustomAnswer[];
+  departmentExplanation?: ICustomAnswer;
+
   // --- Assignment & status ---
   choice1: CandidateChoiceType;
   choice2?: CandidateChoiceType | '';
@@ -71,8 +66,7 @@ export interface ICandidate {
   status: StatusType;
   isRerouted: boolean;
   reviewerEmail?: string;
-  
-  // --- Supplementary ---
+
   customAnswers: ICustomAnswer[];
   
   // --- Metadata ---

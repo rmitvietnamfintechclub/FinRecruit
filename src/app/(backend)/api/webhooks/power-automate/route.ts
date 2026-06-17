@@ -3,6 +3,7 @@ import dbConnect from '@/app/(backend)/libs/dbConnect';
 import Candidate from '@/app/(backend)/models/Candidate';
 import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { logSystemEvent } from '@/app/(backend)/libs/system-log/service';
+import { normalizePowerAutomatePayload } from '@/lib/candidate-answers';
 
 const SYSTEM_ACTOR = {
   email: 'system:power-automate',
@@ -105,10 +106,11 @@ export async function POST(req: Request) {
     payload.generation = active.currentGeneration;
     payload.semester = active.currentSemester;
 
-    console.log("Payload to be inserted:", JSON.stringify(payload, null, 2));
+    const normalized = normalizePowerAutomatePayload(payload);
 
-    // 3. Insert directly — Power Automate already produces a fully shaped payload
-    const newCandidate = await Candidate.create(payload);
+    console.log("Payload to be inserted:", JSON.stringify(normalized, null, 2));
+
+    const newCandidate = await Candidate.create(normalized);
 
     return NextResponse.json({ success: true, id: newCandidate._id }, { status: 200 });
 
