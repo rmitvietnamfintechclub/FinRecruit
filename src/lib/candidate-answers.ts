@@ -1,8 +1,11 @@
 import type { ICustomAnswer } from '@/app/(backend)/types';
 
-/** Exact top-level key Power Automate sends for department choice explanation. */
+/** Exact question label for department choice explanation (also used as PA top-level key). */
 export const DEPARTMENT_EXPLANATION_PA_KEY =
   'Provide an explanation for your choice of department';
+
+const DEPARTMENT_EXPLANATION_KEY_PATTERN =
+  /provide\s+an\s+explanation\s+for\s+your\s+choice\s+of\s+department/i;
 
 /** Legacy flat DB fields → canonical question labels (read fallback). */
 export const LEGACY_GENERAL_FIELD_LABELS: Record<string, string> = {
@@ -32,7 +35,6 @@ const KNOWN_CANDIDATE_KEYS = new Set([
   'isRerouted',
   'reviewerEmail',
   'generalAnswers',
-  'departmentExplanation',
   'customAnswers',
   'generation',
   'semester',
@@ -41,12 +43,14 @@ const KNOWN_CANDIDATE_KEYS = new Set([
   'createdAt',
   'updatedAt',
   '__v',
+  // legacy (read fallback only; stripped before save)
   'futurePlans',
   'fintechAspect',
   'achievementExpectation',
   'timeCommitment',
   'explanation',
   'questionsForUs',
+  'departmentExplanation',
 ]);
 
 function isCustomAnswer(value: unknown): value is ICustomAnswer {
@@ -56,6 +60,36 @@ function isCustomAnswer(value: unknown): value is ICustomAnswer {
     'question' in value &&
     typeof (value as ICustomAnswer).question === 'string'
   );
+}
+
+function isDepartmentExplanationQuestion(question: string): boolean {
+  const trimmed = question.trim();
+  return (
+    trimmed === DEPARTMENT_EXPLANATION_PA_KEY ||
+    trimmed === `${DEPARTMENT_EXPLANATION_PA_KEY}?` ||
+    DEPARTMENT_EXPLANATION_KEY_PATTERN.test(trimmed)
+  );
+}
+
+function findDepartmentExplanationSourceKey(
+  record: Record<string, unknown>
+): string | null {
+  if (DEPARTMENT_EXPLANATION_PA_KEY in record) {
+    return DEPARTMENT_EXPLANATION_PA_KEY;
+  }
+
+  for (const key of Object.keys(record)) {
+    const trimmed = key.trim();
+    if (
+      trimmed === DEPARTMENT_EXPLANATION_PA_KEY ||
+      trimmed === `${DEPARTMENT_EXPLANATION_PA_KEY}?` ||
+      DEPARTMENT_EXPLANATION_KEY_PATTERN.test(trimmed)
+    ) {
+      return key;
+    }
+  }
+
+  return null;
 }
 
 function filterAnswerPairs(items: unknown): ICustomAnswer[] {
@@ -69,73 +103,68 @@ function filterAnswerPairs(items: unknown): ICustomAnswer[] {
     .filter((item) => item.question && item.answer);
 }
 
+function extractDepartmentExplanationFromRecord(
+  doc: Record<string, unknown>
+): ICustomAnswer | null {
+  const embedded = doc.departmentExplanation;
+  if (isCustomAnswer(embedded)) {
+    const question = embedded.question.trim() || DEPARTMENT_EXPLANATION_PA_KEY;
+    const answer = String(embedded.answer ?? '').trim();
+    if (answer) return { question, answer };
+  }
+
+  const sourceKey = findDepartmentExplanationSourceKey(doc);
+  if (sourceKey) {
+    const answer = String(doc[sourceKey] ?? '').trim();
+    if (answer) {
+      return { question: DEPARTMENT_EXPLANATION_PA_KEY, answer };
+    }
+  }
+
+  const legacy = String(doc.explanation ?? '').trim();
+  if (legacy) {
+    return { question: DEPARTMENT_EXPLANATION_PA_KEY, answer: legacy };
+  }
+
+  return null;
+}
+
+function appendDepartmentExplanationIfMissing(
+  answers: ICustomAnswer[],
+  doc: Record<string, unknown>
+): ICustomAnswer[] {
+  const dept = extractDepartmentExplanationFromRecord(doc);
+  if (!dept) return answers;
+
+  const exists = answers.some((item) =>
+    isDepartmentExplanationQuestion(item.question)
+  );
+  if (exists) return answers;
+
+  return [...answers, dept];
+}
+
 export function normalizeCustomAnswers(doc: {
   customAnswers?: ICustomAnswer[] | null;
 }): ICustomAnswer[] {
   return filterAnswerPairs(doc.customAnswers);
 }
 
+/** General form Q&A including department choice explanation (6th item from PA). */
 export function normalizeGeneralAnswers(
   doc: Record<string, unknown>
 ): ICustomAnswer[] {
   const fromArray = filterAnswerPairs(doc.generalAnswers);
-  if (fromArray.length > 0) return fromArray;
+  if (fromArray.length > 0) {
+    return appendDepartmentExplanationIfMissing(fromArray, doc);
+  }
 
   const legacy: ICustomAnswer[] = [];
   for (const [field, label] of Object.entries(LEGACY_GENERAL_FIELD_LABELS)) {
     const answer = String(doc[field] ?? '').trim();
     if (answer) legacy.push({ question: label, answer });
   }
-  return legacy;
-}
-
-export function normalizeDepartmentExplanation(
-  doc: Record<string, unknown>
-): ICustomAnswer | null {
-  const embedded = doc.departmentExplanation;
-  if (isCustomAnswer(embedded)) {
-    const question = embedded.question.trim();
-    const answer = String(embedded.answer ?? '').trim();
-    if (question && answer) return { question, answer };
-  }
-
-  const legacy = String(doc.explanation ?? '').trim();
-  if (legacy) {
-    return {
-      question: DEPARTMENT_EXPLANATION_PA_KEY,
-      answer: legacy,
-    };
-  }
-
-  return null;
-}
-
-function extractDepartmentExplanationFromPayload(
-  raw: Record<string, unknown>
-): ICustomAnswer | undefined {
-  if (isCustomAnswer(raw.departmentExplanation)) {
-    const question = raw.departmentExplanation.question.trim();
-    const answer = String(raw.departmentExplanation.answer ?? '').trim();
-    if (question && answer) return { question, answer };
-  }
-
-  const fromPaKey = raw[DEPARTMENT_EXPLANATION_PA_KEY];
-  if (fromPaKey != null && String(fromPaKey).trim() !== '') {
-    return {
-      question: DEPARTMENT_EXPLANATION_PA_KEY,
-      answer: String(fromPaKey).trim(),
-    };
-  }
-
-  const legacy = String(raw.explanation ?? '').trim();
-  if (legacy) {
-    return {
-      question: DEPARTMENT_EXPLANATION_PA_KEY,
-      answer: legacy,
-    };
-  }
-
-  return undefined;
+  return appendDepartmentExplanationIfMissing(legacy, doc);
 }
 
 export function normalizePowerAutomatePayload(
@@ -144,24 +173,13 @@ export function normalizePowerAutomatePayload(
   const out: Record<string, unknown> = {};
 
   for (const key of KNOWN_CANDIDATE_KEYS) {
+    if (key === 'generalAnswers' || key === 'departmentExplanation') continue;
     if (key in raw && raw[key] !== undefined) {
       out[key] = raw[key];
     }
   }
 
-  const departmentExplanation = extractDepartmentExplanationFromPayload(raw);
-  if (departmentExplanation) {
-    out.departmentExplanation = departmentExplanation;
-  }
-
-  const generalFromArray = filterAnswerPairs(raw.generalAnswers);
-  if (generalFromArray.length > 0) {
-    out.generalAnswers = generalFromArray;
-  } else {
-    const built = normalizeGeneralAnswers(raw);
-    if (built.length > 0) out.generalAnswers = built;
-  }
-
+  out.generalAnswers = normalizeGeneralAnswers(raw);
   out.customAnswers = filterAnswerPairs(raw.customAnswers);
 
   delete out.futurePlans;
@@ -170,7 +188,7 @@ export function normalizePowerAutomatePayload(
   delete out.timeCommitment;
   delete out.questionsForUs;
   delete out.explanation;
-  delete out[DEPARTMENT_EXPLANATION_PA_KEY];
+  delete out.departmentExplanation;
 
   return out;
 }

@@ -15,6 +15,7 @@ import {
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { CohortBanner } from '@/components/feedback/CohortBanner';
 import { emailLocalPart } from '@/lib/utils';
+import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
 
 type StatusCount = {
   total: number;
@@ -84,6 +85,8 @@ export default function MasterCandidatesPage() {
 
   const [visibleCount, setVisibleCount] = useState(3);
   const [viewMode, setViewMode] = useState<CandidateViewMode>('list');
+  const [newCandidateNotice, setNewCandidateNotice] = useState(false);
+  const prevListCountRef = useRef<number | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -165,9 +168,11 @@ export default function MasterCandidatesPage() {
     }
   }, []);
 
-  const loadCandidates = useCallback(async () => {
-    setListError(null);
-    setLoadingList(true);
+  const loadCandidates = useCallback(async (options?: { isPoll?: boolean }) => {
+    if (!options?.isPoll) {
+      setListError(null);
+      setLoadingList(true);
+    }
     try {
       const params = new URLSearchParams();
       const dept = masterViewDeptToApiDepartment(deptFilter);
@@ -183,25 +188,42 @@ export default function MasterCandidatesPage() {
         success?: boolean;
         data?: {
           candidates: ExecutiveListRow[];
+          count: number;
           activeCohort?: ActiveCohort;
         };
         message?: string;
       };
       if (!res.ok || !json.success || !json.data?.candidates) {
-        setListError(json.message ?? `Candidates error (${res.status})`);
-        setCandidates([]);
+        if (!options?.isPoll) {
+          setListError(json.message ?? `Candidates error (${res.status})`);
+          setCandidates([]);
+        }
         return;
       }
+      const count = json.data.count;
+      if (
+        options?.isPoll &&
+        prevListCountRef.current !== null &&
+        count > prevListCountRef.current
+      ) {
+        setNewCandidateNotice(true);
+      }
+      prevListCountRef.current = count;
+
       const rows = json.data.candidates.map((c) => mapExecutiveListItemToHeadRow(c));
       setCandidates(rows);
       if (json.data.activeCohort) {
         setActiveCohort(json.data.activeCohort);
       }
     } catch (e) {
-      setListError(e instanceof Error ? e.message : 'Failed to load candidates.');
-      setCandidates([]);
+      if (!options?.isPoll) {
+        setListError(e instanceof Error ? e.message : 'Failed to load candidates.');
+        setCandidates([]);
+      }
     } finally {
-      setLoadingList(false);
+      if (!options?.isPoll) {
+        setLoadingList(false);
+      }
     }
   }, [deptFilter, statusFilter]);
 
@@ -212,6 +234,15 @@ export default function MasterCandidatesPage() {
   useEffect(() => {
     void loadCandidates();
   }, [loadCandidates]);
+
+  const pollDashboard = useCallback(() => {
+    void loadCandidates({ isPoll: true });
+    void loadStatistics();
+  }, [loadCandidates, loadStatistics]);
+
+  useIntervalWhenVisible(pollDashboard, {
+    enabled: !loadingList && !loadingStats,
+  });
 
   const stats = useMemo(() => {
     if (!statistics) {
@@ -277,6 +308,16 @@ export default function MasterCandidatesPage() {
           </div>
         </AppNotice>
       )}
+
+      {newCandidateNotice ? (
+        <AppNotice
+          variant="info"
+          title="New application received"
+          onDismiss={() => setNewCandidateNotice(false)}
+        >
+          A new candidate has been added to the list.
+        </AppNotice>
+      ) : null}
 
       <div className="flex justify-end">
         <Link

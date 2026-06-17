@@ -1,7 +1,6 @@
 import type { ICustomAnswer } from '@/app/(backend)/types';
 import {
   normalizeCustomAnswers,
-  normalizeDepartmentExplanation,
   normalizeGeneralAnswers,
 } from '@/lib/candidate-answers';
 import type {
@@ -177,7 +176,6 @@ export function mapExecutiveDetailToHeadDetail(
     ...listBase,
     cvLink: String(raw.cvLink ?? ''),
     generalAnswers: normalizeGeneralAnswers(raw),
-    departmentExplanation: normalizeDepartmentExplanation(raw),
     customAnswers,
     personalInformation: {
       dob: String(raw.dob ?? ''),

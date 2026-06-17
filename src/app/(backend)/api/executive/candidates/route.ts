@@ -116,6 +116,7 @@ export const GET = withRBAC(
         .select(
           'fullName email phone dob department status choice1 choice2 generation semester appliedAt createdAt updatedAt'
         )
+        .sort({ createdAt: -1 })
         .lean()
         .exec();
 

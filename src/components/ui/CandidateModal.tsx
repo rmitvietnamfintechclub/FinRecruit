@@ -135,10 +135,8 @@ export const CandidateModal: FC<CandidateModalProps> = ({
       };
 
   const generalAnswers = detail?.generalAnswers ?? [];
-  const departmentExplanation = detail?.departmentExplanation ?? null;
   const deptCustomAnswers = detail?.customAnswers ?? [];
-  const showDepartmentSection =
-    Boolean(departmentExplanation) || deptCustomAnswers.length > 0;
+  const showDepartmentSection = deptCustomAnswers.length > 0;
 
   const routingSource = detail ?? candidate;
   const isSecondChoiceStage =
@@ -355,9 +353,6 @@ export const CandidateModal: FC<CandidateModalProps> = ({
                   III. Department questions
                 </h2>
                 <div className="space-y-4">
-                  {departmentExplanation ? (
-                    <AnswerCard row={departmentExplanation} />
-                  ) : null}
                   {deptCustomAnswers.map((row, i) => (
                     <AnswerCard key={`${row.question}-${i}`} row={row} />
                   ))}

@@ -63,7 +63,6 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
           'facebookLink',
           'cvLink',
           'generalAnswers',
-          'departmentExplanation',
           'customAnswers',
           'choice1',
           'choice2',
@@ -80,6 +79,7 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
           'achievementExpectation',
           'timeCommitment',
           'explanation',
+          'departmentExplanation',
           'questionsForUs',
         ].join(' ')
       )

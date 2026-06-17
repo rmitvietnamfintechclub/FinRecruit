@@ -55,8 +55,8 @@ export interface ICandidate {
   facebookLink: string;
   cvLink: string;
 
+  /** Five general questions plus department choice explanation. */
   generalAnswers: ICustomAnswer[];
-  departmentExplanation?: ICustomAnswer;
 
   // --- Assignment & status ---
   choice1: CandidateChoiceType;

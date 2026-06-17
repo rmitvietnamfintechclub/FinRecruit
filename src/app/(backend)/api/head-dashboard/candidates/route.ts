@@ -89,29 +89,14 @@ export const GET = withRBAC(
     const aggregateResults = (await Candidate.aggregate([
       { $match: match },
       {
-        $addFields: {
-          statusRank: {
-            $switch: {
-              branches: [
-                { case: { $eq: ['$status', 'Pending'] }, then: 0 },
-                { case: { $eq: ['$status', 'Pass'] }, then: 1 },
-                { case: { $eq: ['$status', 'Fail'] }, then: 2 },
-              ],
-              default: 99,
-            },
-          },
-        },
-      },
-      {
         $facet: {
           metadata: [{ $count: 'total' }],
           items: [
-            { $sort: { statusRank: 1, updatedAt: -1, appliedAt: -1, _id: 1 } },
+            { $sort: { createdAt: -1, _id: -1 } },
             { $skip: skip },
             { $limit: limit },
             {
               $project: {
-                statusRank: 0,
                 customAnswers: 0,
                 cvLink: 0,
                 __v: 0,

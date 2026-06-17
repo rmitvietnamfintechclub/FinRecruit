@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CandidateTable, { type CandidateViewMode } from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import {
@@ -11,6 +11,7 @@ import {
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { CohortBanner } from '@/components/feedback/CohortBanner';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
+import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
 
 const PAGE_SIZE = 9;
 
@@ -92,6 +93,8 @@ export default function HeadDashboardPage() {
     message: string;
     preview?: ReroutePreview;
   } | null>(null);
+  const [newCandidateNotice, setNewCandidateNotice] = useState(false);
+  const prevListTotalRef = useRef<number | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -126,10 +129,14 @@ export default function HeadDashboardPage() {
   }, []);
 
   const loadList = useCallback(
-    async (pageNum: number, append: boolean) => {
-      if (pageNum === 1) {
+    async (
+      pageNum: number,
+      append: boolean,
+      options?: { isPoll?: boolean }
+    ) => {
+      if (pageNum === 1 && !append && !options?.isPoll) {
         setLoading(true);
-      } else {
+      } else if (pageNum > 1) {
         setLoadingMore(true);
       }
       setError(null);
@@ -146,20 +153,41 @@ export default function HeadDashboardPage() {
         });
         const json = (await res.json()) as ListApiResponse;
         if (!res.ok || !json.success) {
-          setError(json.message ?? `Request failed (${res.status})`);
-          if (!append) {
-            setCandidates([]);
-            setListEmptyHint(null);
+          if (!options?.isPoll) {
+            setError(json.message ?? `Request failed (${res.status})`);
+            if (!append) {
+              setCandidates([]);
+              setListEmptyHint(null);
+            }
           }
           return;
         }
         const rows = json.candidates ?? [];
-        setCandidates((prev) => (append && pageNum > 1 ? [...prev, ...rows] : rows));
-        const totalPages = json.meta?.totalPages ?? 0;
-        setHasMore(pageNum < totalPages);
-        setPage(pageNum);
+        const total = json.meta?.total ?? 0;
+
+        if (pageNum === 1 && !append) {
+          if (
+            options?.isPoll &&
+            prevListTotalRef.current !== null &&
+            total > prevListTotalRef.current
+          ) {
+            setNewCandidateNotice(true);
+          }
+          prevListTotalRef.current = total;
+          setCandidates(rows);
+          setPage(1);
+          setHasMore((json.meta?.totalPages ?? 0) > 1);
+        } else if (append && pageNum > 1) {
+          setCandidates((prev) => [...prev, ...rows]);
+          const totalPages = json.meta?.totalPages ?? 0;
+          setHasMore(pageNum < totalPages);
+          setPage(pageNum);
+        }
+
         setListEmptyHint(
-          rows.length === 0 ? json.meta?.emptyState ?? null : null
+          rows.length === 0 && !options?.isPoll
+            ? json.meta?.emptyState ?? null
+            : null
         );
         if (json.meta?.activeCohort) {
           setActiveCohort(json.meta.activeCohort);
@@ -168,11 +196,15 @@ export default function HeadDashboardPage() {
           setAssignedDepartment(json.meta.filters.department);
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load candidates.');
-        if (!append) setCandidates([]);
+        if (!options?.isPoll) {
+          setError(e instanceof Error ? e.message : 'Failed to load candidates.');
+          if (!append) setCandidates([]);
+        }
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (!options?.isPoll) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [debouncedSearch, statusFilter]
@@ -185,6 +217,15 @@ export default function HeadDashboardPage() {
   useEffect(() => {
     void refreshStats();
   }, [refreshStats]);
+
+  const pollDashboard = useCallback(() => {
+    void loadList(1, false, { isPoll: true });
+    void refreshStats();
+  }, [loadList, refreshStats]);
+
+  useIntervalWhenVisible(pollDashboard, {
+    enabled: !loading && !loadingMore && !patching,
+  });
 
   const handleUpdateStatusRequest = (id: string, newStatus: DashboardStatus) => {
     const candidate = candidates.find((c) => c.id === id);
@@ -295,6 +336,16 @@ export default function HeadDashboardPage() {
       {patchNotice ? (
         <AppNotice variant="error" onDismiss={() => setPatchNotice(null)}>
           {patchNotice}
+        </AppNotice>
+      ) : null}
+
+      {newCandidateNotice ? (
+        <AppNotice
+          variant="info"
+          title="New application received"
+          onDismiss={() => setNewCandidateNotice(false)}
+        >
+          A new candidate has been added to your list.
         </AppNotice>
       ) : null}
 

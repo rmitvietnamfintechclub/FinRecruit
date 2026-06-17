@@ -21,8 +21,8 @@ const CandidateSchema = new Schema<ICandidate>(
     facebookLink: { type: String, required: true },
     cvLink: { type: String, required: true },
 
+    /** Includes 5 general questions + department choice explanation from PA. */
     generalAnswers: { type: [FormAnswerSchema], default: [] },
-    departmentExplanation: { type: FormAnswerSchema, default: undefined },
 
     choice1: {
       type: String,

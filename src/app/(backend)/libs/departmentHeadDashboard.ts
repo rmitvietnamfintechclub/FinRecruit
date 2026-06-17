@@ -11,7 +11,6 @@ import type {
 } from '@/app/(backend)/types';
 import {
   normalizeCustomAnswers,
-  normalizeDepartmentExplanation,
   normalizeGeneralAnswers,
 } from '@/lib/candidate-answers';
 
@@ -56,7 +55,6 @@ export type DepartmentHeadCandidateDetail = DepartmentHeadCandidateListItem & {
     facebookLink: string;
   };
   generalAnswers: ICustomAnswer[];
-  departmentExplanation: ICustomAnswer | null;
   customAnswers: ICustomAnswer[];
 };
 
@@ -101,7 +99,6 @@ type CandidateSummaryLike = {
 type CandidateDetailLike = CandidateSummaryLike & {
   cvLink: string;
   generalAnswers?: ICustomAnswer[] | null;
-  departmentExplanation?: ICustomAnswer | null;
   customAnswers?: ICustomAnswer[] | null;
   dob?: string;
   majorAndYear?: string;
@@ -318,7 +315,6 @@ export function serializeCandidateDetail(
       facebookLink: candidate.facebookLink ?? '',
     },
     generalAnswers: normalizeGeneralAnswers(doc),
-    departmentExplanation: normalizeDepartmentExplanation(doc),
     customAnswers: normalizeCustomAnswers(candidate),
   };
 }

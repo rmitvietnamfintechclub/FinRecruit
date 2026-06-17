@@ -3,6 +3,11 @@
 import React, { useState, useMemo } from 'react';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import { emailLocalPart } from '@/lib/utils';
+import {
+  formatFullDateTime,
+  formatRelativeTime,
+} from '@/lib/formatRelativeTime';
+import { useRelativeNowTick } from '@/hooks/useRelativeNowTick';
 import CandidateModal from './CandidateModal';
 
 export type CandidateViewMode = 'grid' | 'list';
@@ -24,6 +29,7 @@ export default function CandidateTable({
   detailApi = 'head',
   viewMode = 'grid',
 }: CandidateTableProps) {
+  const now = useRelativeNowTick();
   const [selectedCandidate, setSelectedCandidate] =
     useState<HeadDashboardListCandidate | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,6 +61,14 @@ export default function CandidateTable({
       : status === 'Pending'
         ? 'fa-solid fa-clock'
         : 'fa-solid fa-xmark';
+
+  const appliedLabel = (candidate: HeadDashboardListCandidate) => {
+    const appliedAt = candidate.createdAt ?? candidate.appliedAt;
+    return {
+      relative: formatRelativeTime(appliedAt, now),
+      full: formatFullDateTime(appliedAt),
+    };
+  };
 
   return (
     <>
@@ -139,10 +153,11 @@ export default function CandidateTable({
                   <p className="text-muted-foreground/70 md:hidden text-[10px] font-black uppercase tracking-wider mb-0.5">
                     Applied
                   </p>
-                  <p className="text-foreground truncate text-sm font-bold">
-                    {candidate.createdAt
-                      ? new Date(candidate.createdAt).toLocaleDateString('en-GB')
-                      : '—'}
+                  <p
+                    className="text-foreground truncate text-sm font-bold"
+                    title={appliedLabel(candidate).full}
+                  >
+                    {appliedLabel(candidate).relative}
                   </p>
                 </div>
 
@@ -267,10 +282,11 @@ export default function CandidateTable({
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/70 mb-0.5">Applied On</p>
-                  <p className="truncate text-sm font-bold text-foreground">
-                    {candidate.createdAt
-                      ? new Date(candidate.createdAt).toLocaleDateString('en-GB')
-                      : '—'}
+                  <p
+                    className="truncate text-sm font-bold text-foreground"
+                    title={appliedLabel(candidate).full}
+                  >
+                    {appliedLabel(candidate).relative}
                   </p>
                 </div>
               </div>
