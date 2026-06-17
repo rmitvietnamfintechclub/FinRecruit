@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import * as React from 'react';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { Badge } from '@/components/ui/badge';
@@ -216,17 +215,13 @@ export function SystemLogsClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/MasterViewDashboard"
-            className="font-semibold text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <i className="fa-solid fa-arrow-left mr-2" aria-hidden />
-            MasterView
-          </Link>
-          <span className="text-muted-foreground">/</span>
-          <span className="font-bold text-foreground">System Logs</span>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-black tracking-tight sm:text-2xl">System Logs</h2>
+          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+            Audit trail of role grants, system-config changes, candidate intake
+            failures, and security events. Entries are kept for 90 days.
+          </p>
         </div>
         <Button
           type="button"
@@ -234,18 +229,11 @@ export function SystemLogsClient() {
           variant="outline"
           onClick={() => void load()}
           disabled={loading}
+          className="shrink-0"
         >
           <i className="fa-solid fa-rotate mr-2" aria-hidden />
           {loading ? 'Refreshing…' : 'Refresh'}
         </Button>
-      </div>
-
-      <div>
-        <h2 className="text-xl font-black tracking-tight sm:text-2xl">System Logs</h2>
-        <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-          Audit trail of role grants, system-config changes, candidate intake
-          failures, and security events. Entries are kept for 90 days.
-        </p>
       </div>
 
       {error ? (

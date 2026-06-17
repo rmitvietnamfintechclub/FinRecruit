@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import * as React from 'react';
 import {
@@ -378,18 +377,7 @@ export function UserManagementClient({
 
   return (
     <div className="relative space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/MasterViewDashboard"
-            className="font-semibold text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <i className="fa-solid fa-arrow-left mr-2" aria-hidden />
-            MasterView
-          </Link>
-          <span className="text-muted-foreground">/</span>
-          <span className="font-bold text-foreground">User management</span>
-        </div>
+      <div className="flex justify-end">
         <Button
           type="button"
           size="sm"

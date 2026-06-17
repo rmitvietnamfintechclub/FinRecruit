@@ -198,7 +198,6 @@ export function DashboardAppShell({
             <div className="hidden items-center gap-4 md:flex">
               {badgeEl}
               <div className="h-8 w-px bg-border" />
-              <i className="fa-regular fa-bell cursor-pointer text-xl text-muted-foreground transition-colors hover:text-foreground" />
               {themeBtn}
               {logoutEl}
               <div className="min-w-0 max-w-[160px] text-right lg:max-w-[200px]">

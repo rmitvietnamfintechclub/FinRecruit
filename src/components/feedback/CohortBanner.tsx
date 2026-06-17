@@ -37,7 +37,7 @@ export function CohortBanner({ cohort, scopeLabel }: CohortBannerProps) {
         chip: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
         dot: 'bg-emerald-500 shadow-emerald-500/40',
         label: 'Recruitment open',
-        sub: 'Webhook intake is accepting new applications.',
+        sub: 'New applications from the recruitment form are accepted.',
         icon: 'fa-solid fa-circle-check',
       }
     : {

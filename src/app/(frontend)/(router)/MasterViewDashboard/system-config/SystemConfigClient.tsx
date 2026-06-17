@@ -186,7 +186,7 @@ export function SystemConfigClient() {
     setActivateConfirm(null);
     const result = await postJson(
       { action: 'activate', generation, semester },
-      `Activated ${generation} / ${semester}`
+      `Current recruitment period set to ${generation} / ${semester}`
     );
     if (result.ok) {
       flashHighlight(
@@ -215,8 +215,8 @@ export function SystemConfigClient() {
       setActive(json.active ?? null);
       showSuccess(
         isRecruitmentActive
-          ? 'Webhook intake enabled'
-          : 'Webhook intake disabled'
+          ? 'Now accepting new applications'
+          : 'New applications are no longer accepted'
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Update failed.');
@@ -373,7 +373,8 @@ export function SystemConfigClient() {
             System Config
           </h2>
           <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Manage the Generation → Semester catalog, activate the system cohort, and toggle webhook intake.
+            Manage generations and semesters, choose which period is currently
+            live, and control whether new applications are accepted.
           </p>
         </div>
         <Button
@@ -416,10 +417,11 @@ export function SystemConfigClient() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-lg font-black">
-                  Active cohort
+                  Current recruitment period
                 </CardTitle>
                 <CardDescription>
-                  Used for webhook intake and new user role grants
+                  New applications and role assignments use this generation
+                  and semester
                 </CardDescription>
               </div>
               <Badge
@@ -474,11 +476,11 @@ export function SystemConfigClient() {
                     onCheckedChange={(v) => void patchRecruitment(v)}
                   />
                   <div>
-                    <p className="text-sm font-bold">Webhook intake</p>
+                    <p className="text-sm font-bold">Accept new applications</p>
                     <p className="text-muted-foreground text-xs">
                       {recruitmentOn
-                        ? 'Logic App can POST new candidates'
-                        : 'All new intake requests are rejected'}
+                        ? 'The recruitment form can submit and save new candidates'
+                        : 'New applications are blocked — the form cannot submit'}
                     </p>
                   </div>
                 </div>
@@ -512,7 +514,8 @@ export function SystemConfigClient() {
         <CardHeader className="border-b border-border/60">
           <CardTitle className="text-lg font-black">Generation catalog</CardTitle>
           <CardDescription>
-            Expand each generation to add semesters or click Activate on a row.
+            Expand each generation to add semesters, then set one as the current
+            recruitment period.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-5">
@@ -598,7 +601,7 @@ export function SystemConfigClient() {
                               key={g.name}
                               className="sc-badge-pop bg-purple-600 text-white hover:bg-purple-600/90"
                             >
-                              Generation active
+                              Current generation
                             </Badge>
                           ) : null}
                           <Badge variant="secondary">
@@ -649,7 +652,7 @@ export function SystemConfigClient() {
                                           key={`${s.code}-active`}
                                           className="sc-badge-pop bg-green-600 text-white hover:bg-green-600/90"
                                         >
-                                          Active
+                                          Live now
                                         </Badge>
                                       ) : null}
                                     </div>
@@ -661,11 +664,11 @@ export function SystemConfigClient() {
                                           requestActivateCohort(g.name, s.code)
                                         }
                                       >
-                                        Activate
+                                        Set as current
                                       </Button>
                                     ) : (
                                       <span className="text-muted-foreground text-xs font-semibold">
-                                        Current cohort
+                                        Receiving new applications
                                       </span>
                                     )}
                                   </li>
@@ -720,22 +723,23 @@ export function SystemConfigClient() {
 
       <ConfirmDialog
         open={activateConfirm !== null}
-        title="Activate cohort"
+        title="Set current recruitment period"
         description={
           activateConfirm ? (
             <>
-              Activate cohort{' '}
+              Set{' '}
               <span className="text-foreground font-semibold">
                 {activateConfirm.generation} / {activateConfirm.semester}
-              </span>
-              ? New candidates and newly granted users will use this cohort.
+              </span>{' '}
+              as the live recruitment period? New applications and newly
+              assigned users will be tagged with this generation and semester.
               Existing records are unchanged.
             </>
           ) : (
             ''
           )
         }
-        confirmLabel="Activate"
+        confirmLabel="Set as current"
         onConfirm={() => void confirmActivateCohort()}
         onCancel={() => setActivateConfirm(null)}
         loading={busy}

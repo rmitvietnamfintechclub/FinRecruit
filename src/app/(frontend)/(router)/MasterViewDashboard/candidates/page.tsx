@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import CandidateTable, { type CandidateViewMode } from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
@@ -318,15 +317,6 @@ export default function MasterCandidatesPage() {
           A new candidate has been added to the list.
         </AppNotice>
       ) : null}
-
-      <div className="flex justify-end">
-        <Link
-          href="/MasterViewDashboard"
-          className="shrink-0 text-sm font-bold text-blue-600 hover:underline dark:text-blue-400"
-        >
-          ← Executive overview
-        </Link>
-      </div>
 
       <CohortBanner cohort={activeCohort} scopeLabel="Executive Board view · all departments" />
 
