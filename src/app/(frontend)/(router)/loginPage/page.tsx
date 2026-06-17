@@ -72,7 +72,12 @@ export default function LoginPage() {
           <div className="mx-auto mt-8 flex max-w-sm flex-col items-center">
             <button
               type="button"
-              onClick={() => signIn('google', { callbackUrl: '/' })}
+              onClick={() =>
+                signIn('google', {
+                  callbackUrl: '/',
+                  authorizationParams: { prompt: 'select_account' },
+                })
+              }
               className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-6 py-4 text-base font-bold text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.98] dark:bg-blue-600 dark:hover:bg-blue-500"
             >
               <svg
