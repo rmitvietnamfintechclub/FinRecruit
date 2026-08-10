@@ -6,6 +6,7 @@ import {
   rotateAppSession,
 } from '@/app/(backend)/libs/session';
 import User from '@/app/(backend)/models/User';
+import type { RoleType, DepartmentType } from '@/app/(backend)/types';
 
 type GoogleProfilePayload = {
   email: string;
@@ -40,6 +41,25 @@ export async function upsertGoogleUser({
 
   const normalizedEmail = normalizeEmail(email);
 
+  let defaultRole: RoleType = 'Guest';
+  let defaultDept: DepartmentType = 'Unassigned';
+
+  if (process.env.NODE_ENV === 'development') {
+    const isEmailInList = (envVarString?: string) =>
+      envVarString
+        ?.split(',')
+        .map((e) => e.trim().toLowerCase())
+        .includes(normalizedEmail);
+
+    if (isEmailInList(process.env.DEV_EB_EMAILS)) {
+      defaultRole = 'Executive Board';
+      defaultDept = 'EBMB';
+    } else if (isEmailInList(process.env.DEV_HEAD_EMAILS)) {
+      defaultRole = 'Department Head';
+      defaultDept = 'Technology Department';
+    }
+  }
+
   const dbUser = await User.findOneAndUpdate(
     { email: normalizedEmail },
     {
@@ -49,8 +69,8 @@ export async function upsertGoogleUser({
         avatar: avatar || null,
       },
       $setOnInsert: {
-        role: 'Guest',
-        department: 'Unassigned',
+        role: defaultRole,
+        department: defaultDept,
         isActive: true,
       },
     },
