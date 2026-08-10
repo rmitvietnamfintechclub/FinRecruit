@@ -32,7 +32,7 @@ npm install
 The app needs secret keys to connect to the database and authentication providers. 
 
 **Local Authorization:** To test Executive Board or Department Head views locally without needing a real Admin to promote you, add your Google account email to the DEV lists below.
-# LOCAL DEV ONLY: Auto-grant roles on first sign-in (Comma-separated)
+### LOCAL DEV ONLY: Auto-grant roles on first sign-in (Comma-separated)
 DEV_EB_EMAILS="your.email@gmail.com,admin2@rmit.edu.vn"
 DEV_HEAD_EMAILS="head.tech@gmail.com"
 
