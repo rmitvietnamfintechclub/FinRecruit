@@ -7,7 +7,7 @@ Welcome to the Fin-Recruit project! This system streamlines our club's recruitme
 ---
 
 ## 📚 Essential Reading for New Developers
-Before writing any code, please review these core documents located in the root directory:
+Before writing any code, please review these core documents located in the `docs` directory:
 1. **`PHASE1_SUMMARY.md`**: Read this first! It explains the system architecture, existing features, and database schemas.
 2. **`CONTRIBUTING.md`**: Our guidelines for branching, committing, and creating Pull Requests.
 3. **`agents.md`**: If you use AI assistants, this file provides the necessary context to generate code matching our architecture.
