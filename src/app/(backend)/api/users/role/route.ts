@@ -1,16 +1,10 @@
 import mongoose from 'mongoose';
 import { NextResponse, type NextRequest } from 'next/server';
 import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
-import type { DepartmentType, RoleType } from '@/app/(backend)/types';
+import { ROLES, type DepartmentType, type RoleType } from '@/app/(backend)/types';
 import { patchUserInDb } from '@/lib/user-management/db-user-management';
 
 export const runtime = 'nodejs';
-
-const ROLE_VALUES: RoleType[] = [
-    'Guest',
-    'Department Head',
-    'Executive Board',
-];
 
 type RoleUpdatePayload = {
     userId?: string;
@@ -19,7 +13,7 @@ type RoleUpdatePayload = {
 };
 
 function isRoleType(value: unknown): value is RoleType {
-    return typeof value === 'string' && ROLE_VALUES.includes(value as RoleType);
+    return typeof value === 'string' && (ROLES as readonly string[]).includes(value);
 }
 
 function getClientIp(req: NextRequest): string | undefined {
@@ -32,7 +26,7 @@ function getClientIp(req: NextRequest): string | undefined {
  * Legacy endpoint. Delegates to {@link patchUserInDb} so every role change
  * is funnelled through the same anti-headless / sole-EB guards as PATCH /api/users.
  */
-export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest, { session }) => {
+export const PATCH = withActiveRBAC(['Executive Board'], async (req: NextRequest, { session }) => {
     let body: RoleUpdatePayload;
 
     try {

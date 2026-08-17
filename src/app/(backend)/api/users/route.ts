@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import type { DepartmentType, RoleType } from '@/app/(backend)/types';
+import { ROLES, type DepartmentType, type RoleType } from '@/app/(backend)/types';
 import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import mongoose from 'mongoose';
 import {
@@ -11,8 +11,7 @@ export const runtime = 'nodejs';
 
 function isRoleType(value: unknown): value is RoleType {
     return (
-        typeof value === 'string' &&
-        ['Guest', 'Department Head', 'Executive Board'].includes(value)
+        typeof value === 'string' && (ROLES as readonly string[]).includes(value)
     );
 }
 
@@ -38,7 +37,7 @@ function getClientIp(req: NextRequest): string | undefined {
     return req.headers.get('x-real-ip') ?? undefined;
 }
 
-export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest, { session }) => {
+export const PATCH = withActiveRBAC(['Executive Board'], async (req: NextRequest, { session }) => {
     let body: PatchBody;
     try {
         body = (await req.json()) as PatchBody;
