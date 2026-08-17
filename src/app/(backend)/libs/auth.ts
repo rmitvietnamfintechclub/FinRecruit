@@ -1,180 +1,177 @@
 import type { AuthOptions, Profile } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
-import {
-  APP_SESSION_MAX_AGE_SECONDS,
-  rotateAppSession,
-} from '@/app/(backend)/libs/session';
+import { APP_SESSION_MAX_AGE_SECONDS, rotateAppSession } from '@/app/(backend)/libs/session';
 import User from '@/app/(backend)/models/User';
 import type { RoleType, DepartmentType } from '@/app/(backend)/types';
 
 type GoogleProfilePayload = {
-  email: string;
-  name?: string | null;
-  avatar?: string | null;
+    email: string;
+    name?: string | null;
+    avatar?: string | null;
 };
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 function buildGoogleProviders() {
-  const googleClientId = process.env.AUTH_GOOGLE_ID;
-  const googleClientSecret = process.env.AUTH_GOOGLE_SECRET;
+    const googleClientId = process.env.AUTH_GOOGLE_ID;
+    const googleClientSecret = process.env.AUTH_GOOGLE_SECRET;
 
-  if (!googleClientId || !googleClientSecret) {
-    return [];
-  }
+    if (!googleClientId || !googleClientSecret) {
+        return [];
+    }
 
-  return [
-    GoogleProvider({
-      clientId: googleClientId,
-      clientSecret: googleClientSecret,
-    }),
-  ];
+    return [
+        GoogleProvider({
+        clientId: googleClientId,
+        clientSecret: googleClientSecret,
+        }),
+    ];
 }
 
 export async function upsertGoogleUser({
-  email,
-  name,
-  avatar,
+    email,
+    name,
+    avatar,
 }: GoogleProfilePayload) {
-  await dbConnect();
+    await dbConnect();
 
-  const normalizedEmail = normalizeEmail(email);
+    const normalizedEmail = normalizeEmail(email);
 
-  let defaultRole: RoleType = 'Guest';
-  let defaultDept: DepartmentType = 'Unassigned';
+    let defaultRole: RoleType = 'Guest';
+    let defaultDept: DepartmentType = 'Unassigned';
 
-  if (process.env.NODE_ENV === 'development') {
-    const isEmailInList = (envVarString?: string) =>
-      envVarString
-        ?.split(',')
-        .map((e) => e.trim().toLowerCase())
-        .includes(normalizedEmail);
+    if (process.env.NODE_ENV === 'development') {
+        const isEmailInList = (envVarString?: string) =>
+        envVarString
+            ?.split(',')
+            .map((e) => e.trim().toLowerCase())
+            .includes(normalizedEmail);
 
-    if (isEmailInList(process.env.DEV_EB_EMAILS)) {
-      defaultRole = 'Executive Board';
-      defaultDept = 'EBMB';
-    } else if (isEmailInList(process.env.DEV_HEAD_EMAILS)) {
-      defaultRole = 'Department Head';
-      defaultDept = 'Technology Department';
+        if (isEmailInList(process.env.DEV_EB_EMAILS)) {
+            defaultRole = 'Executive Board';
+            defaultDept = 'EBMB';
+        } else if (isEmailInList(process.env.DEV_HEAD_EMAILS)) {
+            defaultRole = 'Department Head';
+            defaultDept = 'Technology Department';
+        }
     }
-  }
 
-  const dbUser = await User.findOneAndUpdate(
-    { email: normalizedEmail },
-    {
-      $set: {
-        email: normalizedEmail,
-        name: name?.trim() || null,
-        avatar: avatar || null,
-      },
-      $setOnInsert: {
-        role: defaultRole,
-        department: defaultDept,
-        isActive: true,
-      },
-    },
-    {
-      returnDocument: 'after',
-      upsert: true,
-      setDefaultsOnInsert: true,
+    const dbUser = await User.findOneAndUpdate(
+        { email: normalizedEmail },
+        {
+        $set: {
+            email: normalizedEmail,
+            name: name?.trim() || null,
+            avatar: avatar || null,
+        },
+        $setOnInsert: {
+            role: defaultRole,
+            department: defaultDept,
+            isActive: true,
+        },
+        },
+        {
+            returnDocument: 'after',
+            upsert: true,
+            setDefaultsOnInsert: true,
+        }
+    ).exec();
+
+    if (!dbUser) {
+        throw new Error('Failed to create or load user from Google sign-in.');
     }
-  ).exec();
 
-  if (!dbUser) {
-    throw new Error('Failed to create or load user from Google sign-in.');
-  }
-
-  return dbUser;
+    return dbUser;
 }
 
 export function buildAuthOptions(): AuthOptions {
-  return {
-    secret: process.env.NEXTAUTH_SECRET,
-    session: {
-      strategy: 'jwt',
-      maxAge: APP_SESSION_MAX_AGE_SECONDS,
-    },
-    providers: buildGoogleProviders(),
-    callbacks: {
-      async signIn({ user, profile }) {
-        if (!user.email) {
-          return false;
-        }
+    return {
+        secret: process.env.NEXTAUTH_SECRET,
+        session: {
+            strategy: 'jwt',
+            maxAge: APP_SESSION_MAX_AGE_SECONDS,
+        },
+        providers: buildGoogleProviders(),
+        callbacks: {
+            async signIn({ user, profile }) {
+                if (!user.email) {
+                    return false;
+                }
 
-        const googleProfile = profile as Profile | undefined;
+                const googleProfile = profile as Profile | undefined;
 
-        const dbUser = await upsertGoogleUser({
-          email: user.email,
-          name: user.name ?? googleProfile?.name ?? null,
-          avatar: user.image ?? googleProfile?.image ?? null,
-        });
+                const dbUser = await upsertGoogleUser({
+                email: user.email,
+                name: user.name ?? googleProfile?.name ?? null,
+                avatar: user.image ?? googleProfile?.image ?? null,
+                });
 
-        if (!dbUser.isActive) {
-          return false;
-        }
+                if (!dbUser.isActive) {
+                    return false;
+                }
 
-        await rotateAppSession(dbUser._id);
+                await rotateAppSession(dbUser._id);
 
-        return true;
-      },
-      async jwt({ token, user, trigger }) {
-        if ((trigger === 'signIn' || trigger === 'signUp') && user.email) {
-          const dbUser = await upsertGoogleUser({
-            email: user.email,
-            name: user.name ?? null,
-            avatar: user.image ?? null,
-          });
+                return true;
+            },
+            async jwt({ token, user, trigger }) {
+                if ((trigger === 'signIn' || trigger === 'signUp') && user.email) {
+                    const dbUser = await upsertGoogleUser({
+                        email: user.email,
+                        name: user.name ?? null,
+                        avatar: user.image ?? null,
+                    });
 
-          if (dbUser) {
-            token.userId = dbUser._id.toString();
-          }
-        }
+                    if (dbUser) {
+                        token.userId = dbUser._id.toString();
+                    }
+                }
 
-        // Keep role/isActive in sync on JWT refresh and after admin DB updates
-        if (token.userId) {
-          await dbConnect();
-          const dbUser = await User.findById(token.userId)
-            .select('role department isActive')
-            .lean()
-            .exec();
+                // Keep role/isActive in sync on JWT refresh and after admin DB updates
+                if (token.userId) {
+                    await dbConnect();
+                    const dbUser = await User.findById(token.userId)
+                        .select('role department isActive')
+                        .lean()
+                        .exec();
 
-          if (dbUser) {
-            token.role = dbUser.role;
-            token.department = dbUser.department;
-            token.isActive = dbUser.isActive;
-          }
-        }
+                    if (dbUser) {
+                        token.role = dbUser.role;
+                        token.department = dbUser.department;
+                        token.isActive = dbUser.isActive;
+                    }
+                }
 
-        return token;
-      },
-      async session({ session, token }) {
-        if (!session.user || !token.userId) {
-          return session;
-        }
+                return token;
+            },
+            async session({ session, token }) {
+                if (!session.user || !token.userId) {
+                    return session;
+                }
 
-        await dbConnect();
+                await dbConnect();
 
-        const dbUser = await User.findById(token.userId)
-          .select('name email avatar role department isActive')
-          .lean()
-          .exec();
+                const dbUser = await User.findById(token.userId)
+                .select('name email avatar role department isActive')
+                .lean()
+                .exec();
 
-        if (!dbUser) {
-          session.user = undefined;
-          return session;
-        }
+                if (!dbUser) {
+                    session.user = undefined;
+                    return session;
+                }
 
-        session.user.id = dbUser._id.toString();
-        session.user.name = dbUser.name ?? null;
-        session.user.email = dbUser.email;
-        session.user.image = dbUser.avatar ?? null;
-        session.user.role = dbUser.role;
-        session.user.department = dbUser.department;
-        session.user.isActive = dbUser.isActive;
+                session.user.id = dbUser._id.toString();
+                session.user.name = dbUser.name ?? null;
+                session.user.email = dbUser.email;
+                session.user.image = dbUser.avatar ?? null;
+                session.user.role = dbUser.role;
+                session.user.department = dbUser.department;
+                session.user.isActive = dbUser.isActive;
 
-        return session;
-      },
-    },
-  };
+                return session;
+            },
+        },
+    };
 }
