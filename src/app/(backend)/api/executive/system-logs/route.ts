@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import {
   AUDIT_LOG_CATEGORIES,
   AUDIT_LOG_LEVELS,
-} from '@/app/(backend)/models/AuditLog';
+} from '@/app/(backend)/types';
 import { listSystemLogs } from '@/app/(backend)/libs/system-log/service';
 import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import type { AuditLogCategory, AuditLogLevel } from '@/app/(backend)/types';
@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 function parseLevel(value: string | null): AuditLogLevel | 'all' | undefined {
   if (!value) return undefined;
   if (value === 'all') return 'all';
-  return (AUDIT_LOG_LEVELS as string[]).includes(value)
+  return (AUDIT_LOG_LEVELS as readonly string[]).includes(value)
     ? (value as AuditLogLevel)
     : undefined;
 }
@@ -22,7 +22,7 @@ function parseCategory(
 ): AuditLogCategory | 'all' | undefined {
   if (!value) return undefined;
   if (value === 'all') return 'all';
-  return (AUDIT_LOG_CATEGORIES as string[]).includes(value)
+  return (AUDIT_LOG_CATEGORIES as readonly string[]).includes(value)
     ? (value as AuditLogCategory)
     : undefined;
 }

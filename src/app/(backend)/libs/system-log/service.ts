@@ -1,8 +1,6 @@
 import dbConnect from '@/app/(backend)/libs/dbConnect';
-import AuditLog, {
-  AUDIT_LOG_CATEGORIES,
-  AUDIT_LOG_LEVELS,
-} from '@/app/(backend)/models/AuditLog';
+import AuditLog from '@/app/(backend)/models/AuditLog';
+import { AUDIT_LOG_LEVELS, AUDIT_LOG_CATEGORIES } from '@/app/(backend)/types';
 import type {
   AuditLogCategory,
   AuditLogLevel,
@@ -89,12 +87,12 @@ const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 200;
 
 function isValidLevel(v: unknown): v is AuditLogLevel {
-  return typeof v === 'string' && (AUDIT_LOG_LEVELS as string[]).includes(v);
+  return typeof v === 'string' && (AUDIT_LOG_LEVELS as readonly string[]).includes(v);
 }
 
 function isValidCategory(v: unknown): v is AuditLogCategory {
   return (
-    typeof v === 'string' && (AUDIT_LOG_CATEGORIES as string[]).includes(v)
+    typeof v === 'string' && (AUDIT_LOG_CATEGORIES as readonly string[]).includes(v)
   );
 }
 
