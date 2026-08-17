@@ -5,10 +5,6 @@ export const getResponseCollectionData = async () => {
     const conn = await dbConnect();
     const finRecruitDb = conn.connection.useDb('FinRecruit');
 
-    const responses = await finRecruitDb
-        .collection<Document>('response')
-        .find({})
-        .toArray();
-
+    const responses = await finRecruitDb.collection<Document>('response').find({}).toArray();
     return responses;
 };

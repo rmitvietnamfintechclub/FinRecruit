@@ -3,6 +3,9 @@ import AuditLog from '@/app/(backend)/models/AuditLog';
 import { AUDIT_LOG_LEVELS, AUDIT_LOG_CATEGORIES } from '@/app/(backend)/types';
 import type { AuditLogCategory, AuditLogLevel, IAuditLog, IAuditLogActor, IAuditLogTarget } from '@/app/(backend)/types';
 
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 200;
+
 export type LogSystemEventInput = {
     level: AuditLogLevel;
     category: AuditLogCategory;
@@ -25,21 +28,11 @@ export type LogSystemEventInput = {
 export async function logSystemEvent(input: LogSystemEventInput): Promise<void> {
     try {
         await dbConnect();
-        await AuditLog.create({
-        level: input.level,
-        category: input.category,
-        action: input.action,
-        message: input.message,
-        performedBy: input.performedBy,
-        target: input.target,
-        metadata: input.metadata,
-        ipAddress: input.ipAddress,
-        userAgent: input.userAgent,
-        });
+        await AuditLog.create({ input });
     } catch (e) {
         console.error('[system-log] failed to persist event', {
-        action: input.action,
-        error: e instanceof Error ? e.message : String(e),
+            action: input.action,
+            error: e instanceof Error ? e.message : String(e),
         });
     }
 }
@@ -77,17 +70,12 @@ export type ListSystemLogsResult = {
     pageSize: number;
 };
 
-const DEFAULT_PAGE_SIZE = 25;
-const MAX_PAGE_SIZE = 200;
-
 function isValidLevel(v: unknown): v is AuditLogLevel {
     return typeof v === 'string' && (AUDIT_LOG_LEVELS as readonly string[]).includes(v);
 }
 
 function isValidCategory(v: unknown): v is AuditLogCategory {
-    return (
-        typeof v === 'string' && (AUDIT_LOG_CATEGORIES as readonly string[]).includes(v)
-    );
+    return typeof v === 'string' && (AUDIT_LOG_CATEGORIES as readonly string[]).includes(v);
 }
 
 function escapeRegex(value: string): string {
@@ -113,9 +101,7 @@ function serialize(doc: IAuditLog): SerializedSystemLog {
     };
 }
 
-export async function listSystemLogs(
-    input: ListSystemLogsInput = {}
-): Promise<ListSystemLogsResult> {
+export async function listSystemLogs(input: ListSystemLogsInput = {}): Promise<ListSystemLogsResult> {
     await dbConnect();
 
     // Plain query object; mongoose accepts a structural shape in v9 instead of
@@ -126,11 +112,7 @@ export async function listSystemLogs(
     if (input.level && input.level !== 'all' && isValidLevel(input.level)) {
         filter.level = input.level;
     }
-    if (
-        input.category &&
-        input.category !== 'all' &&
-        isValidCategory(input.category)
-    ) {
+    if (input.category && input.category !== 'all' && isValidCategory(input.category)) {
         filter.category = input.category;
     }
 
@@ -164,11 +146,7 @@ export async function listSystemLogs(
         ];
     }
 
-    const rawPageSize = input.pageSize ?? DEFAULT_PAGE_SIZE;
-    const pageSize = Math.min(
-        Math.max(1, Math.floor(rawPageSize)),
-        MAX_PAGE_SIZE
-    );
+    const pageSize = Math.min(Math.max(1, Math.floor(input.pageSize ?? DEFAULT_PAGE_SIZE)), MAX_PAGE_SIZE);
     const page = Math.max(1, Math.floor(input.page ?? 1));
 
     const [docs, total] = await Promise.all([
@@ -181,10 +159,5 @@ export async function listSystemLogs(
         AuditLog.countDocuments(filter).exec(),
     ]);
 
-    return {
-        items: docs.map(serialize),
-        total,
-        page,
-        pageSize,
-    };
+    return { items: docs.map(serialize), total, page, pageSize };
 }

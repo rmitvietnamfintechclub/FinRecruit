@@ -30,9 +30,7 @@ export function getDepartmentAliases(canonical: HeadDepartment): string[] {
 /**
  * Returns the canonical head-department label, or null if not a head department.
  */
-export function normalizeHeadDepartment(
-    department: string | null | undefined
-): HeadDepartment | null {
+export function normalizeHeadDepartment(department: string | null | undefined): HeadDepartment | null {
     if (!department) {
         return null;
     }
@@ -54,9 +52,7 @@ export function isHeadDepartment(department: string | null | undefined): boolean
  * MongoDB fragment: candidates a Department Head may access — either routed to
  * their department, or still Unassigned with first application choice = that dept.
  */
-export function departmentHeadCandidateVisibilityFilter(
-    assignedDepartment: HeadDepartment
-): { $or: Record<string, unknown>[] } {
+export function departmentHeadCandidateVisibilityFilter(assignedDepartment: HeadDepartment): { $or: Record<string, unknown>[] } {
     return {
         $or: [
             { department: assignedDepartment },

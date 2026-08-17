@@ -1,10 +1,9 @@
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import RecruitmentGeneration from '@/app/(backend)/models/RecruitmentGeneration';
 import SystemConfig from '@/app/(backend)/models/SystemConfig';
-import type { ISystemConfig } from '@/app/(backend)/types';
+import { CANDIDATE_CHOICES, type ISystemConfig }  from '@/app/(backend)/types';
 
 export const GLOBAL_CONFIG_NAME = 'global_settings';
-
 export const UM_DEFAULT_SEMESTER = '2026A';
 export const UM_DEFAULT_GENERATION = 'Gen 12';
 
@@ -26,10 +25,17 @@ export async function getOrCreateGlobalConfig(): Promise<ISystemConfig> {
     let cfg = await SystemConfig.findOne({ configName: GLOBAL_CONFIG_NAME }).exec();
     if (!cfg) {
         cfg = await SystemConfig.create({
-        configName: GLOBAL_CONFIG_NAME,
-        currentGeneration: UM_DEFAULT_GENERATION,
-        currentSemester: UM_DEFAULT_SEMESTER,
-        isRecruitmentActive: false,
+            configName: GLOBAL_CONFIG_NAME,
+            currentGeneration: UM_DEFAULT_GENERATION,
+            currentSemester: UM_DEFAULT_SEMESTER,
+            isRecruitmentActive: false,
+            departmentStates: CANDIDATE_CHOICES.map((dept) => {
+                return {
+                    department: dept,
+                    isRound1Locked: false,
+                    isRound2Locked: false,
+                };
+            }),
         });
     }
     return cfg;
@@ -102,11 +108,7 @@ export async function addSemesterToGeneration(
     };
 }
 
-export async function activateCohort(input: {
-    generation: string;
-    semester: string;
-    isRecruitmentActive?: boolean;
-}): Promise<ActiveSystemConfig> {
+export async function activateCohort(input: { generation: string; semester: string; isRecruitmentActive?: boolean }): Promise<ActiveSystemConfig> {
     await dbConnect();
     const generation = input.generation.trim();
     const semester = input.semester.trim();
@@ -136,9 +138,7 @@ export async function activateCohort(input: {
     return getActiveConfig();
 }
 
-export async function setRecruitmentActive(
-    isRecruitmentActive: boolean
-): Promise<ActiveSystemConfig> {
+export async function setRecruitmentActive( isRecruitmentActive: boolean ): Promise<ActiveSystemConfig> {
     const cfg = await getOrCreateGlobalConfig();
     cfg.isRecruitmentActive = isRecruitmentActive;
     await cfg.save();

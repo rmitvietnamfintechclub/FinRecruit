@@ -7,25 +7,20 @@ import User from '@/app/(backend)/models/User';
 import type { DepartmentType, RoleType } from '@/app/(backend)/types';
 
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-
-const parsedSessionMaxAge = Number(
-    process.env.AUTH_SESSION_MAX_AGE_SECONDS ?? DEFAULT_SESSION_MAX_AGE_SECONDS
-);
+const parsedSessionMaxAge = Number(process.env.AUTH_SESSION_MAX_AGE_SECONDS ?? DEFAULT_SESSION_MAX_AGE_SECONDS);
 
 export const APP_SESSION_MAX_AGE_SECONDS =
   Number.isFinite(parsedSessionMaxAge) && parsedSessionMaxAge > 0
     ? parsedSessionMaxAge
     : DEFAULT_SESSION_MAX_AGE_SECONDS;
 
-export const APP_SESSION_COOKIE_NAME =
-  process.env.NODE_ENV === 'production'
+export const APP_SESSION_COOKIE_NAME = process.env.NODE_ENV === 'production'
     ? '__Host-finrecruit_session'
     : 'finrecruit_session';
 
 const isSecureCookie = process.env.NODE_ENV === 'production';
 
-const buildSessionExpiry = () =>
-  new Date(Date.now() + APP_SESSION_MAX_AGE_SECONDS * 1000);
+const buildSessionExpiry = () => new Date(Date.now() + APP_SESSION_MAX_AGE_SECONDS * 1000);
 
 export type AuthenticatedAppUser = {
     id: string;
@@ -47,10 +42,7 @@ export function generateSessionId() {
     return randomBytes(32).toString('hex');
 }
 
-export async function createSessionRecord(
-    userId: string | Types.ObjectId,
-    currentSessionId?: string
-) {
+export async function createSessionRecord(userId: string | Types.ObjectId, currentSessionId?: string) {
     await dbConnect();
 
     if (currentSessionId) {
@@ -60,22 +52,14 @@ export async function createSessionRecord(
     const sessionId = generateSessionId();
     const expiresAt = buildSessionExpiry();
 
-    await Session.create({
-        sessionId,
-        userId,
-        expiresAt,
-    });
-
+    await Session.create({ sessionId, userId, expiresAt });
     return { sessionId, expiresAt };
 }
 
 export async function rotateAppSession(userId: string | Types.ObjectId) {
     const cookieStore = await cookies();
     const currentSessionId = cookieStore.get(APP_SESSION_COOKIE_NAME)?.value;
-    const { sessionId, expiresAt } = await createSessionRecord(
-        userId,
-        currentSessionId
-    );
+    const { sessionId, expiresAt } = await createSessionRecord(userId, currentSessionId);
 
     cookieStore.set({
         name: APP_SESSION_COOKIE_NAME,
@@ -104,21 +88,13 @@ export async function revokeUserSessions(userId: string | Types.ObjectId) {
     await Session.deleteMany({ userId });
 }
 
-export async function getActiveAppSession(
-    sessionId?: string
-): Promise<ActiveAppSession | null> {
+export async function getActiveAppSession(sessionId?: string): Promise<ActiveAppSession | null> {
     if (!sessionId) {
         return null;
     }
-
     await dbConnect();
 
-    const session = await Session.findOne({
-        sessionId,
-        expiresAt: { $gt: new Date() },
-    })
-        .lean()
-        .exec();
+    const session = await Session.findOne({sessionId,expiresAt: { $gt: new Date() }}).lean().exec();
 
     if (!session) {
         return null;

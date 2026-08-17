@@ -23,19 +23,14 @@ function buildGoogleProviders() {
 
     return [
         GoogleProvider({
-        clientId: googleClientId,
-        clientSecret: googleClientSecret,
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
         }),
     ];
 }
 
-export async function upsertGoogleUser({
-    email,
-    name,
-    avatar,
-}: GoogleProfilePayload) {
+export async function upsertGoogleUser({ email, name, avatar }: GoogleProfilePayload) {
     await dbConnect();
-
     const normalizedEmail = normalizeEmail(email);
 
     let defaultRole: RoleType = 'Guest';
@@ -43,10 +38,7 @@ export async function upsertGoogleUser({
 
     if (process.env.NODE_ENV === 'development') {
         const isEmailInList = (envVarString?: string) =>
-        envVarString
-            ?.split(',')
-            .map((e) => e.trim().toLowerCase())
-            .includes(normalizedEmail);
+        envVarString?.split(',').map((e) => e.trim().toLowerCase()).includes(normalizedEmail);
 
         if (isEmailInList(process.env.DEV_EB_EMAILS)) {
             defaultRole = 'Executive Board';
@@ -71,11 +63,7 @@ export async function upsertGoogleUser({
             isActive: true,
         },
         },
-        {
-            returnDocument: 'after',
-            upsert: true,
-            setDefaultsOnInsert: true,
-        }
+        { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
     ).exec();
 
     if (!dbUser) {
@@ -100,11 +88,10 @@ export function buildAuthOptions(): AuthOptions {
                 }
 
                 const googleProfile = profile as Profile | undefined;
-
                 const dbUser = await upsertGoogleUser({
-                email: user.email,
-                name: user.name ?? googleProfile?.name ?? null,
-                avatar: user.image ?? googleProfile?.image ?? null,
+                    email: user.email,
+                    name: user.name ?? googleProfile?.name ?? null,
+                    avatar: user.image ?? googleProfile?.image ?? null,
                 });
 
                 if (!dbUser.isActive) {
@@ -112,7 +99,6 @@ export function buildAuthOptions(): AuthOptions {
                 }
 
                 await rotateAppSession(dbUser._id);
-
                 return true;
             },
             async jwt({ token, user, trigger }) {
@@ -151,7 +137,6 @@ export function buildAuthOptions(): AuthOptions {
                 }
 
                 await dbConnect();
-
                 const dbUser = await User.findById(token.userId)
                 .select('name email avatar role department isActive')
                 .lean()

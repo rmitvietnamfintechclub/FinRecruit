@@ -30,10 +30,7 @@ export async function requireAuthenticatedSession(req?: NextRequest) {
     return session;
 }
 
-export async function checkRole(
-    requiredRoles: RoleType | RoleType[],
-    req?: NextRequest
-) {
+export async function checkRole( requiredRoles: RoleType | RoleType[], req?: NextRequest ) {
     const session = await requireAuthenticatedSession(req);
     const allowedRoles = Array.isArray(requiredRoles)
         ? requiredRoles
@@ -50,15 +47,12 @@ export async function checkRole(
  * Requires {@link checkRole} and an active user account (`session.user.isActive`).
  * Use for Executive Board endpoints that manage users or grant access.
  */
-export async function checkActiveRole(
-    requiredRoles: RoleType | RoleType[],
-    req?: NextRequest
-) {
+export async function checkActiveRole( requiredRoles: RoleType | RoleType[], req?: NextRequest ) {
     const session = await checkRole(requiredRoles, req);
 
     if (!session.user.isActive) {
         throw new AuthorizationError(
-        'Inactive accounts cannot perform this action. Only active Executive Board members may manage users and grant access.',
+        'Inactive accounts cannot perform this action.',
         403
         );
     }
@@ -78,15 +72,9 @@ export function authorizationErrorToResponse(error: AuthorizationError) {
 
 type ProtectedRouteContext = Record<string, unknown>;
 
-type ProtectedRouteHandlerWithoutContext = (
-    req: NextRequest,
-    context: { session: ActiveAppSession }
-) => Promise<Response>;
+type ProtectedRouteHandlerWithoutContext = ( req: NextRequest, context: { session: ActiveAppSession }) => Promise<Response>;
 
-type ProtectedRouteHandlerWithContext<TContext extends ProtectedRouteContext> = (
-    req: NextRequest,
-    context: TContext & { session: ActiveAppSession }
-) => Promise<Response>;
+type ProtectedRouteHandlerWithContext<TContext extends ProtectedRouteContext> = ( req: NextRequest, context: TContext & { session: ActiveAppSession }) => Promise<Response>;
 
 export function withRBAC(
     requiredRoles: RoleType | RoleType[],
@@ -108,12 +96,10 @@ export function withRBAC<TContext extends ProtectedRouteContext>(
         try {
         const session = await checkRole(requiredRoles, req);
 
-        return await (
-            handler as ProtectedRouteHandlerWithContext<TContext>
-        )(
+        return await (handler as ProtectedRouteHandlerWithContext<TContext>)(
             req,
             Object.assign({}, context, { session }) as TContext & {
-            session: ActiveAppSession;
+                session: ActiveAppSession;
             }
         );
         } catch (error) {
@@ -146,12 +132,10 @@ export function withActiveRBAC<TContext extends ProtectedRouteContext>(
         try {
         const session = await checkActiveRole(requiredRoles, req);
 
-        return await (
-            handler as ProtectedRouteHandlerWithContext<TContext>
-        )(
+        return await (handler as ProtectedRouteHandlerWithContext<TContext>)(
             req,
             Object.assign({}, context, { session }) as TContext & {
-            session: ActiveAppSession;
+                session: ActiveAppSession;
             }
         );
         } catch (error) {

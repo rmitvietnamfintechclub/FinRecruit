@@ -22,7 +22,6 @@ declare global {
 
 // Reuse cached connection across hot reloads in development
 let cached = global.mongoose;
-
 if (!cached) {
     cached = global.mongoose = { conn: null, promise: null };
 }
@@ -32,9 +31,9 @@ const logPrefix = '[dbConnect]';
 async function dbConnect() {
     // Step 1: return existing connection if present
     if (cached.conn) {
-        const host = cached.conn.connection.host;
-        const name = cached.conn.connection.name;
-        console.log(`${logPrefix} Reusing cached connection (host=${host}, db=${name}, readyState=${cached.conn.connection.readyState})`);
+        // const host = cached.conn.connection.host;
+        // const name = cached.conn.connection.name;
+        // console.log(`${logPrefix} Reusing cached connection (host=${host}, db=${name}, readyState=${cached.conn.connection.readyState})`);
         return cached.conn;
     }
 
@@ -48,16 +47,12 @@ async function dbConnect() {
         cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
             return mongoose;
         });
-    } else {
-        console.log(`${logPrefix} Connection in progress — awaiting existing promise`);
     }
 
     try {
         // Store connection in cache
         cached.conn = await cached.promise;
-        const host = cached.conn.connection.host;
-        const name = cached.conn.connection.name;
-        console.log(`${logPrefix} Connected (host=${host}, db=${name}, readyState=${cached.conn.connection.readyState})`);
+        console.log(`${logPrefix} Connected (readyState=${cached.conn.connection.readyState})`);
     } catch (e) {
         console.error(`${logPrefix} Connection failed:`, e);
         cached.promise = null;

@@ -1,12 +1,8 @@
 import { Types } from 'mongoose';
 import { departmentHeadCandidateVisibilityFilter, isHeadDepartment, type HeadDepartment } from '@/app/(backend)/libs/departments';
 import { rerouteConfirmMessage, rerouteSuccessMessage } from '@/lib/candidateRoutingCopy';
-import type { DepartmentType, ICustomAnswer, StatusType } from '@/app/(backend)/types';
+import { STATUSES, type DepartmentType, type ICustomAnswer, type StatusType, type IRound2Evaluation } from '@/app/(backend)/types';
 import { normalizeCustomAnswers, normalizeGeneralAnswers } from '@/lib/candidate-answers';
-
-export const DASHBOARD_STATUS_OPTIONS = ['Pending', 'Pass', 'Fail'] as const;
-
-export type DashboardStatus = (typeof DASHBOARD_STATUS_OPTIONS)[number];
 
 export type CandidateRoutingStage = 'choice1' | 'choice2' | 'unknown';
 
@@ -35,6 +31,10 @@ export type DepartmentHeadCandidateListItem = {
     createdAt: Date;
     updatedAt: Date;
     routing: CandidateRoutingInfo;
+
+    // Phase 2 fields
+    round2Status?: StatusType;
+    interviewSlotId: string | null;
 };
 
 export type DepartmentHeadCandidateDetail = DepartmentHeadCandidateListItem & {
@@ -46,12 +46,15 @@ export type DepartmentHeadCandidateDetail = DepartmentHeadCandidateListItem & {
     };
     generalAnswers: ICustomAnswer[];
     customAnswers: ICustomAnswer[];
+
+    // Phase 2 fields
+    round2Evaluation: IRound2Evaluation;
 };
 
 export type CandidateStatusChangeDecision =
     | {
         kind: 'update-status';
-        nextStatus: DashboardStatus;
+        nextStatus: StatusType;
         message: string;
         code: 'STATUS_UPDATED' | 'FINAL_FAIL_NO_REROUTE' | 'FINAL_FAIL_SECOND_REVIEW';
     }
@@ -84,6 +87,10 @@ type CandidateSummaryLike = {
     appliedAt: Date;
     createdAt: Date;
     updatedAt: Date;
+
+    // Phase 2 fields
+    round2Status?: StatusType;
+    interviewSlotId: Types.ObjectId | null;
 };
 
 type CandidateDetailLike = CandidateSummaryLike & {
@@ -94,12 +101,15 @@ type CandidateDetailLike = CandidateSummaryLike & {
     majorAndYear?: string;
     facebookLink?: string;
     // legacy fields (read fallback only)
-    futurePlans?: string;
-    fintechAspect?: string;
-    achievementExpectation?: string;
-    timeCommitment?: string;
-    explanation?: string;
-    questionsForUs?: string;
+    // futurePlans?: string;
+    // fintechAspect?: string;
+    // achievementExpectation?: string;
+    // timeCommitment?: string;
+    // explanation?: string;
+    // questionsForUs?: string;
+
+    // Phase 2 fields
+    round2Evaluation: IRound2Evaluation;
 };
 
 type CandidateRoutingLike = {
@@ -111,7 +121,7 @@ type CandidateRoutingLike = {
 type DashboardQueryOptions = {
     department: DepartmentType;
     search?: string;
-    status?: DashboardStatus | null;
+    status?: StatusType | null;
     /**
      * Optional active-cohort filter. When provided, only candidates matching the
      * given generation/semester are returned. Pass `null`/omit to skip cohort
@@ -120,19 +130,13 @@ type DashboardQueryOptions = {
     cohort?: { generation: string; semester: string } | null;
 };
 
-export function parseDashboardStatus(
-    value: string | null | undefined
-): DashboardStatus | null {
-    if (!value) {
+export function parseDashboardStatus(value: string | null | undefined): StatusType | null {
+    if (!value || value === 'Any') {
         return null;
     }
 
-    if (value === 'All') {
-        return null;
-    }
-
-    return DASHBOARD_STATUS_OPTIONS.includes(value as DashboardStatus)
-        ? (value as DashboardStatus)
+    return STATUSES.includes(value as StatusType)
+        ? (value as StatusType)
         : null;
 }
 
@@ -142,32 +146,18 @@ export function parsePaginationParams(searchParams: URLSearchParams) {
 
     const page = Number.isFinite(pageValue) && pageValue > 0 ? Math.floor(pageValue) : 1;
     const rawLimit = Number.isFinite(limitValue) && limitValue > 0 ? Math.floor(limitValue) : 20;
-    const limit = Math.min(rawLimit, 100);
-
-    return {
-        page,
-        limit,
-        skip: (page - 1) * limit,
-    };
+    
+    return { page, limit: Math.min(rawLimit, 100), skip: (page - 1) * Math.min(rawLimit, 100) };
 }
 
 export function sanitizeSearchQuery(value: string | null | undefined) {
-    if (!value) {
-        return '';
-    }
-
-    return value.trim().slice(0, 100);
+    return value ? value.trim().slice(0, 100) : '';
 }
 
-export function buildDepartmentHeadCandidateMatch({
-    department,
-    search,
-    status,
-    cohort,
-}: DashboardQueryOptions) {
+export function buildDepartmentHeadCandidateMatch({ department, search, status, cohort }: DashboardQueryOptions) {
     const match: Record<string, unknown> = {
         ...departmentHeadCandidateVisibilityFilter(department as HeadDepartment),
-        status: status ? status : { $in: [...DASHBOARD_STATUS_OPTIONS] },
+        status: status ? status : { $in: [...STATUSES] },
     };
 
     if (cohort) {
@@ -176,15 +166,13 @@ export function buildDepartmentHeadCandidateMatch({
     }
 
     if (search) {
-        match.fullName = { $regex: escapeRegex(search), $options: 'i' };
+        match.fullName = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
     }
 
     return match;
 }
 
-export function getCandidateRoutingInfo(
-    candidate: CandidateRoutingLike
-): CandidateRoutingInfo {
+export function getCandidateRoutingInfo(candidate: CandidateRoutingLike): CandidateRoutingInfo {
     const isChoice2Valid =
         Boolean(candidate.choice2) &&
         candidate.choice2 !== candidate.choice1 &&
@@ -205,11 +193,7 @@ export function getCandidateRoutingInfo(
     };
 }
 
-export function resolveCandidateStatusChange(
-    candidate: CandidateRoutingLike,
-    nextStatus: DashboardStatus,
-    confirmReroute: boolean
-): CandidateStatusChangeDecision {
+export function resolveCandidateStatusChange(candidate: CandidateRoutingLike, nextStatus: StatusType, confirmReroute: boolean): CandidateStatusChangeDecision {
     if (nextStatus === 'Pending' || nextStatus === 'Pass') {
         return {
             kind: 'update-status',
@@ -225,8 +209,7 @@ export function resolveCandidateStatusChange(
         return {
             kind: 'update-status',
             nextStatus: 'Fail',
-            message:
-                'Candidate marked as Fail. No valid second-choice department is available for rerouting.',
+            message: 'Candidate marked as Fail. No valid second-choice department is available for rerouting.',
             code: 'FINAL_FAIL_NO_REROUTE',
         };
     }
@@ -267,9 +250,7 @@ export function resolveCandidateStatusChange(
     };
 }
 
-export function serializeCandidateListItem(
-    candidate: CandidateSummaryLike
-): DepartmentHeadCandidateListItem {
+export function serializeCandidateListItem(candidate: CandidateSummaryLike): DepartmentHeadCandidateListItem {
     return {
         id: candidate._id.toString(),
         fullName: candidate.fullName,
@@ -286,27 +267,29 @@ export function serializeCandidateListItem(
         createdAt: candidate.createdAt,
         updatedAt: candidate.updatedAt,
         routing: getCandidateRoutingInfo(candidate),
+
+
+        // Phase 2 fields
+        round2Status: candidate.round2Status,
+        interviewSlotId: candidate.interviewSlotId ? candidate.interviewSlotId.toString(),
     };
 }
 
-export function serializeCandidateDetail(
-    candidate: CandidateDetailLike
-): DepartmentHeadCandidateDetail {
+export function serializeCandidateDetail(candidate: CandidateDetailLike): DepartmentHeadCandidateDetail {
     const doc = candidate as Record<string, unknown>;
 
     return {
         ...serializeCandidateListItem(candidate),
         cvLink: candidate.cvLink,
         personalInformation: {
-        dob: candidate.dob ?? '',
-        majorAndYear: candidate.majorAndYear ?? '',
-        facebookLink: candidate.facebookLink ?? '',
+            dob: candidate.dob ?? '',
+            majorAndYear: candidate.majorAndYear ?? '',
+            facebookLink: candidate.facebookLink ?? '',
         },
         generalAnswers: normalizeGeneralAnswers(doc),
         customAnswers: normalizeCustomAnswers(candidate),
-    };
-}
 
-function escapeRegex(value: string) {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Phase 2 fields
+        round2Evaluation: candidate.round2Evaluation,
+    };
 }
