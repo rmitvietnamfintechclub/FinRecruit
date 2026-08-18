@@ -16,97 +16,97 @@ function isExportableStatus(value: string | null): value is ExportableStatus {
 }
 
 interface ErrorResponse {
-  success: false;
-  message: string;
-  error?: string;
+    success: false;
+    message: string;
+    error?: string;
 }
 
 export const GET = withRBAC(
-  'Executive Board',
-  async (req: NextRequest, context: { session: ActiveAppSession }): Promise<Response> => {
-    try {
-      // Parse query parameters
-      const searchParams = req.nextUrl.searchParams;
-      const statusParam = searchParams.get('status');
+    'Executive Board',
+    async (req: NextRequest, context: { session: ActiveAppSession }): Promise<Response> => {
+        try {
+            // Parse query parameters
+            const searchParams = req.nextUrl.searchParams;
+            const statusParam = searchParams.get('status');
 
-      if (!isExportableStatus(statusParam)) {
-        return NextResponse.json(
-          { success: false, message: 'Invalid export type requested.' },
-          { status: 400 }
-        );
-      }
+            if (!isExportableStatus(statusParam)) {
+                return NextResponse.json(
+                    { success: false, message: 'Invalid export type requested.' },
+                    { status: 400 }
+                );
+            }
 
-      // Connect to database
-      await dbConnect();
+            // Connect to database
+            await dbConnect();
 
-      // Implicit cohort filter: only export candidates from the active cohort.
-      const active = await getActiveConfig();
+            // Implicit cohort filter: only export candidates from the active cohort.
+            const active = await getActiveConfig();
 
-      // Query database
-      const candidates = await Candidate.find({
-        status: statusParam,
-        generation: active.currentGeneration,
-        semester: active.currentSemester,
-      })
-        .select('fullName email department')
-        .sort({ department: 1 })
-        .lean()
-        .exec();
+            // Query database
+            const candidates = await Candidate.find({
+                status: statusParam,
+                generation: active.currentGeneration,
+                semester: active.currentSemester,
+            })
+                .select('fullName email department')
+                .sort({ department: 1 })
+                .lean()
+                .exec();
 
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Mail Merge Data'); 
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Mail Merge Data'); 
 
-      // Define the exact three columns required
-      worksheet.columns = [
-        { header: 'NAME', key: 'name', width: 25 },
-        { header: 'SID', key: 'sid', width: 35 },
-        { header: 'Department', key: 'department', width: 25 }
-      ];
+            // Define the exact three columns required
+            worksheet.columns = [
+                { header: 'NAME', key: 'name', width: 25 },
+                { header: 'SID', key: 'sid', width: 35 },
+                { header: 'Department', key: 'department', width: 25 }
+            ];
 
-      // Make the header row bold for better UX
-      worksheet.getRow(1).font = { bold: true };
+            // Make the header row bold for better UX
+            worksheet.getRow(1).font = { bold: true };
 
-      // Loop through database results and add rows
-      candidates.forEach((candidate) => {
-        worksheet.addRow({
-          name: candidate.fullName,
-          sid: candidate.email, // Map email to SID column
-          department: candidate.department,
-        });
-      });
+            // Loop through database results and add rows
+            candidates.forEach((candidate) => {
+                worksheet.addRow({
+                    name: candidate.fullName,
+                    sid: candidate.email, // Map email to SID column
+                    department: candidate.department,
+                });
+            });
 
-      // Write the workbook to a raw memory buffer
-      const buffer = await workbook.xlsx.writeBuffer();
+            // Write the workbook to a raw memory buffer
+            const buffer = await workbook.xlsx.writeBuffer();
 
-      // Set headers telling the browser this is an Excel file meant to be downloaded
-      const headers = new Headers();
-      headers.append(
-        'Content-Type', 
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
-      headers.append(
-        'Content-Disposition', 
-        `attachment; filename="${statusParam}_List_Export.xlsx"`
-      );
+            // Set headers telling the browser this is an Excel file meant to be downloaded
+            const headers = new Headers();
+            headers.append(
+                'Content-Type', 
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            );
+            headers.append(
+                'Content-Disposition', 
+                `attachment; filename="${statusParam}_List_Export.xlsx"`
+            );
 
-      // Return the binary buffer directly, not JSON!
-      return new NextResponse(buffer, {
-        status: 200,
-        headers: headers,
-      });
-    } catch (error: unknown) {
-      console.error('[export/GET] Error:', error);
+            // Return the binary buffer directly, not JSON!
+            return new NextResponse(buffer, {
+                status: 200,
+                headers: headers,
+            });
+        } catch (error: unknown) {
+            console.error('[export/GET] Error:', error);
 
-      const message =
-        error instanceof Error ? error.message : 'Unknown error occurred';
+            const message =
+                error instanceof Error ? error.message : 'Unknown error occurred';
 
-      const errorResponse: ErrorResponse = {
-        success: false,
-        message: 'Failed to generate Excel file.',
-        error: process.env.NODE_ENV === 'development' ? message : undefined,
-      };
+            const errorResponse: ErrorResponse = {
+                success: false,
+                message: 'Failed to generate Excel file.',
+                error: process.env.NODE_ENV === 'development' ? message : undefined,
+            };
 
-      return NextResponse.json(errorResponse, { status: 500 });
+            return NextResponse.json(errorResponse, { status: 500 });
+        }
     }
-  }
 );
