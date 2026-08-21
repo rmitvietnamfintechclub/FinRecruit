@@ -3,7 +3,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import {
     buildDepartmentHeadCandidateMatch,
-    DASHBOARD_STATUS_OPTIONS,
     parseDashboardStatus,
     parsePaginationParams,
     sanitizeSearchQuery,
@@ -15,6 +14,8 @@ import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
 export const runtime = 'nodejs';
+
+const DASHBOARD_STATUS_OPTIONS = ['All', 'Pending', 'Pass', 'Fail'] as const;
 
 type CandidateListAggregationResult = {
     metadata: Array<{ total: number }>;
@@ -110,9 +111,10 @@ export const GET = withRBAC(
         const total = aggregationResult?.metadata?.[0]?.total ?? 0;
         const items = aggregationResult?.items?.map((candidate) =>
             serializeCandidateListItem({
-            ...candidate,
-            _id: candidate._id,
-            choice2: candidate.choice2 ?? null,
+                ...candidate,
+                _id: candidate._id,
+                choice2: candidate.choice2 ?? null,
+                interviewSlotId: null
             })
         ) ?? [];
 

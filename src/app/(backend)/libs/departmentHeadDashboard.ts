@@ -271,7 +271,7 @@ export function serializeCandidateListItem(candidate: CandidateSummaryLike): Dep
 
         // Phase 2 fields
         round2Status: candidate.round2Status,
-        interviewSlotId: candidate.interviewSlotId ? candidate.interviewSlotId.toString(),
+        interviewSlotId: candidate.interviewSlotId ? candidate.interviewSlotId.toString() : null,
     };
 }
 
