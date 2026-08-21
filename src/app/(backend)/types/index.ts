@@ -1,7 +1,7 @@
 import { Document, Types } from 'mongoose';
 
 // 1. Core Enumeration Constants (Runtime)
-export const ROLES = ['Guest', 'MEMBER', 'Department Head', 'Executive Board'] as const;
+export const ROLES = ['Guest', 'Member', 'Department Head', 'Executive Board'] as const;
 
 export const DEPARTMENTS = [
     'Technology Department', 

@@ -34,7 +34,7 @@ export type DepartmentHeadCandidateListItem = {
 
     // Phase 2 fields
     round2Status?: StatusType;
-    interviewSlotId: string | null;
+    interviewSlotId?: string | null;
 };
 
 export type DepartmentHeadCandidateDetail = DepartmentHeadCandidateListItem & {
@@ -90,7 +90,7 @@ type CandidateSummaryLike = {
 
     // Phase 2 fields
     round2Status?: StatusType;
-    interviewSlotId: Types.ObjectId | null;
+    interviewSlotId?: Types.ObjectId | null;
 };
 
 type CandidateDetailLike = CandidateSummaryLike & {
@@ -271,7 +271,7 @@ export function serializeCandidateListItem(candidate: CandidateSummaryLike): Dep
 
         // Phase 2 fields
         round2Status: candidate.round2Status,
-        interviewSlotId: candidate.interviewSlotId ? candidate.interviewSlotId.toString(),
+        interviewSlotId: candidate.interviewSlotId ? candidate.interviewSlotId.toString() : null
     };
 }
 
