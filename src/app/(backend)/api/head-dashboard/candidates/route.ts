@@ -1,13 +1,14 @@
 import { Types } from 'mongoose';
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
-import {
+import {    
     buildDepartmentHeadCandidateMatch,
     parseDashboardStatus,
     parsePaginationParams,
     sanitizeSearchQuery,
     serializeCandidateListItem,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
+import { STATUSES, type DepartmentType, type CandidateChoiceType, type StatusType } from '@/app/(backend)/types'
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
@@ -25,20 +26,28 @@ type CandidateListAggregationResult = {
         email: string;
         phone: string;
         dob: string;
-        department: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
-        choice1: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department';
-        choice2?: 'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department' | null;
-        status: 'Pending' | 'Pass' | 'Fail';
+        department: DepartmentType;
+        choice1: DepartmentType;
+        choice2?: DepartmentType | null;
+        status: StatusType;
         generation: string;
         semester: string;
         appliedAt: Date;
         createdAt: Date;
         updatedAt: Date;
+
+        // Phase 2 Fields
+        round2Status: StatusType;
+        interviewSlotId?: Types.ObjectId | null;
+        round2Evaluation?: {
+            score?: number | null;
+        };
     }>;
 };
 
+// Include 'Member' so interviwers can access the dashboard candidate list
 export const GET = withRBAC(
-    'Department Head',
+    ['Department Head', 'Member'],
     async (req: NextRequest, { session }) => {
         const assignedDepartment = normalizeHeadDepartment(session.user.department);
 
@@ -59,11 +68,14 @@ export const GET = withRBAC(
         const status = parseDashboardStatus(statusParam);
         const { page, limit, skip } = parsePaginationParams(searchParams);
 
+        // Parse quatitative scoring sort toggle
+        const sourceByScore = searchParams.get('sortByScore') === 'true';
+
         if (statusParam && statusParam !== 'All' && !status) {
             return NextResponse.json(
                 {
-                success: false,
-                message: `Invalid status filter. Supported values: ${DASHBOARD_STATUS_OPTIONS.join(', ')}.`,
+                    success: false,
+                    message: `Invalid status filter. Supported values: ${STATUSES.join(', ')}.`,
                 },
                 { status: 400 }
             );
@@ -85,13 +97,18 @@ export const GET = withRBAC(
             cohort,
         });
 
+        // Dynamic sorting behavior
+        const sortStage: Record<string, 1 | -1> = sourceByScore
+            ? { 'round2Evaluation.score': -1, createdAt: -1, _id: -1 } // Rank highest scores first
+            : { createdAt: -1, _id: -1 }; // Default chronological order (newest first)
+
         const aggregateResults = (await Candidate.aggregate([
         { $match: match },
         {
             $facet: {
                 metadata: [{ $count: 'total' }],
                 items: [
-                    { $sort: { createdAt: -1, _id: -1 } },
+                    { $sort: sortStage },
                     { $skip: skip },
                     { $limit: limit },
                     {
@@ -99,6 +116,9 @@ export const GET = withRBAC(
                         customAnswers: 0,
                         cvLink: 0,
                         __v: 0,
+                        'round2Evaluation.templateAnswers': 0,
+                        'round2Evaluation.adHocQuestions': 0,
+                        'round2Evaluation.notes': 0,
                     },
                     },
                 ],
@@ -135,12 +155,13 @@ export const GET = withRBAC(
                     search,
                     status,
                     department: assignedDepartment,
+                    sortByScore: sourceByScore,
                 },
                 activeCohort: {
                     ...cohort,
                     isRecruitmentActive: active.isRecruitmentActive,
                 },
-                allowedStatusOptions: [...DASHBOARD_STATUS_OPTIONS],
+                allowedStatusOptions: [...STATUSES],
                 emptyState:
                     hasNoDepartmentCandidates
                     ? `No candidates have been routed to your department for ${cohort.semester} · ${cohort.generation} yet.`

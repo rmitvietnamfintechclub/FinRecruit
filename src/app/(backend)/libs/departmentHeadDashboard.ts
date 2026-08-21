@@ -1,8 +1,26 @@
 import { Types } from 'mongoose';
-import { departmentHeadCandidateVisibilityFilter, isHeadDepartment, type HeadDepartment } from '@/app/(backend)/libs/departments';
-import { rerouteConfirmMessage, rerouteSuccessMessage } from '@/lib/candidateRoutingCopy';
-import { STATUSES, type DepartmentType, type ICustomAnswer, type StatusType, type IRound2Evaluation } from '@/app/(backend)/types';
-import { normalizeCustomAnswers, normalizeGeneralAnswers } from '@/lib/candidate-answers';
+import {
+    departmentHeadCandidateVisibilityFilter,
+    isHeadDepartment,
+    type HeadDepartment,
+} from '@/app/(backend)/libs/departments';
+import {
+    rerouteConfirmMessage,
+    rerouteSuccessMessage,
+} from '@/lib/candidateRoutingCopy';
+import {
+    STATUSES,
+    type DepartmentType,
+    type ICustomAnswer,
+    type StatusType,
+    type IRound2Evaluation,
+} from '@/app/(backend)/types';
+import {
+    normalizeCustomAnswers,
+    normalizeGeneralAnswers,
+} from '@/lib/candidate-answers';
+
+export const DASHBOARD_STATUS_OPTIONS = STATUSES;
 
 export type CandidateRoutingStage = 'choice1' | 'choice2' | 'unknown';
 
@@ -34,7 +52,7 @@ export type DepartmentHeadCandidateListItem = {
 
     // Phase 2 fields
     round2Status?: StatusType;
-    interviewSlotId: string | null;
+    interviewSlotId?: string | null;
 };
 
 export type DepartmentHeadCandidateDetail = DepartmentHeadCandidateListItem & {
@@ -56,21 +74,24 @@ export type CandidateStatusChangeDecision =
         kind: 'update-status';
         nextStatus: StatusType;
         message: string;
-        code: 'STATUS_UPDATED' | 'FINAL_FAIL_NO_REROUTE' | 'FINAL_FAIL_SECOND_REVIEW';
-    }
+        code:
+            | 'STATUS_UPDATED'
+            | 'FINAL_FAIL_NO_REROUTE'
+            | 'FINAL_FAIL_SECOND_REVIEW';
+        }
     | {
         kind: 'reroute-confirmation-required';
         targetDepartment: DepartmentType;
         message: string;
         code: 'REROUTE_CONFIRMATION_REQUIRED';
-    }
+        }
     | {
         kind: 'reroute';
         targetDepartment: DepartmentType;
         nextStatus: 'Pending';
         message: string;
         code: 'CANDIDATE_REROUTED';
-    };
+        };
 
 type CandidateSummaryLike = {
     _id: Types.ObjectId;
@@ -90,7 +111,7 @@ type CandidateSummaryLike = {
 
     // Phase 2 fields
     round2Status?: StatusType;
-    interviewSlotId: Types.ObjectId | null;
+    interviewSlotId?: Types.ObjectId | null;
 };
 
 type CandidateDetailLike = CandidateSummaryLike & {
@@ -130,31 +151,42 @@ type DashboardQueryOptions = {
     cohort?: { generation: string; semester: string } | null;
 };
 
-export function parseDashboardStatus(value: string | null | undefined): StatusType | null {
+export function parseDashboardStatus(
+    value: string | null | undefined
+): StatusType | null {
     if (!value || value === 'Any') {
         return null;
     }
 
-    return STATUSES.includes(value as StatusType)
-        ? (value as StatusType)
-        : null;
+    return STATUSES.includes(value as StatusType) ? (value as StatusType) : null;
 }
 
 export function parsePaginationParams(searchParams: URLSearchParams) {
     const pageValue = Number(searchParams.get('page') ?? '1');
     const limitValue = Number(searchParams.get('limit') ?? '20');
 
-    const page = Number.isFinite(pageValue) && pageValue > 0 ? Math.floor(pageValue) : 1;
-    const rawLimit = Number.isFinite(limitValue) && limitValue > 0 ? Math.floor(limitValue) : 20;
-    
-    return { page, limit: Math.min(rawLimit, 100), skip: (page - 1) * Math.min(rawLimit, 100) };
+    const page =
+        Number.isFinite(pageValue) && pageValue > 0 ? Math.floor(pageValue) : 1;
+    const rawLimit =
+        Number.isFinite(limitValue) && limitValue > 0 ? Math.floor(limitValue) : 20;
+
+    return {
+        page,
+        limit: Math.min(rawLimit, 100),
+        skip: (page - 1) * Math.min(rawLimit, 100),
+    };
 }
 
 export function sanitizeSearchQuery(value: string | null | undefined) {
     return value ? value.trim().slice(0, 100) : '';
 }
 
-export function buildDepartmentHeadCandidateMatch({ department, search, status, cohort }: DashboardQueryOptions) {
+export function buildDepartmentHeadCandidateMatch({
+    department,
+    search,
+    status,
+    cohort,
+}: DashboardQueryOptions) {
     const match: Record<string, unknown> = {
         ...departmentHeadCandidateVisibilityFilter(department as HeadDepartment),
         status: status ? status : { $in: [...STATUSES] },
@@ -166,13 +198,18 @@ export function buildDepartmentHeadCandidateMatch({ department, search, status, 
     }
 
     if (search) {
-        match.fullName = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+        match.fullName = {
+        $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        $options: 'i',
+        };
     }
 
     return match;
 }
 
-export function getCandidateRoutingInfo(candidate: CandidateRoutingLike): CandidateRoutingInfo {
+export function getCandidateRoutingInfo(
+    candidate: CandidateRoutingLike
+): CandidateRoutingInfo {
     const isChoice2Valid =
         Boolean(candidate.choice2) &&
         candidate.choice2 !== candidate.choice1 &&
@@ -189,11 +226,17 @@ export function getCandidateRoutingInfo(candidate: CandidateRoutingLike): Candid
         currentStage,
         isChoice2Valid,
         canRerouteOnFail: isChoice2Valid && currentStage === 'choice1',
-        rerouteTargetDepartment: isChoice2Valid ? (candidate.choice2 ?? null) : null,
+        rerouteTargetDepartment: isChoice2Valid
+        ? (candidate.choice2 ?? null)
+        : null,
     };
 }
 
-export function resolveCandidateStatusChange(candidate: CandidateRoutingLike, nextStatus: StatusType, confirmReroute: boolean): CandidateStatusChangeDecision {
+export function resolveCandidateStatusChange(
+    candidate: CandidateRoutingLike,
+    nextStatus: StatusType,
+    confirmReroute: boolean
+): CandidateStatusChangeDecision {
     if (nextStatus === 'Pending' || nextStatus === 'Pass') {
         return {
             kind: 'update-status',
@@ -209,7 +252,8 @@ export function resolveCandidateStatusChange(candidate: CandidateRoutingLike, ne
         return {
             kind: 'update-status',
             nextStatus: 'Fail',
-            message: 'Candidate marked as Fail. No valid second-choice department is available for rerouting.',
+            message:
+                'Candidate marked as Fail. No valid second-choice department is available for rerouting.',
             code: 'FINAL_FAIL_NO_REROUTE',
         };
     }
@@ -245,13 +289,16 @@ export function resolveCandidateStatusChange(candidate: CandidateRoutingLike, ne
     return {
         kind: 'update-status',
         nextStatus: 'Fail',
-        message: 'Candidate marked as Fail. Automatic rerouting was skipped because the current routing state is not eligible.',
+        message:
+        'Candidate marked as Fail. Automatic rerouting was skipped because the current routing state is not eligible.',
         code: 'FINAL_FAIL_NO_REROUTE',
     };
 }
 
-export function serializeCandidateListItem(candidate: CandidateSummaryLike): DepartmentHeadCandidateListItem {
-    return {
+export function serializeCandidateListItem(
+    candidate: CandidateSummaryLike
+): DepartmentHeadCandidateListItem {
+  return {
         id: candidate._id.toString(),
         fullName: candidate.fullName,
         email: candidate.email,
@@ -268,23 +315,24 @@ export function serializeCandidateListItem(candidate: CandidateSummaryLike): Dep
         updatedAt: candidate.updatedAt,
         routing: getCandidateRoutingInfo(candidate),
 
-
         // Phase 2 fields
         round2Status: candidate.round2Status,
-        interviewSlotId: candidate.interviewSlotId ? candidate.interviewSlotId.toString() : null,
+        interviewSlotId: candidate.interviewSlotId ? candidate.interviewSlotId.toString() : null
     };
 }
 
-export function serializeCandidateDetail(candidate: CandidateDetailLike): DepartmentHeadCandidateDetail {
+export function serializeCandidateDetail(
+    candidate: CandidateDetailLike
+): DepartmentHeadCandidateDetail {
     const doc = candidate as Record<string, unknown>;
 
     return {
         ...serializeCandidateListItem(candidate),
         cvLink: candidate.cvLink,
         personalInformation: {
-            dob: candidate.dob ?? '',
-            majorAndYear: candidate.majorAndYear ?? '',
-            facebookLink: candidate.facebookLink ?? '',
+        dob: candidate.dob ?? '',
+        majorAndYear: candidate.majorAndYear ?? '',
+        facebookLink: candidate.facebookLink ?? '',
         },
         generalAnswers: normalizeGeneralAnswers(doc),
         customAnswers: normalizeCustomAnswers(candidate),
