@@ -1,47 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Candidate from '../../models/Candidate';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
-import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
-import SystemConfig from '@/app/(backend)/models/SystemConfig';
+import Candidate from '../../models/Candidate';
+import SystemConfig from '../../models/SystemConfig';
+import { withRBAC } from '../../middleware/auth&RBAC';
 
 export const GET = withRBAC(['Department Head', 'Member'], async (req: NextRequest, sessionUser: any) => {
   try {
-    await dbConnect()
+    await dbConnect();
     const { searchParams } = new URL(req.url);
 
-    // Extract query parameters with defaults
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const search = searchParams.get('search') || '';
-    const status = searchParams.get('status') || '';
     const round2Status = searchParams.get('round2Status') || '';
 
-    // Fetch active recruitment cycle
-    const systemConfig = await SystemConfig.findOne({ configName: 'global_settings' });
-    const currentGeneration = systemConfig?.currentGeneration;
-    const currentSemester = systemConfig?.currentSemester;
-
-    // Base filter scoped to the user's assigned department
     const query: Record<string, any> = {};
 
-    if (sessionUser.role !== 'EXEC') {
+    // 1. Department Filter (Only restrict if non-EXEC and assigned to a valid department)
+    if (sessionUser.role !== 'EXEC' && sessionUser.department && sessionUser.department !== 'Unassigned' && sessionUser.department !== 'All') {
       query.department = sessionUser.department;
     }
 
-    if (currentGeneration && currentSemester) {
-      query.generation = currentGeneration;
-      query.semester = currentSemester;
+    // 2. Fetch Active System Config (Optional match so missing generation/semester doesn't break query)
+    const systemConfig = await SystemConfig.findOne({ configName: 'global_settings' });
+    if (systemConfig?.currentGeneration && systemConfig?.currentSemester) {
+      // Uncomment if you strictly want to filter by active cohort:
+      // query.generation = systemConfig.currentGeneration;
+      // query.semester = systemConfig.currentSemester;
     }
 
-    // Filter by Round 1 or Round 2 status
-    if (status && status !== 'All') {
-      query.status = status;
+    // 3. Round 2 Pool Filter: Only evaluate candidates who passed Round 1 (or allow override via query param)
+    const r1Status = searchParams.get('status');
+    if (r1Status && r1Status !== 'All') {
+      query.status = r1Status;
+    } else if (!r1Status) {
+      // Default to candidates eligible for Round 2 interviews
+      query.status = 'Pass'; 
     }
+
+    // 4. Round 2 Status Filter
     if (round2Status && round2Status !== 'All') {
       query.round2Status = round2Status;
     }
 
-    // Search by name or email
+    // 5. Search
     if (search.trim()) {
       query.$or = [
         { fullName: { $regex: search.trim(), $options: 'i' } },
@@ -54,7 +56,7 @@ export const GET = withRBAC(['Department Head', 'Member'], async (req: NextReque
     const [candidates, total] = await Promise.all([
       Candidate.find(query)
         .populate('interviewSlotId', 'date startTime endTime room')
-        .select('fullName email phone majorAndYear department status round2Status round2Evaluation interviewSlotId appliedAt')
+        .select('fullName email phone majorAndYear department status round2Status round2Evaluation interviewSlotId appliedAt generation semester')
         .sort({ appliedAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -62,7 +64,6 @@ export const GET = withRBAC(['Department Head', 'Member'], async (req: NextReque
       Candidate.countDocuments(query),
     ]);
 
-    // Format response array for the interviews table/list view
     const formattedCandidates = candidates.map((c: any) => ({
       id: c._id.toString(),
       fullName: c.fullName,
@@ -72,6 +73,8 @@ export const GET = withRBAC(['Department Head', 'Member'], async (req: NextReque
       department: c.department,
       status: c.status,
       round2Status: c.round2Status,
+      generation: c.generation,
+      semester: c.semester,
       interviewSlot: c.interviewSlotId ? {
         id: c.interviewSlotId._id.toString(),
         date: c.interviewSlotId.date,
