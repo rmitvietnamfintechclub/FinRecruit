@@ -16,20 +16,19 @@ export const GET = withRBAC(['Department Head', 'Member'], async (req: NextReque
 
     const query: Record<string, any> = {};
 
-    // 1. Department Filter (Only restrict if non-EXEC and assigned to a valid department)
+    // Department Filter 
     if (sessionUser.role !== 'EXEC' && sessionUser.department && sessionUser.department !== 'Unassigned' && sessionUser.department !== 'All') {
       query.department = sessionUser.department;
     }
 
-    // 2. Fetch Active System Config (Optional match so missing generation/semester doesn't break query)
+    // Fetch Active System Config 
     const systemConfig = await SystemConfig.findOne({ configName: 'global_settings' });
     if (systemConfig?.currentGeneration && systemConfig?.currentSemester) {
-      // Uncomment if you strictly want to filter by active cohort:
       // query.generation = systemConfig.currentGeneration;
       // query.semester = systemConfig.currentSemester;
     }
 
-    // 3. Round 2 Pool Filter: Only evaluate candidates who passed Round 1 (or allow override via query param)
+    // Round 2 Pool Filter: Only evaluate candidates who passed Round 1 (or allow override via query param)
     const r1Status = searchParams.get('status');
     if (r1Status && r1Status !== 'All') {
       query.status = r1Status;
@@ -38,12 +37,12 @@ export const GET = withRBAC(['Department Head', 'Member'], async (req: NextReque
       query.status = 'Pass'; 
     }
 
-    // 4. Round 2 Status Filter
+    // Round 2 Status Filter
     if (round2Status && round2Status !== 'All') {
       query.round2Status = round2Status;
     }
 
-    // 5. Search
+    // Search
     if (search.trim()) {
       query.$or = [
         { fullName: { $regex: search.trim(), $options: 'i' } },
