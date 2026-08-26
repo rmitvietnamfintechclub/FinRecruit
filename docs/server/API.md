@@ -52,8 +52,8 @@ These APIs manage candidate lists, department configurations, and evaluations.
 | `GET` | `/head-dashboard/candidates/:id` | HEAD | Retrieves full details and form answers for a specific candidate. | 1 | DONE |
 | `PATCH` | `/head-dashboard/candidates/:id/status` | HEAD | Updates candidate evaluation status (includes complex Choice 2 reroute logic). | 1 | DONE |
 | `POST` | `/head-dashboard/lock-round-1` | HEAD | Locks department Round 1 results, moving passed candidates into the Round 2 interview pool. | 2 (Story 1.1) | TODO |
-| `PATCH` | `/head-dashboard/config` | HEAD | Configures dynamic interview questions and toggles numeric scoring. | 2 (Story 3.2, 5.1) | TODO |
-| `POST` | `/head-dashboard/close-round-2` | HEAD | Locks the department's final Round 2 results so the dashboard becomes read-only. | 2 (Story 4.1) | TODO |
+| `PATCH` | `/head-dashboard/config` | HEAD | Configures dynamic interview questions and toggles numeric scoring. | 2 (Story 3.2, 5.1) | DONE |
+| `POST` | `/head-dashboard/lock-round-2` | HEAD | Locks the department's final Round 2 results so the dashboard becomes read-only. | 2 (Story 4.1) | DONE |
 
 ### `GET` `/head-dashboard/candidates` query params
 
@@ -112,7 +112,7 @@ Provides master views, aggregate statistics, and system exports.
 | `GET` | `/executive/statistics` | EXEC | Global and per-department candidate evaluation statistics. | 1 | DONE |
 | `GET` | `/executive/candidates` | EXEC | Read-only master view of all candidates across departments. | 1 | DONE |
 | `GET` | `/executive/export/round-1` | EXEC | Downloads an Excel (.xlsx) file containing R1 Pass/Fail lists. | 1 | DONE |
-| `GET` | `/executive/export/round-2` | EXEC | Downloads an Excel (.xlsx) file containing finalized R2 Pass/Fail lists. | 2 (Story 4.2) | TODO |
+| `GET` | `/executive/export/round-2` | EXEC | Downloads an Excel (.xlsx) file containing finalized R2 Pass/Fail lists. | 2 (Story 4.2) | DONE |
 
 ## 5. System Config & Logs APIs
 **Base Path**: `/api/executive`

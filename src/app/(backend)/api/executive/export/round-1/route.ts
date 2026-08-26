@@ -54,7 +54,7 @@ export const GET = withRBAC(
                 .exec();
 
             const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Mail Merge Data'); 
+            const worksheet = workbook.addWorksheet('Round 1 Final Data'); 
 
             // Define the exact three columns required
             worksheet.columns = [
@@ -86,7 +86,7 @@ export const GET = withRBAC(
             );
             headers.append(
                 'Content-Disposition', 
-                `attachment; filename="${statusParam}_List_Export.xlsx"`
+                `attachment; filename="Round_1_${statusParam}_List_Export.xlsx"`
             );
 
             // Return the binary buffer directly, not JSON!
