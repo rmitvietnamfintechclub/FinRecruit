@@ -106,7 +106,7 @@ export default function MasterCandidatesPage() {
     setExporting(true);
     setIsExportOpen(false);
     try {
-      const res = await fetch(`/api/executive/export?status=${status}`, {
+      const res = await fetch(`/api/executive/export/round-1?status=${status}`, {
         credentials: 'include',
       });
       if (!res.ok) {
