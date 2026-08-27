@@ -48,7 +48,7 @@ export const PATCH = withRBAC(
                         interviewQuestions: interviewQuestions 
                             ? interviewQuestions.map(String).map((q: string) => q.trim()).filter(Boolean)
                             : [],
-                        isScoringEnabled: Boolean(isScoringEnabled)??false,
+                        isScoringEnabled: Boolean(isScoringEnabled)??false, // Default to false if not provided
                     },
                 },
                 { new: true, upsert: true }
