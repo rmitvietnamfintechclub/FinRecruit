@@ -9,7 +9,14 @@ export type DashboardBadgeVariant = 'yellow' | 'purple';
 
 const BADGE_STYLES: Record<
   DashboardBadgeVariant,
-  { border: string; bg: string; text: string; darkBorder: string; darkBg: string; darkText: string }
+  {
+    border: string;
+    bg: string;
+    text: string;
+    darkBorder: string;
+    darkBg: string;
+    darkText: string;
+  }
 > = {
   yellow: {
     border: 'border-yellow-200',
@@ -100,21 +107,20 @@ export function DashboardAppShell({
   userAvatar,
   showLogout = true,
 }: DashboardAppShellProps) {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
     const prefersDark = window.matchMedia(
       '(prefers-color-scheme: dark)'
     ).matches;
-    return savedTheme === 'dark' || (!savedTheme && prefersDark);
-  });
+    const dark = savedTheme === 'dark' || (!savedTheme && prefersDark);
+
+    setIsDarkMode(dark);
+  }, []);
 
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
 
   const toggleDarkMode = () => {
