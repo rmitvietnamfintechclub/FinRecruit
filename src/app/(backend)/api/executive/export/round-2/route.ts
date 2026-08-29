@@ -8,24 +8,16 @@ import ExcelJS from 'exceljs';
 
 export const runtime = 'nodejs';
 
-// Validation helper
 type ExportableStatus = 'Pass' | 'Fail';
 
 function isExportableStatus(value: string | null): value is ExportableStatus {
-  return value === 'Pass' || value === 'Fail';
-}
-
-interface ErrorResponse {
-    success: false;
-    message: string;
-    error?: string;
+    return value === 'Pass' || value === 'Fail';
 }
 
 export const GET = withRBAC(
     'Executive Board',
-    async (req: NextRequest, context: { session: ActiveAppSession }): Promise<Response> => {
+    async (req: NextRequest, { session }: { session: ActiveAppSession }): Promise<Response> => {
         try {
-            // Parse query parameters
             const searchParams = req.nextUrl.searchParams;
             const statusParam = searchParams.get('status');
 
@@ -36,49 +28,47 @@ export const GET = withRBAC(
                 );
             }
 
-            // Connect to database
             await dbConnect();
-
-            // Implicit cohort filter: only export candidates from the active cohort.
             const active = await getActiveConfig();
 
-            // Query database
+            // Query strictly for Round 2 evaluations
             const candidates = await Candidate.find({
-                status: statusParam,
+                status: 'Pass', // Must have passed R1
+                round2Status: statusParam,
                 generation: active.currentGeneration,
                 semester: active.currentSemester,
             })
-                .select('fullName email department')
+                .select('fullName email department') // Add round2Evaluation.score if needed
                 .sort({ department: 1 })
                 .lean()
                 .exec();
 
             const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Mail Merge Data'); 
+            const worksheet = workbook.addWorksheet('Round 2 Final Data'); 
 
-            // Define the exact three columns required
+            // Define columns, including the new quantitative score
             worksheet.columns = [
                 { header: 'NAME', key: 'name', width: 25 },
                 { header: 'SID', key: 'sid', width: 35 },
-                { header: 'Department', key: 'department', width: 25 }
+                { header: 'Department', key: 'department', width: 25 },
+                //{ header: 'R2 Score', key: 'score', width: 15 } 
             ];
 
-            // Make the header row bold for better UX
             worksheet.getRow(1).font = { bold: true };
 
-            // Loop through database results and add rows
+            // Map data to rows
             candidates.forEach((candidate) => {
                 worksheet.addRow({
                     name: candidate.fullName,
-                    sid: candidate.email, // Map email to SID column
+                    sid: candidate.email, 
                     department: candidate.department,
+                    // score: candidate.round2Evaluation?.score ?? 'N/A'
                 });
             });
 
             // Write the workbook to a raw memory buffer
             const buffer = await workbook.xlsx.writeBuffer();
 
-            // Set headers telling the browser this is an Excel file meant to be downloaded
             const headers = new Headers();
             headers.append(
                 'Content-Type', 
@@ -86,27 +76,19 @@ export const GET = withRBAC(
             );
             headers.append(
                 'Content-Disposition', 
-                `attachment; filename="${statusParam}_List_Export.xlsx"`
+                `attachment; filename="Round_2_Final_${statusParam}_Export.xlsx"`
             );
 
-            // Return the binary buffer directly, not JSON!
             return new NextResponse(buffer, {
                 status: 200,
                 headers: headers,
             });
         } catch (error: unknown) {
-            console.error('[export/GET] Error:', error);
-
-            const message =
-                error instanceof Error ? error.message : 'Unknown error occurred';
-
-            const errorResponse: ErrorResponse = {
-                success: false,
-                message: 'Failed to generate Excel file.',
-                error: process.env.NODE_ENV === 'development' ? message : undefined,
-            };
-
-            return NextResponse.json(errorResponse, { status: 500 });
+            console.error('[export/round-2/GET] Error:', error);
+            return NextResponse.json(
+                { success: false, message: 'Failed to generate Round 2 Excel file.' },
+                { status: 500 }
+            );
         }
     }
 );
