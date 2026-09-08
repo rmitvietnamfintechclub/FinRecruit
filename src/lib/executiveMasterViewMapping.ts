@@ -11,6 +11,7 @@ import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import type {
   CandidateChoiceType,
   DepartmentType,
+  IRound2Evaluation,
   StatusType,
 } from '@/app/(backend)/types';
 import type {
@@ -71,9 +72,7 @@ function routingFromChoices(args: {
       : null;
 
   const isChoice2Valid =
-    Boolean(c2) &&
-    c2 !== args.choice1 &&
-    isHeadDepartment(c2 ?? undefined);
+    Boolean(c2) && c2 !== args.choice1 && isHeadDepartment(c2 ?? undefined);
 
   const currentStage: CandidateRoutingStage =
     args.department === args.choice1
@@ -138,6 +137,35 @@ export function mapExecutiveListItemToHeadRow(
   };
 }
 
+function normalizeRound2Evaluation(
+  raw: Record<string, unknown>
+): IRound2Evaluation {
+  const evaluation = (raw.round2Evaluation ?? {}) as Partial<IRound2Evaluation>;
+
+  return {
+    templateAnswers: Array.isArray(evaluation.templateAnswers)
+      ? (evaluation.templateAnswers as ICustomAnswer[]).map((item) => ({
+          question: String(item?.question ?? '').trim(),
+          answer: String(item?.answer ?? '').trim(),
+          addedBy: item?.addedBy ? String(item.addedBy) : undefined,
+        }))
+      : [],
+    adHocQuestions: Array.isArray(evaluation.adHocQuestions)
+      ? (evaluation.adHocQuestions as ICustomAnswer[]).map((item) => ({
+          question: String(item?.question ?? '').trim(),
+          answer: String(item?.answer ?? '').trim(),
+          addedBy: item?.addedBy ? String(item.addedBy) : undefined,
+        }))
+      : [],
+    notes: {
+      note1: String(evaluation.notes?.note1 ?? ''),
+      note2: String(evaluation.notes?.note2 ?? ''),
+      note3: String(evaluation.notes?.note3 ?? ''),
+    },
+    score: typeof evaluation.score === 'number' ? evaluation.score : null,
+  };
+}
+
 export function mapExecutiveDetailToHeadDetail(
   raw: Record<string, unknown>
 ): HeadDashboardCandidateDetailApi {
@@ -177,6 +205,7 @@ export function mapExecutiveDetailToHeadDetail(
     cvLink: String(raw.cvLink ?? ''),
     generalAnswers: normalizeGeneralAnswers(raw),
     customAnswers,
+    round2Evaluation: normalizeRound2Evaluation(raw),
     personalInformation: {
       dob: String(raw.dob ?? ''),
       majorAndYear: String(raw.majorAndYear ?? ''),
