@@ -182,5 +182,11 @@ export function mapExecutiveDetailToHeadDetail(
       majorAndYear: String(raw.majorAndYear ?? ''),
       facebookLink: String(raw.facebookLink ?? ''),
     },
+    round2Evaluation: {
+      templateAnswers: [],
+      adHocQuestions: [],
+      notes: { note1: '', note2: '', note3: '' },
+      score: null,
+    },
   };
 }

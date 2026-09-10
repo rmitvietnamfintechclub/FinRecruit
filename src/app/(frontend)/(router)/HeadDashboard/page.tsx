@@ -12,6 +12,7 @@ import { AppNotice } from '@/components/feedback/AppNotice';
 import { CohortBanner } from '@/components/feedback/CohortBanner';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
+import Link from 'next/link';
 
 const PAGE_SIZE = 9;
 
@@ -351,12 +352,38 @@ export default function HeadDashboardPage() {
 
       <CohortBanner
         cohort={activeCohort}
+        variant="head"
         scopeLabel={
           assignedDepartment
             ? `Department Head view · ${assignedDepartment}`
             : undefined
         }
       />
+
+      <nav
+        className="bg-card border-border grid grid-cols-3 overflow-hidden rounded-xl border shadow-sm"
+        aria-label="Department head dashboard sections"
+      >
+        {[
+          { label: 'Candidate Evaluation', href: '/HeadDashboard' },
+          { label: 'Interview Schedule', href: '#interview-schedule' },
+          { label: 'Question Template', href: '/HeadDashboard/question-template' },
+        ].map(
+          (item, index) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={`flex items-center justify-center border-b-2 px-2 py-3 text-center text-xs font-bold transition-colors sm:px-4 sm:text-sm ${
+                index === 0
+                  ? 'border-purple-600 text-purple-600'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {item.label}
+            </Link>
+          )
+        )}
+      </nav>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
         <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
@@ -428,6 +455,43 @@ export default function HeadDashboardPage() {
         </div>
       </div>
 
+      <section className="bg-card border-border rounded-2xl border p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-muted-foreground text-[10px] font-black uppercase tracking-[0.18em]">
+              Round 2 evaluation
+            </p>
+            <h2 className="mt-1 text-xl font-black tracking-tight">
+              {statsDisplay.pending === 0
+                ? `Complete — ${statsDisplay.passed + statsDisplay.failed} evaluated`
+                : `In progress — ${statsDisplay.passed + statsDisplay.failed} of ${statsDisplay.total} evaluated`}
+            </h2>
+            <div className="mt-2 h-1.5 w-56 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-purple-600 transition-all"
+                style={{
+                  width: `${statsDisplay.total ? ((statsDisplay.passed + statsDisplay.failed) / statsDisplay.total) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={statsDisplay.pending > 0}
+            className="rounded-lg bg-muted px-4 py-2 text-xs font-bold text-muted-foreground disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            Confirm &amp; Lock Round 2
+          </button>
+        </div>
+        {statsDisplay.pending > 0 ? (
+          <p className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-800 dark:border-yellow-900/50 dark:bg-yellow-950/30 dark:text-yellow-300">
+            <i className="fa-solid fa-triangle-exclamation mr-2" />
+            You still have {statsDisplay.pending} pending candidate
+            {statsDisplay.pending === 1 ? '' : 's'}.
+          </p>
+        ) : null}
+      </section>
+
       <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="bg-muted/40 -mx-1 flex w-full max-w-full items-center gap-1.5 overflow-x-auto rounded-xl p-1.5 sm:mx-0 sm:w-fit sm:gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {filterOptions.map((option) => (
@@ -447,6 +511,14 @@ export default function HeadDashboardPage() {
         </div>
 
         <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:items-center lg:w-auto">
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted"
+          >
+            <i className="fa-solid fa-file-excel text-emerald-600" />
+            Export Excel
+            <i className="fa-solid fa-chevron-down text-xs text-muted-foreground" />
+          </button>
           <div className="relative w-full sm:w-72">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
               <i className="fa-solid fa-magnifying-glass text-muted-foreground" />

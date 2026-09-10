@@ -13,6 +13,7 @@ export type CohortBannerProps = {
    * scope of the page (e.g. "Department Head view · Technology Department").
    */
   scopeLabel?: string;
+  variant?: 'default' | 'head';
 };
 
 /**
@@ -20,7 +21,11 @@ export type CohortBannerProps = {
  * recruitment status. Used on both the MasterView and HeadDashboard candidate
  * pages so the implicit filter applied to the candidate list is unambiguous.
  */
-export function CohortBanner({ cohort, scopeLabel }: CohortBannerProps) {
+export function CohortBanner({
+  cohort,
+  scopeLabel,
+  variant = 'default',
+}: CohortBannerProps) {
   if (!cohort) {
     return (
       <div className="bg-card border-border rounded-2xl border p-5 shadow-sm">
@@ -59,7 +64,10 @@ export function CohortBanner({ cohort, scopeLabel }: CohortBannerProps) {
       <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-            <i className="fa-solid fa-layer-group text-2xl" aria-hidden />
+            <i
+              className={`fa-solid ${variant === 'head' ? 'fa-calendar-days' : 'fa-layer-group'} text-2xl`}
+              aria-hidden
+            />
           </div>
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
@@ -87,10 +95,14 @@ export function CohortBanner({ cohort, scopeLabel }: CohortBannerProps) {
               aria-hidden
             />
             <i className={`${recruitmentTone.icon}`} aria-hidden />
-            {recruitmentTone.label}
+            {variant === 'head' && cohort.isRecruitmentActive
+              ? 'Interviews in progress'
+              : recruitmentTone.label}
           </span>
           <p className="max-w-xs text-xs font-semibold text-muted-foreground lg:text-right">
-            {recruitmentTone.sub}
+            {variant === 'head' && cohort.isRecruitmentActive
+              ? 'Conducting interviews and evaluating candidates.'
+              : recruitmentTone.sub}
           </p>
         </div>
       </div>

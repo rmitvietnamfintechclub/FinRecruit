@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import Link from 'next/link';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import { emailLocalPart } from '@/lib/utils';
 import {
@@ -19,7 +20,7 @@ export type CandidateViewMode = 'grid' | 'list';
 interface CandidateTableProps {
   candidates: HeadDashboardListCandidate[];
   onUpdateStatus: (id: string, newStatus: 'Pass' | 'Fail' | 'Pending') => void;
-  /** Executive MasterView: no PATCH status API yet — hide quick actions + pass readOnly to modal */
+  /** Kept for shared dashboard compatibility. Status changes happen in the cockpit. */
   readOnly?: boolean;
   detailApi?: 'head' | 'executive';
   /** Layout for the candidate list. Defaults to `'grid'` (card layout). */
@@ -38,12 +39,10 @@ export default function CandidateTable({
     useState<HeadDashboardListCandidate | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // --- Sync the modal's data with fresh candidate from the list ---
   const displayedSelectedCandidate = useMemo(() => {
     if (!selectedCandidate) return null;
-    const updated = candidates.find((c) => c.id === selectedCandidate.id);
-    return updated || selectedCandidate;
-  }, [selectedCandidate, candidates]);
+    return candidates.find((candidate) => candidate.id === selectedCandidate.id) ?? selectedCandidate;
+  }, [candidates, selectedCandidate]);
 
   const handleViewDetails = (candidate: HeadDashboardListCandidate) => {
     setSelectedCandidate(candidate);
@@ -175,33 +174,22 @@ export default function CandidateTable({
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
-                  {!readOnly && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onUpdateStatus(candidate.id, 'Pass')}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-green-50 text-green-600 shadow-sm transition-colors hover:bg-green-500 hover:text-white dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-600 dark:hover:text-white"
-                        title="Quick Pass"
-                      >
-                        <i className="fa-solid fa-check" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onUpdateStatus(candidate.id, 'Fail')}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 shadow-sm transition-colors hover:bg-red-500 hover:text-white dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white"
-                        title="Quick Fail"
-                      >
-                        <i className="fa-solid fa-xmark" />
-                      </button>
-                    </>
+                  {detailApi === 'executive' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleViewDetails(candidate)}
+                      className="inline-flex h-9 items-center justify-center rounded-xl bg-blue-50 px-4 text-xs font-bold text-blue-600 shadow-sm transition-colors hover:bg-blue-600 hover:text-white dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white"
+                    >
+                      Review Profile
+                    </button>
+                  ) : (
+                    <Link
+                      href={`/interviews/${candidate.id}`}
+                      className="inline-flex h-9 items-center justify-center rounded-xl bg-purple-50 px-4 text-xs font-bold text-purple-700 shadow-sm transition-colors hover:bg-purple-600 hover:text-white dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-600 dark:hover:text-white"
+                    >
+                      Access Cockpit
+                    </Link>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => handleViewDetails(candidate)}
-                    className="inline-flex h-9 items-center justify-center rounded-xl bg-blue-50 px-4 text-xs font-bold text-blue-600 shadow-sm transition-colors hover:bg-blue-600 hover:text-white dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white"
-                  >
-                    Review Profile
-                  </button>
                 </div>
               </li>
             ))}
@@ -298,48 +286,38 @@ export default function CandidateTable({
 
             {/* Card Footer */}
             <div className="flex items-center justify-between border-t border-border pt-5 mt-auto">
-              {!readOnly && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onUpdateStatus(candidate.id, 'Pass')}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-600 transition-colors hover:bg-green-500 hover:text-white tooltip-trigger shadow-sm dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-600 dark:hover:text-white"
-                    title="Quick Pass"
-                  >
-                    <i className="fa-solid fa-check"></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateStatus(candidate.id, 'Fail')}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-500 hover:text-white tooltip-trigger shadow-sm dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white"
-                    title="Quick Fail"
-                  >
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
-                </div>
+              {detailApi === 'executive' ? (
+                <button
+                  type="button"
+                  onClick={() => handleViewDetails(candidate)}
+                  className="ml-auto inline-flex h-10 items-center justify-center rounded-xl bg-blue-50 px-5 text-sm font-bold text-blue-600 transition-colors hover:bg-blue-600 hover:text-white shadow-sm dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white"
+                >
+                  Review Profile
+                </button>
+              ) : (
+                <Link
+                  href={`/interviews/${candidate.id}`}
+                  className="ml-auto inline-flex h-10 items-center justify-center rounded-xl bg-purple-50 px-5 text-sm font-bold text-purple-700 transition-colors hover:bg-purple-600 hover:text-white shadow-sm dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-600 dark:hover:text-white"
+                >
+                  Access Cockpit
+                </Link>
               )}
-
-              <button
-                type="button"
-                onClick={() => handleViewDetails(candidate)}
-                className={`inline-flex h-10 items-center justify-center rounded-xl bg-blue-50 px-5 text-sm font-bold text-blue-600 transition-colors hover:bg-blue-600 hover:text-white shadow-sm dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white ${readOnly ? 'ml-auto' : ''}`}
-              >
-                Review Profile
-              </button>
             </div>
           </div>
         ))}
       </div>
       )}
 
-      <CandidateModal
-        candidate={displayedSelectedCandidate}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onUpdateStatus={onUpdateStatus}
-        detailApi={detailApi}
-        readOnly={readOnly}
-      />
+      {detailApi === 'executive' ? (
+        <CandidateModal
+          candidate={displayedSelectedCandidate}
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onUpdateStatus={onUpdateStatus}
+          detailApi="executive"
+          readOnly={readOnly}
+        />
+      ) : null}
     </>
   );
 }

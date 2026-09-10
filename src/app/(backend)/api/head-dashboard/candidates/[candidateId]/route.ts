@@ -8,6 +8,7 @@ import {
 } from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
+import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
 
 export const runtime = 'nodejs';
 
@@ -16,7 +17,7 @@ type CandidateDetailRouteContext = {
 };
 
 export const GET = withRBAC<CandidateDetailRouteContext>(
-    'Department Head',
+    ['Department Head', 'Member'],
     async (_req: NextRequest, { session, params }) => {
         const assignedDepartment = normalizeHeadDepartment(session.user.department);
 
@@ -70,6 +71,8 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
                 'appliedAt',
                 'updatedAt',
                 'createdAt',
+                'round2Status',
+                'round2Evaluation',
                 // legacy (read fallback)
                 'futurePlans',
                 'fintechAspect',
@@ -93,6 +96,15 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
             );
         }
 
+        const config = await DepartmentConfig.findOne({
+            department: assignedDepartment,
+            generation: candidate.generation,
+            semester: candidate.semester,
+        })
+            .select('interviewQuestions isScoringEnabled')
+            .lean()
+            .exec();
+
         return NextResponse.json(
             {
                 success: true,
@@ -110,6 +122,8 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
                         canEditSubmittedData: false,
                         canDeleteCandidate: false,
                     },
+                    interviewQuestions: config?.interviewQuestions ?? [],
+                    isScoringEnabled: config?.isScoringEnabled ?? false,
                 },
             },
             { status: 200 }
