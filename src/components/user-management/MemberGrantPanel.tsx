@@ -38,6 +38,7 @@ export function MemberGrantPanel({ department }: { department: DepartmentType })
   const { grant, pending } = useGrantMember();
   const [target, setTarget] = useState<DirectoryAccount | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const departmentMembers = members.filter((m) => m.department === department);
 
   return (
     <div className="space-y-6">
@@ -92,11 +93,11 @@ export function MemberGrantPanel({ department }: { department: DepartmentType })
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {members.length === 0 ? (
+          {departmentMembers.length === 0 ? (
             <p className="text-muted-foreground text-sm">No members granted yet.</p>
           ) : (
             <ul>
-              {members.map((account) => (
+              {departmentMembers.map((account) => (
                 <AccountRow key={account.id} account={account} />
               ))}
             </ul>

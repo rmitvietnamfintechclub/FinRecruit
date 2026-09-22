@@ -23,6 +23,7 @@ import {
 } from '@/hooks/use-round-transition';
 import { RoundModeTabs, type RoundMode } from '@/components/head-dashboard/RoundModeTabs';
 import { RoundTransitionBar } from '@/components/head-dashboard/RoundTransitionBar';
+import type { LockRound1Result } from '@/types/roundTransition';
 
 const PAGE_SIZE = 9;
 
@@ -84,6 +85,8 @@ export default function HeadDashboardPage() {
 
   const [mode, setMode] = useState<RoundMode>('round1');
   const [round2Candidates, setRound2Candidates] = useState<HeadDashboardListCandidate[]>([]);
+  const [round2Loading, setRound2Loading] = useState(false);
+  const [round2Error, setRound2Error] = useState<string | null>(null);
   const departmentStates = useDepartmentStates();
   const { lock, pending: locking } = useLockRound1();
 
@@ -250,6 +253,8 @@ export default function HeadDashboardPage() {
   }, [loadList, refreshStats]);
 
   const loadRound2 = useCallback(async () => {
+    setRound2Loading(true);
+    setRound2Error(null);
     try {
       const params = new URLSearchParams({ status: 'Pass', page: '1', limit: '100' });
       const res = await fetch(`/api/head-dashboard/candidates?${params}`, {
@@ -258,20 +263,28 @@ export default function HeadDashboardPage() {
       const json = (await res.json()) as ListApiResponse;
       if (!res.ok || !json.success) {
         setRound2Candidates([]);
+        setRound2Error(json.message ?? `Request failed (${res.status})`);
         return;
       }
       setRound2Candidates(json.candidates ?? []);
-    } catch {
+      setRound2Error(null);
+    } catch (e) {
       setRound2Candidates([]);
+      setRound2Error(e instanceof Error ? e.message : 'Failed to load the Round 2 pool.');
+    } finally {
+      setRound2Loading(false);
     }
   }, []);
 
-  const handleLockRound1 = useCallback(async () => {
-    if (!headDepartment) return;
+  const handleLockRound1 = useCallback(async (): Promise<LockRound1Result> => {
+    if (!headDepartment) {
+      return { success: false, message: 'No department assignment found.' };
+    }
     const result = await lock(headDepartment);
     if (result.success) {
       await Promise.all([loadList(1, false), refreshStats()]);
     }
+    return result;
   }, [headDepartment, lock, loadList, refreshStats]);
 
   useEffect(() => {
@@ -572,6 +585,23 @@ export default function HeadDashboardPage() {
       ) : null}
 
       <div className="mt-4">
+        {mode === 'round2' && round2Loading ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <i className="fa-solid fa-spinner fa-spin text-2xl text-blue-600" />
+            <p className="mt-3 text-sm font-semibold">Loading Round 2 pool…</p>
+          </div>
+        ) : null}
+
+        {mode === 'round2' && round2Error ? (
+          <AppNotice
+            variant="error"
+            title="Could not load the Round 2 pool"
+            onDismiss={() => setRound2Error(null)}
+          >
+            {round2Error}
+          </AppNotice>
+        ) : null}
+
         <CandidateTable
           candidates={mode === 'round2' ? round2Candidates : candidates}
           onUpdateStatus={mode === 'round2' ? () => undefined : handleUpdateStatusRequest}
@@ -579,7 +609,8 @@ export default function HeadDashboardPage() {
           readOnly={mode === 'round2' || isRound1Locked}
         />
 
-        {(mode === 'round2' ? round2Candidates : candidates).length === 0 && !loading && (
+        {(mode === 'round2' ? round2Candidates : candidates).length === 0 &&
+          (mode === 'round2' ? !round2Loading && !round2Error : !loading) && (
           <div className="bg-card border-border mt-4 flex flex-col items-center justify-center rounded-2xl border py-20 text-center shadow-sm">
             <div className="bg-muted/50 mb-5 flex h-20 w-20 items-center justify-center rounded-full">
               <i className={`fa-solid ${mode === 'round2' ? 'fa-people-group' : 'fa-folder-open'} text-muted-foreground text-3xl`} />

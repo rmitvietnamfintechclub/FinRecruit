@@ -10,6 +10,7 @@ import {
   subscribe,
 } from '@/lib/round-transition/mock-store';
 
+// TODO(backend): wire getRoundTransitionApi().getDepartmentStates() once reads move server-side.
 export function useDepartmentStates(): DepartmentState[] {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

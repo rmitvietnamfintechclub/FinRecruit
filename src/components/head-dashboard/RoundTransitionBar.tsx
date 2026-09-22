@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { DepartmentType } from '@/app/(backend)/types';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { AppNotice } from '@/components/feedback/AppNotice';
+import type { LockRound1Result } from '@/types/roundTransition';
 
 type RoundTransitionBarProps = {
   department: DepartmentType | null;
@@ -12,7 +13,7 @@ type RoundTransitionBarProps = {
   pending: number;
   isLocked: boolean;
   locking: boolean;
-  onLock: () => Promise<void>;
+  onLock: () => Promise<LockRound1Result>;
 };
 
 export function RoundTransitionBar({
@@ -25,7 +26,10 @@ export function RoundTransitionBar({
   onLock,
 }: RoundTransitionBarProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{
+    text: string;
+    variant: 'info' | 'error';
+  } | null>(null);
   const percentage = total > 0 ? Math.round((evaluated / total) * 100) : 0;
   const canLock = department !== null && pending === 0 && total > 0 && !isLocked;
 
@@ -76,8 +80,8 @@ export function RoundTransitionBar({
 
       {notice ? (
         <div className="w-full sm:w-auto">
-          <AppNotice variant="info" onDismiss={() => setNotice(null)}>
-            {notice}
+          <AppNotice variant={notice.variant} onDismiss={() => setNotice(null)}>
+            {notice.text}
           </AppNotice>
         </div>
       ) : null}
@@ -90,9 +94,19 @@ export function RoundTransitionBar({
         loading={locking}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={async () => {
-          await onLock();
+          const result = await onLock();
           setConfirmOpen(false);
-          setNotice('Round 1 locked. Passed candidates are now in the Round 2 pool.');
+          if (result.success) {
+            setNotice({
+              text: 'Round 1 locked. Passed candidates are now in the Round 2 pool.',
+              variant: 'info',
+            });
+          } else {
+            setNotice({
+              text: result.message ?? 'Failed to lock Round 1.',
+              variant: 'error',
+            });
+          }
         }}
       />
     </section>

@@ -10,6 +10,7 @@ import {
   subscribe,
 } from '@/lib/member-directory/mock-store';
 
+// TODO(backend): wire getMemberDirectoryApi().getDirectory() once reads move server-side.
 export function useMemberDirectory(): MemberDirectoryPayload {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
