@@ -12,6 +12,17 @@ import { AppNotice } from '@/components/feedback/AppNotice';
 import { CohortBanner } from '@/components/feedback/CohortBanner';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
+import type { DepartmentType } from '@/app/(backend)/types';
+import {
+  findDepartmentState,
+  ROUND_TRANSITION_DEPARTMENTS,
+} from '@/lib/round-transition/reducer';
+import {
+  useDepartmentStates,
+  useLockRound1,
+} from '@/hooks/use-round-transition';
+import { RoundModeTabs, type RoundMode } from '@/components/head-dashboard/RoundModeTabs';
+import { RoundTransitionBar } from '@/components/head-dashboard/RoundTransitionBar';
 
 const PAGE_SIZE = 9;
 
@@ -70,6 +81,21 @@ export default function HeadDashboardPage() {
   const [listEmptyHint, setListEmptyHint] = useState<string | null>(null);
   const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
   const [assignedDepartment, setAssignedDepartment] = useState<string | null>(null);
+
+  const [mode, setMode] = useState<RoundMode>('round1');
+  const [round2Candidates, setRound2Candidates] = useState<HeadDashboardListCandidate[]>([]);
+  const departmentStates = useDepartmentStates();
+  const { lock, pending: locking } = useLockRound1();
+
+  const headDepartment: DepartmentType | null =
+    assignedDepartment &&
+    ROUND_TRANSITION_DEPARTMENTS.includes(assignedDepartment as DepartmentType)
+      ? (assignedDepartment as DepartmentType)
+      : null;
+
+  const isRound1Locked = headDepartment
+    ? (findDepartmentState(departmentStates, headDepartment)?.isRound1Locked ?? false)
+    : false;
 
   const [stats, setStats] = useState({
     total: 0,
@@ -223,6 +249,39 @@ export default function HeadDashboardPage() {
     void refreshStats();
   }, [loadList, refreshStats]);
 
+  const loadRound2 = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ status: 'Pass', page: '1', limit: '100' });
+      const res = await fetch(`/api/head-dashboard/candidates?${params}`, {
+        credentials: 'include',
+      });
+      const json = (await res.json()) as ListApiResponse;
+      if (!res.ok || !json.success) {
+        setRound2Candidates([]);
+        return;
+      }
+      setRound2Candidates(json.candidates ?? []);
+    } catch {
+      setRound2Candidates([]);
+    }
+  }, []);
+
+  const handleLockRound1 = useCallback(async () => {
+    if (!headDepartment) return;
+    const result = await lock(headDepartment);
+    if (result.success) {
+      await Promise.all([loadList(1, false), refreshStats()]);
+    }
+  }, [headDepartment, lock, loadList, refreshStats]);
+
+  useEffect(() => {
+    if (isRound1Locked) setMode('round2');
+  }, [isRound1Locked]);
+
+  useEffect(() => {
+    if (isRound1Locked && mode === 'round2') void loadRound2();
+  }, [isRound1Locked, mode, loadRound2]);
+
   useIntervalWhenVisible(pollDashboard, {
     enabled: !loading && !loadingMore && !patching,
   });
@@ -358,6 +417,21 @@ export default function HeadDashboardPage() {
         }
       />
 
+      {headDepartment ? (
+        <div className="flex flex-col gap-4">
+          <RoundModeTabs mode={mode} isLocked={isRound1Locked} onChange={setMode} />
+          <RoundTransitionBar
+            department={headDepartment}
+            evaluated={Math.max(stats.total - stats.pending, 0)}
+            total={stats.total}
+            pending={stats.pending}
+            isLocked={isRound1Locked}
+            locking={locking}
+            onLock={handleLockRound1}
+          />
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
         <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl text-blue-600 sm:h-14 sm:w-14 sm:text-2xl">
@@ -428,7 +502,8 @@ export default function HeadDashboardPage() {
         </div>
       </div>
 
-      <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      {mode === 'round1' ? (
+        <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="bg-muted/40 -mx-1 flex w-full max-w-full items-center gap-1.5 overflow-x-auto rounded-xl p-1.5 sm:mx-0 sm:w-fit sm:gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {filterOptions.map((option) => (
             <button
@@ -494,23 +569,28 @@ export default function HeadDashboardPage() {
           </div>
         </div>
       </div>
+      ) : null}
 
       <div className="mt-4">
         <CandidateTable
-          candidates={candidates}
-          onUpdateStatus={handleUpdateStatusRequest}
+          candidates={mode === 'round2' ? round2Candidates : candidates}
+          onUpdateStatus={mode === 'round2' ? () => undefined : handleUpdateStatusRequest}
           viewMode={viewMode}
+          readOnly={mode === 'round2' || isRound1Locked}
         />
 
-        {candidates.length === 0 && !loading && (
+        {(mode === 'round2' ? round2Candidates : candidates).length === 0 && !loading && (
           <div className="bg-card border-border mt-4 flex flex-col items-center justify-center rounded-2xl border py-20 text-center shadow-sm">
             <div className="bg-muted/50 mb-5 flex h-20 w-20 items-center justify-center rounded-full">
-              <i className="fa-solid fa-folder-open text-muted-foreground text-3xl" />
+              <i className={`fa-solid ${mode === 'round2' ? 'fa-people-group' : 'fa-folder-open'} text-muted-foreground text-3xl`} />
             </div>
-            <p className="text-foreground text-xl font-black">No candidates found</p>
+            <p className="text-foreground text-xl font-black">
+              {mode === 'round2' ? 'No candidates in the Round 2 pool yet' : 'No candidates found'}
+            </p>
             <p className="text-muted-foreground mt-2 text-sm font-medium">
-              {listEmptyHint ??
-                'Try adjusting your search or filter settings.'}
+              {mode === 'round2'
+                ? 'Passed Round 1 candidates will appear here.'
+                : (listEmptyHint ?? 'Try adjusting your search or filter settings.')}
             </p>
           </div>
         )}
