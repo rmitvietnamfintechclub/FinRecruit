@@ -595,7 +595,7 @@ export default function HeadDashboardPage() {
           </div>
         )}
 
-        {hasMore && candidates.length > 0 && (
+        {mode === 'round1' && hasMore && candidates.length > 0 && (
           <div className="mt-8 flex justify-center">
             <button
               type="button"
