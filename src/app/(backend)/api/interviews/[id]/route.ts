@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import Candidate from '@/app/(backend)/models/Candidate';
 import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
-import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 
 type InterviewRouteContext = {
   params: Promise<{ id: string }>;
