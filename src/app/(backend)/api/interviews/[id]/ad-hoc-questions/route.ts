@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import Candidate from '@/app/(backend)/models/Candidate';
-import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 
 type InterviewAdHocRouteContext = {
   params: Promise<{ id: string }>;
