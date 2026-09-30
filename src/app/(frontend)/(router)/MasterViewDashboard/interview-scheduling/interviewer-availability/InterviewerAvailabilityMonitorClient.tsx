@@ -8,6 +8,7 @@ import {
   useInterviewLinks,
   useInterviewSlots,
 } from '@/hooks/use-interview-scheduling';
+import { DEPARTMENT_COLORS } from '@/lib/interview-scheduling/departmentColors';
 import { DEPARTMENT_META, DEPARTMENT_ORDER } from '@/lib/interview-scheduling/departments';
 import { formatDateBand, slotRangeLabel } from '@/lib/interview-scheduling/format';
 import {
@@ -40,11 +41,17 @@ export function InterviewerAvailabilityMonitorClient() {
     });
   }
 
+  const tones = DEPARTMENT_COLORS[department];
+
   const names = (rs: { interviewerName: string }[]) =>
     rs.length ? (
       <div className="flex flex-wrap justify-center gap-1">
         {rs.map((r, i) => (
-          <span key={`${r.interviewerName}-${i}`} className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold text-slate-900">
+          <span
+            key={`${r.interviewerName}-${i}`}
+            style={{ backgroundColor: tones.light, borderColor: tones.dark, color: tones.dark }}
+            className="rounded-full border px-2 py-0.5 text-xs font-bold"
+          >
             {r.interviewerName}
           </span>
         ))}
@@ -99,7 +106,8 @@ export function InterviewerAvailabilityMonitorClient() {
                 type="button"
                 onClick={() => toggle(date)}
                 aria-expanded={open}
-                className="flex w-full items-center justify-between bg-[#0E3559] px-4 py-3 text-left text-sm font-extrabold tracking-wide text-white"
+                style={{ backgroundColor: tones.dark }}
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-extrabold tracking-wide text-white"
               >
                 {formatDateBand(date, true)}
                 <ChevronDown className={cn('h-4 w-4 transition-transform', !open && '-rotate-90')} aria-hidden />
@@ -108,7 +116,7 @@ export function InterviewerAvailabilityMonitorClient() {
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[720px] border-collapse text-center text-sm">
                     <thead>
-                      <tr className="bg-[#3D85C6] text-white">
+                      <tr style={{ backgroundColor: tones.medium }} className="text-white">
                         {COLS.map((c) => (
                           <th key={c} className="px-3 py-2 text-xs font-extrabold tracking-wider uppercase">{c}</th>
                         ))}
@@ -124,7 +132,7 @@ export function InterviewerAvailabilityMonitorClient() {
                           (() => {
                             const a = availabilityForSlot(availability, row.slot.id, department);
                             return (
-                              <tr key={row.slot.id} className="border-t border-white/40 bg-[#9FC5E8]/50 text-slate-900 dark:bg-[#9FC5E8]/50">
+                              <tr key={row.slot.id} style={{ backgroundColor: tones.light }} className="border-t border-white/60 text-slate-900">
                                 <td className="px-3 py-2 font-bold">Session {row.session}</td>
                                 <td className="px-3 py-2 font-semibold tabular-nums">{slotRangeLabel(row.slot)}</td>
                                 <td className="px-3 py-2">{names(a.executiveBoard)}</td>

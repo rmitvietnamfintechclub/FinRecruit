@@ -8,6 +8,7 @@ import {
   useInterviewLinks,
   useInterviewSlots,
 } from '@/hooks/use-interview-scheduling';
+import { DEPARTMENT_COLORS } from '@/lib/interview-scheduling/departmentColors';
 import { DEPARTMENT_META, DEPARTMENT_ORDER } from '@/lib/interview-scheduling/departments';
 import { formatDateBand, slotRangeLabel } from '@/lib/interview-scheduling/format';
 import { buildMonitorRows, cellState, groupSlotsByDate } from '@/lib/interview-scheduling/reducer';
@@ -57,6 +58,8 @@ export function CandidateBookingsMonitorClient() {
   const allCols = ['Activity', 'Time', ...DEPARTMENT_ORDER.map((d) => DEPARTMENT_META[d].full), 'Room'];
   const deptCols = ['Activity', 'Time', 'Candidate', 'Student ID', 'Room', 'Status'];
   const cols = view === 'all' ? allCols : deptCols;
+  // Single-department view reskins to that department's tones; All Departments stays gold.
+  const tones = view === 'all' ? null : DEPARTMENT_COLORS[view];
 
   function rowsFor(daySlots: InterviewSlot[]) {
     if (view === 'all') return buildMonitorRows(daySlots);
@@ -114,7 +117,11 @@ export function CandidateBookingsMonitorClient() {
                 type="button"
                 onClick={() => toggle(date)}
                 aria-expanded={open}
-                className="flex w-full items-center justify-between bg-[#9A6F19] px-4 py-3 text-left text-sm font-extrabold tracking-wide text-white"
+                style={tones ? { backgroundColor: tones.dark } : undefined}
+                className={cn(
+                  'flex w-full items-center justify-between px-4 py-3 text-left text-sm font-extrabold tracking-wide text-white',
+                  !tones && 'bg-[#9A6F19]'
+                )}
               >
                 {formatDateBand(date, true)}
                 <ChevronDown className={cn('h-4 w-4 transition-transform', !open && '-rotate-90')} aria-hidden />
@@ -123,7 +130,10 @@ export function CandidateBookingsMonitorClient() {
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[720px] border-collapse text-center text-sm">
                     <thead>
-                      <tr className="bg-[#E6B656] text-[#010A63]">
+                      <tr
+                        style={tones ? { backgroundColor: tones.medium } : undefined}
+                        className={tones ? 'text-white' : 'bg-[#E6B656] text-[#010A63]'}
+                      >
                         {cols.map((c) => (
                           <th key={c} className="px-3 py-2 text-xs font-extrabold tracking-wider uppercase">{c}</th>
                         ))}
@@ -140,7 +150,11 @@ export function CandidateBookingsMonitorClient() {
                         }
                         const s = row.slot;
                         return (
-                          <tr key={s.id} className="border-t border-white/40 bg-[#EAD6AF] text-slate-900">
+                          <tr
+                            key={s.id}
+                            style={tones ? { backgroundColor: tones.light } : undefined}
+                            className={cn('border-t border-white/40 text-slate-900', !tones && 'bg-[#EAD6AF]')}
+                          >
                             <td className="px-3 py-2 font-bold">Session {row.session}</td>
                             <td className="px-3 py-2 font-semibold tabular-nums">{slotRangeLabel(s)}</td>
                             {view === 'all' ? (
