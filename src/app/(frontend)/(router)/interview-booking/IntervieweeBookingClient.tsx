@@ -64,16 +64,6 @@ export function IntervieweeBookingClient() {
   const validEmail = /^\S+@\S+\.\S+$/.test(email.trim());
   const selected = slots.find((s) => s.id === selectedId) ?? null;
 
-  async function checkExisting() {
-    if (!validEmail) return;
-    try {
-      const existing = await getInterviewSchedulingApi().findExistingBooking(email.trim());
-      if (existing) setScreen({ kind: 'already', booking: existing });
-    } catch {
-      /* non-blocking: the confirm step re-checks server-side */
-    }
-  }
-
   function openConfirm() {
     setError(null);
     if (!name.trim()) return setError('Please enter your full name.');
@@ -164,7 +154,24 @@ export function IntervieweeBookingClient() {
             </>
           }
           actions={
-            <a href={`mailto:${CONTACT_EMAIL}`} className={`block w-full text-center ${amberBtn}`}>Contact Us</a>
+            <div className="space-y-3">
+              <a href={`mailto:${CONTACT_EMAIL}`} className={`block w-full text-center ${amberBtn}`}>Contact Us</a>
+              <button
+                type="button"
+                onClick={() => {
+                  // Back to the form; clear the email so a mistyped one can be corrected
+                  // (the same email would land here again).
+                  setScreen({ kind: 'form' });
+                  setEmail('');
+                  setSelectedId(null);
+                  setError(null);
+                  void loadSchedule(department);
+                }}
+                className="w-full rounded-xl border border-[#232838] px-5 py-2.5 text-sm font-bold text-slate-300 hover:bg-white/5"
+              >
+                Back
+              </button>
+            </div>
           }
         />
       </PublicPageShell>
@@ -182,7 +189,7 @@ export function IntervieweeBookingClient() {
           </div>
           <div>
             <label className={labelClass} htmlFor="ib-email">Student email</label>
-            <input id="ib-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={checkExisting} placeholder="Please enter your student email" className={inputClass} />
+            <input id="ib-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Please enter your student email" className={inputClass} />
           </div>
           <div>
             <p className={labelClass}>Select your applied department</p>
