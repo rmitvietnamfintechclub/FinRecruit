@@ -3,18 +3,20 @@
 import { ChevronDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SlotChip } from '@/components/interview-scheduling/SlotChip';
+import { DEPARTMENT_COLORS } from '@/lib/interview-scheduling/departmentColors';
+import { DEPARTMENT_META } from '@/lib/interview-scheduling/departments';
 import { formatDateBand, slotDuration, slotRangeLabel } from '@/lib/interview-scheduling/format';
 import { groupSlotsByDate, groupSlotsByRoom } from '@/lib/interview-scheduling/reducer';
 import { cn } from '@/lib/utils';
-import type { InterviewSlot } from '@/types/interviewScheduling';
+import type { InterviewDepartment, InterviewSlot } from '@/types/interviewScheduling';
 
 type SlotPickerProps<T extends InterviewSlot> = {
   slots: T[];
   isSelected: (slot: T) => boolean;
   isDisabled?: (slot: T) => boolean;
   onToggle: (slot: T) => void;
-  /** Colored band header (department). Omit for a plain grid. */
-  band?: { label: string; color: string };
+  /** Department-themed band: primary-colored toggle header + support-colored content. Omit for a plain grid. */
+  band?: { label: string; department: InterviewDepartment };
 };
 
 /** Date -> room -> chips grid, optionally under a collapsible colored department band. */
@@ -28,17 +30,22 @@ export function SlotPicker<T extends InterviewSlot>({
   const [open, setOpen] = useState(true);
   const byDate = useMemo(() => groupSlotsByDate(slots) as Map<string, T[]>, [slots]);
 
+  const tones = band ? DEPARTMENT_COLORS[band.department] : null;
+
   const grid = (
-    <div className="space-y-5 p-4">
+    <div
+      className="space-y-5 p-4 text-black"
+      style={tones ? { backgroundColor: `${tones.light}80` } : undefined}
+    >
       {byDate.size === 0 ? (
         <p className="text-muted-foreground py-6 text-center text-sm">No interview slots are available yet.</p>
       ) : (
         [...byDate.entries()].map(([date, daySlots]) => (
           <div key={date}>
-            <p className="mb-2 text-sm font-extrabold tracking-wide">{formatDateBand(date)}</p>
+            <p className="mb-2 text-sm font-extrabold tracking-wide text-black">{formatDateBand(date)}</p>
             {[...groupSlotsByRoom(daySlots).entries()].map(([room, list]) => (
               <div key={room} className="mb-3">
-                <p className="text-muted-foreground mb-1.5 text-[11px] font-bold tracking-wider uppercase">Room: {room}</p>
+                <p className="mb-1.5 text-[11px] font-bold tracking-wider text-black uppercase">Room: {room}</p>
                 <div className="flex flex-wrap gap-2">
                   {list.map((s) => (
                     <SlotChip
@@ -66,7 +73,7 @@ export function SlotPicker<T extends InterviewSlot>({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        style={{ backgroundColor: band.color }}
+        style={{ backgroundColor: DEPARTMENT_META[band.department].strong }}
         className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-extrabold tracking-wide text-white"
       >
         {band.label}

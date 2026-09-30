@@ -22,11 +22,11 @@ export function SlotChip({ label, caption, state, onClick }: SlotChipProps) {
       className={cn(
         'flex min-w-[8.5rem] flex-col items-center rounded-lg px-3 py-2 text-center transition-colors',
         state === 'idle' &&
-          'border border-[rgba(198,197,211,0.4)] bg-white text-slate-800 hover:border-[#16A34A]/60 dark:bg-white/5 dark:text-slate-100',
+          'border border-[rgba(198,197,211,0.4)] bg-white text-black hover:border-[#16A34A]/60',
         state === 'selected' &&
-          'border border-[#16A34A] bg-[#DCFCE7] text-slate-900',
+          'border border-[#16A34A] bg-[#DCFCE7] text-black',
         disabled &&
-          'cursor-not-allowed border-0 bg-[rgba(0,34,0,0.13)] text-[rgba(27,27,32,0.3)] dark:text-white/30'
+          'cursor-not-allowed border-0 bg-[rgba(0,34,0,0.13)] text-[rgba(27,27,32,0.3)]'
       )}
     >
       <span className="text-sm font-bold tabular-nums">{label}</span>

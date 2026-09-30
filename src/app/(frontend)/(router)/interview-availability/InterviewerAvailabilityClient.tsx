@@ -184,7 +184,7 @@ export function InterviewerAvailabilityClient() {
                 <SlotPicker
                   key={d}
                   slots={slots}
-                  band={{ label: DEPARTMENT_META[d].full, color: DEPARTMENT_META[d].strong }}
+                  band={{ label: DEPARTMENT_META[d].full, department: d }}
                   isSelected={(s) => picks[d].has(s.id)}
                   onToggle={(s) => toggle(d, s.id)}
                 />

@@ -216,6 +216,7 @@ export function IntervieweeBookingClient() {
           ) : (
             <SlotPicker
               slots={slots}
+              band={{ label: DEPARTMENT_META[department].full, department }}
               isSelected={(s) => s.id === selectedId}
               isDisabled={(s) => !s.bookable}
               onToggle={(s) => setSelectedId(s.id === selectedId ? null : s.id)}
