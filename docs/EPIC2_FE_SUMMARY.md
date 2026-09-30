@@ -66,3 +66,18 @@ Executive routes: `withRBAC` Executive Board + `logSystemEvent` (category `inter
 ## Frontend gotchas
 - `useInterviewSlots()` / `useAvailabilityRecords()` in `src/hooks/use-interview-scheduling.ts` read the mock store directly. **In real mode the EB screens (1, 3, 5–7) won't show server data until those two hooks are switched to `getInterviewSchedulingApi()` fetches** (marked `TODO(backend)`).
 - Generation/semester in `InterviewSchedulingClient.tsx` is a seed constant; server should override.
+
+## Colors (frontend only, no backend impact)
+Single sources: `src/lib/interview-scheduling/departments.ts` (`DEPARTMENT_META`: `strong`, `light`) and `departmentColors.ts` (`DEPARTMENT_COLORS`: `dark`, `medium`, `light`). Don't hardcode department colors elsewhere.
+
+| Dept | Primary (`strong`) | dark | medium | light |
+|---|---|---|---|---|
+| Technology | `#0070C0` | `#1F6FC0` | `#4F81BD` | `#BDD7EE` |
+| Business | `#B70002` | `#C0202A` | `#C0504D` | `#E6B8B7` |
+| Marketing | `#351C75` | `#3B2C63` | `#7C67A8` | `#CCC1DA` |
+| HR | `#38761D` | `#4B7A3C` | `#6AA84F` | `#D9EAD3` |
+
+- **Department pills** (Interviewer Availability, Candidate Bookings, booking form's department picker): active = primary, white text. "All Departments" pill stays gold `#E6B656` / navy `#010A63`.
+- **Interviewer Availability table**: date band = dark, header row = medium, data rows = light, name chips = light bg + dark text/border. LUNCH BREAK stays indigo `#363E8E`.
+- **Candidate Bookings, one department**: same dark/medium/light reskin. **All Departments view stays gold** (`#9A6F19` date band, `#E6B656` header, `#BB8822` lunch, `#EAD6AF` rows). Status badges keep status colors (Scheduled `#FEF9C2`, Available `#DBF5FF`), not department colors.
+- **Slot picker (public forms)**: band toggle header = primary; content area = `light` tint; all text black. Chips keep spec colors: idle white, selected `#DCFCE7`/`#16A34A`, disabled `rgba(0,34,0,.13)`.
