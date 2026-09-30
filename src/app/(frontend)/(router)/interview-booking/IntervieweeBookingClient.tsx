@@ -195,7 +195,7 @@ export function IntervieweeBookingClient() {
             <p className={labelClass}>Select your applied department</p>
             <SegmentedControl
               ariaLabel="Applied department"
-              options={DEPARTMENT_ORDER.map((d) => ({ value: d, label: DEPARTMENT_META[d].short }))}
+              options={DEPARTMENT_ORDER.map((d) => ({ value: d, label: DEPARTMENT_META[d].short, color: DEPARTMENT_META[d].strong }))}
               value={department}
               onChange={(d) => {
                 setDepartment(d);

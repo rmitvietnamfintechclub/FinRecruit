@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils';
 
 type SegmentedControlProps<T extends string> = {
-  options: Array<{ value: T; label: string }>;
+  options: Array<{ value: T; label: string; color?: string }>;
   value: T;
   onChange: (value: T) => void;
   ariaLabel: string;
@@ -26,9 +26,10 @@ export function SegmentedControl<T extends string>({
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
+          style={value === o.value && o.color ? { backgroundColor: o.color, color: '#fff' } : undefined}
           className={cn(
             'flex-1 rounded-lg px-3 py-2 text-sm font-bold whitespace-nowrap transition-colors',
-            value === o.value ? activeClassName : 'text-muted-foreground hover:text-foreground'
+            value === o.value ? (o.color ? 'shadow-sm' : activeClassName) : 'text-muted-foreground hover:text-foreground'
           )}
         >
           {o.label}
