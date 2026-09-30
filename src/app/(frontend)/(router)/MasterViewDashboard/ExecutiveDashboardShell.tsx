@@ -22,6 +22,7 @@ const NAV: NavItem[] = [
   { href: '/MasterViewDashboard', label: 'Overview', exact: true },
   { href: '/MasterViewDashboard/candidates', label: 'Candidates' },
   { href: '/MasterViewDashboard/user-management', label: 'Users' },
+  { href: '/MasterViewDashboard/interview-scheduling', label: 'Interview Scheduling' },
   { href: '/MasterViewDashboard/system-config', label: 'System Config' },
   { href: '/MasterViewDashboard/system-logs', label: 'System Logs' },
 ];

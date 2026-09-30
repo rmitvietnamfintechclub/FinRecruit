@@ -1,0 +1,36 @@
+'use client';
+
+import { cn } from '@/lib/utils';
+
+export type SlotChipState = 'idle' | 'selected' | 'disabled';
+
+type SlotChipProps = {
+  label: string;
+  caption: string;
+  state: SlotChipState;
+  onClick?: () => void;
+};
+
+export function SlotChip({ label, caption, state, onClick }: SlotChipProps) {
+  const disabled = state === 'disabled';
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-pressed={state === 'selected'}
+      onClick={onClick}
+      className={cn(
+        'flex min-w-[8.5rem] flex-col items-center rounded-lg px-3 py-2 text-center transition-colors',
+        state === 'idle' &&
+          'border border-[rgba(198,197,211,0.4)] bg-white text-slate-800 hover:border-[#16A34A]/60 dark:bg-white/5 dark:text-slate-100',
+        state === 'selected' &&
+          'border border-[#16A34A] bg-[#DCFCE7] text-slate-900',
+        disabled &&
+          'cursor-not-allowed border-0 bg-[rgba(0,34,0,0.13)] text-[rgba(27,27,32,0.3)] dark:text-white/30'
+      )}
+    >
+      <span className="text-sm font-bold tabular-nums">{label}</span>
+      <span className="text-[11px] font-medium opacity-70">{caption}</span>
+    </button>
+  );
+}
