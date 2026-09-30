@@ -14,6 +14,8 @@ type SlotPickerProps<T extends InterviewSlot> = {
   slots: T[];
   isSelected: (slot: T) => boolean;
   isDisabled?: (slot: T) => boolean;
+  /** Tooltip for a chip (e.g. why it is disabled). */
+  chipTitle?: (slot: T) => string | undefined;
   onToggle: (slot: T) => void;
   /** Department-themed band: primary-colored toggle header + support-colored content. Omit for a plain grid. */
   band?: { label: string; department: InterviewDepartment };
@@ -24,6 +26,7 @@ export function SlotPicker<T extends InterviewSlot>({
   slots,
   isSelected,
   isDisabled,
+  chipTitle,
   onToggle,
   band,
 }: SlotPickerProps<T>) {
@@ -53,6 +56,7 @@ export function SlotPicker<T extends InterviewSlot>({
                       label={slotRangeLabel(s)}
                       caption={slotDuration(s)}
                       state={isDisabled?.(s) ? 'disabled' : isSelected(s) ? 'selected' : 'idle'}
+                      title={chipTitle?.(s)}
                       onClick={() => onToggle(s)}
                     />
                   ))}

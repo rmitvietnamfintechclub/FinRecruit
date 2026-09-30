@@ -59,6 +59,27 @@ export function InterviewerAvailabilityClient() {
   );
   const total = activeDepartments.reduce((n, d) => n + picks[d].size, 0);
 
+  // Executive Board can't be in two departments at the same time: a time already picked
+  // in one department is locked in the others (owner = the department that picked it).
+  const timeKey = (s: InterviewSlot) => `${s.date}|${s.startTime}|${s.endTime}`;
+  const timeOwners = useMemo(() => {
+    const owners = new Map<string, InterviewDepartment>();
+    if (!isEB) return owners;
+    const byId = new Map(slots.map((s) => [s.id, s]));
+    for (const d of DEPARTMENT_ORDER) {
+      for (const id of picks[d]) {
+        const slot = byId.get(id);
+        if (slot && !owners.has(timeKey(slot))) owners.set(timeKey(slot), d);
+      }
+    }
+    return owners;
+  }, [isEB, slots, picks]);
+
+  const lockedBy = (slot: InterviewSlot, dept: InterviewDepartment) => {
+    const owner = timeOwners.get(timeKey(slot));
+    return owner && owner !== dept ? owner : undefined;
+  };
+
   function toggle(dept: InterviewDepartment, id: string) {
     setPicks((prev) => {
       const next = new Set(prev[dept]);
@@ -146,7 +167,7 @@ export function InterviewerAvailabilityClient() {
             <div>
               <label className={labelClass} htmlFor="iv-email">Student email</label>
               <input id="iv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Please enter your student email" className={inputClass} />
-              <p className="text-muted-foreground mt-1.5 text-xs">Note: Using the same email will overwrite your previous availability.</p>
+              <p className="text-muted-foreground mt-1.5 text-xs">Each time a user with that Student Email submits the form, the system will delete their old selection and replace it with the latest one.</p>
             </div>
             <div>
               <p className={labelClass}>Select your role</p>
@@ -186,6 +207,11 @@ export function InterviewerAvailabilityClient() {
                   slots={slots}
                   band={{ label: DEPARTMENT_META[d].full, department: d }}
                   isSelected={(s) => picks[d].has(s.id)}
+                  isDisabled={(s) => Boolean(lockedBy(s, d))}
+                  chipTitle={(s) => {
+                    const owner = lockedBy(s, d);
+                    return owner ? `Already selected in ${DEPARTMENT_META[owner].short}` : undefined;
+                  }}
                   onToggle={(s) => toggle(d, s.id)}
                 />
               ))

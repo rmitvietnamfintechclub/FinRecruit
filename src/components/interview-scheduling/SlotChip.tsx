@@ -9,11 +9,14 @@ type SlotChipProps = {
   caption: string;
   state: SlotChipState;
   onClick?: () => void;
+  /** Native tooltip; put on a wrapper so it also shows on disabled chips. */
+  title?: string;
 };
 
-export function SlotChip({ label, caption, state, onClick }: SlotChipProps) {
+export function SlotChip({ label, caption, state, onClick, title }: SlotChipProps) {
   const disabled = state === 'disabled';
   return (
+    <span title={title} className="inline-flex">
     <button
       type="button"
       disabled={disabled}
@@ -32,5 +35,6 @@ export function SlotChip({ label, caption, state, onClick }: SlotChipProps) {
       <span className="text-sm font-bold tabular-nums">{label}</span>
       <span className="text-[11px] font-medium opacity-70">{caption}</span>
     </button>
+    </span>
   );
 }
