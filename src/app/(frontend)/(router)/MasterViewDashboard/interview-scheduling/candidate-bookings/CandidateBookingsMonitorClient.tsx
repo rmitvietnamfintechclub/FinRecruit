@@ -85,11 +85,18 @@ export function CandidateBookingsMonitorClient() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => setView(p.value)}
+                style={
+                  active && p.value !== 'all'
+                    ? { backgroundColor: DEPARTMENT_META[p.value].strong }
+                    : undefined
+                }
                 className={cn(
                   'rounded-full px-4 py-2 text-sm font-bold transition-colors',
                   active
-                    ? 'bg-[#E6B656] text-[#010A63]'
-                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-[#171717] dark:text-slate-300 dark:hover:bg-[#232838]'
+                    ? p.value === 'all'
+                      ? 'bg-[#E6B656] text-[#010A63]'
+                      : 'text-white'
+                    :'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-[#171717] dark:text-slate-300 dark:hover:bg-[#232838]'
                 )}
               >
                 {p.label}
