@@ -31,8 +31,14 @@ npm install
 ### 3. Setup Environment Variables (.env)
 The app needs secret keys to connect to the database and authentication providers. 
 
-1. Duplicate the `.env.example` file and rename it to **`.env.local`**.
-2. Copy actual connection strings and paste them into your new `.env.local` file.
+**Local Authorization:**
+To test Executive Board or Department Head views locally without needing a real Admin to promote you, add your Google account email to the DEV lists in your `.env` file:
+
+```bash
+# LOCAL DEV ONLY: Auto-grant roles on first sign-in (Comma-separated)
+DEV_EB_EMAILS="your.email@gmail.com,admin2@rmit.edu.vn"
+DEV_HEAD_EMAILS="head.tech@gmail.com"
+```
 
 ⚠️ **CRITICAL RULE:** NEVER commit `.env` to GitHub. It is already added to `.gitignore`.
 
