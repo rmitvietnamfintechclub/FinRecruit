@@ -8,6 +8,7 @@ export const UM_DEFAULT_GENERATION = 'Gen 12';
 
 export type DisplayRoleLabel =
   | 'Guest'
+  | 'Member'
   | 'Department Head'
   | 'Executive Board'
   | 'Alumni'
@@ -35,6 +36,9 @@ export function displayRoleLabel(row: ManagementUserRow): DisplayRoleLabel {
   }
   if (row.role === 'Department Head') {
     return 'Department Head';
+  }
+  if (row.role === 'Member') {
+    return 'Member';
   }
   return 'Guest';
 }
@@ -269,6 +273,7 @@ export function getUserManagementPayload(): UserManagementPayload {
   const activeEbs = store.filter(
     (u) => u.role === 'Executive Board' && u.isActive
   );
+
   const soleActiveExecutiveId =
     activeEbs.length === 1 ? activeEbs[0].id : null;
 
@@ -295,19 +300,25 @@ function wouldDeactivateSoleExecutive(
   next: { role: RoleType; isActive: boolean }
 ) {
   const current = store.find((u) => u.id === userId);
+
   if (!current) {
     return false;
   }
+
   const wasEbActive =
     current.role === 'Executive Board' && current.isActive;
+
   if (!wasEbActive) {
     return false;
   }
+
   const removesEb =
     next.role !== 'Executive Board' || next.isActive === false;
+
   if (!removesEb) {
     return false;
   }
+
   return countActiveExecutiveBoard(userId) === 0;
 }
 
@@ -342,6 +353,7 @@ export function patchUserManagement(
   input: PatchUserManagementInput
 ): PatchUserManagementResult {
   const idx = store.findIndex((u) => u.id === input.userId);
+
   if (idx === -1) {
     return { ok: false, status: 404, message: 'User not found.' };
   }
@@ -349,18 +361,23 @@ export function patchUserManagement(
   const current = store[idx];
   const prevRole = current.role;
   const nextRole = input.role ?? prevRole;
-  const roleChanged = input.role !== undefined && input.role !== prevRole;
+  const roleChanged =
+    input.role !== undefined && input.role !== prevRole;
+
   let nextDept = input.department ?? current.department;
 
   if (nextRole === 'Department Head') {
     const d = HEAD_DEPARTMENTS.find((x) => x === nextDept);
+
     if (!d) {
       return {
         ok: false,
         status: 400,
-        message: 'A valid head department is required for Department Head.',
+        message:
+          'A valid head department is required for Department Head.',
       };
     }
+
     nextDept = d;
   } else if (nextRole === 'Executive Board') {
     nextDept = 'EBMB';
@@ -369,6 +386,7 @@ export function patchUserManagement(
   }
 
   let nextIsActive = input.isActive ?? current.isActive;
+
   if (
     roleChanged &&
     (nextRole === 'Department Head' || nextRole === 'Executive Board')
@@ -376,10 +394,12 @@ export function patchUserManagement(
     nextIsActive = true;
   }
 
-  if (wouldDeactivateSoleExecutive(input.userId, {
-    role: nextRole,
-    isActive: nextIsActive,
-  })) {
+  if (
+    wouldDeactivateSoleExecutive(input.userId, {
+      role: nextRole,
+      isActive: nextIsActive,
+    })
+  ) {
     return {
       ok: false,
       status: 409,
@@ -396,5 +416,9 @@ export function patchUserManagement(
   };
 
   store[idx] = updated;
-  return { ok: true, user: serializeRow(updated) };
-}
+
+  return {
+    ok: true,
+    user: serializeRow(updated),
+  };
+};

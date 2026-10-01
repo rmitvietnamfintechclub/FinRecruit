@@ -26,131 +26,131 @@ function isValidStatus(value: unknown): value is StatusType {
 
 // Interfaces
 interface CandidateListItem {
-  _id: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  dob: string;
-  department: DepartmentType;
-  status: StatusType;
-  choice1: string;
-  choice2?: string;
-  generation: string;
-  semester: string;
-  appliedAt: Date;
-  createdAt: Date;
-  updatedAt: Date;
+    _id: string;
+    fullName: string;
+    email: string;
+    phone: string;
+    dob: string;
+    department: DepartmentType;
+    status: StatusType;
+    choice1: string;
+    choice2?: string;
+    generation: string;
+    semester: string;
+    appliedAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 interface QueryFilters {
-  department?: DepartmentType;
-  status?: StatusType;
+    department?: DepartmentType;
+    status?: StatusType;
 }
 
 interface ActiveCohortInfo {
-  generation: string;
-  semester: string;
-  isRecruitmentActive: boolean;
+    generation: string;
+    semester: string;
+    isRecruitmentActive: boolean;
 }
 
 interface CandidateListResponse {
-  success: true;
-  data: {
-    candidates: CandidateListItem[];
-    count: number;
-    filters: QueryFilters;
-    /** The active cohort applied as an implicit filter on this query. */
-    activeCohort: ActiveCohortInfo;
-    timestamp: string;
-  };
+    success: true;
+    data: {
+        candidates: CandidateListItem[];
+        count: number;
+        filters: QueryFilters;
+        /** The active cohort applied as an implicit filter on this query. */
+        activeCohort: ActiveCohortInfo;
+        timestamp: string;
+    };
 }
 
 interface ErrorResponse {
-  success: false;
-  message: string;
-  error?: string;
+    success: false;
+    message: string;
+    error?: string;
 }
 
 export const GET = withRBAC(
-  'Executive Board',
-  async (req: NextRequest, context: { session: ActiveAppSession }): Promise<Response> => {
-    try {
-      // Parse query parameters
-      const searchParams = req.nextUrl.searchParams;
-      const departmentParam = searchParams.get('department');
-      const statusParam = searchParams.get('status');
+    'Executive Board',
+    async (req: NextRequest, context: { session: ActiveAppSession }): Promise<Response> => {
+        try {
+            // Parse query parameters
+            const searchParams = req.nextUrl.searchParams;
+            const departmentParam = searchParams.get('department');
+            const statusParam = searchParams.get('status');
 
-      // Validate query parameters
-      const filters: QueryFilters = {};
+            // Validate query parameters
+            const filters: QueryFilters = {};
 
-      if (departmentParam && isValidDepartment(departmentParam)) {
-        filters.department = departmentParam;
-      }
+            if (departmentParam && isValidDepartment(departmentParam)) {
+                filters.department = departmentParam;
+            }
 
-      if (statusParam && isValidStatus(statusParam)) {
-        filters.status = statusParam;
-      }
+            if (statusParam && isValidStatus(statusParam)) {
+                filters.status = statusParam;
+            }
 
-      // Connect to database
-      await dbConnect();
+            // Connect to database
+            await dbConnect();
 
-      // Implicit cohort filter: only show candidates of the active SystemConfig cohort.
-      const active = await getActiveConfig();
+            // Implicit cohort filter: only show candidates of the active SystemConfig cohort.
+            const active = await getActiveConfig();
 
-      // Build mongodb filter
-      const mongoFilter: Record<string, unknown> = {
-        generation: active.currentGeneration,
-        semester: active.currentSemester,
-      };
+            // Build mongodb filter
+            const mongoFilter: Record<string, unknown> = {
+                generation: active.currentGeneration,
+                semester: active.currentSemester,
+            };
 
-      if (filters.department) {
-        mongoFilter.department = filters.department;
-      }
+            if (filters.department) {
+                mongoFilter.department = filters.department;
+            }
 
-      if (filters.status) {
-        mongoFilter.status = filters.status;
-      }
+            if (filters.status) {
+                mongoFilter.status = filters.status;
+            }
 
-      // Query database
-      const candidates = await Candidate.find(mongoFilter)
-        .select(
-          'fullName email phone dob department status choice1 choice2 generation semester appliedAt createdAt updatedAt'
-        )
-        .sort({ createdAt: -1 })
-        .lean()
-        .exec();
+            // Query database
+            const candidates = await Candidate.find(mongoFilter)
+                .select(
+                'fullName email phone dob department status choice1 choice2 generation semester appliedAt createdAt updatedAt'
+                )
+                .sort({ createdAt: -1 })
+                .lean()
+                .exec();
 
-      const now = new Date().toISOString();
+            const now = new Date().toISOString();
 
-      const response: CandidateListResponse = {
-        success: true,
-        data: {
-          candidates: candidates as CandidateListItem[],
-          count: candidates.length,
-          filters,
-          activeCohort: {
-            generation: active.currentGeneration,
-            semester: active.currentSemester,
-            isRecruitmentActive: active.isRecruitmentActive,
-          },
-          timestamp: now,
-        },
-      };
+            const response: CandidateListResponse = {
+                success: true,
+                data: {
+                    candidates: candidates as CandidateListItem[],
+                    count: candidates.length,
+                    filters,
+                    activeCohort: {
+                        generation: active.currentGeneration,
+                        semester: active.currentSemester,
+                        isRecruitmentActive: active.isRecruitmentActive,
+                    },
+                    timestamp: now,
+                },
+            };
 
-      return NextResponse.json(response, { status: 200 });
-    } catch (error: unknown) {
-      console.error('[candidates/GET] Error:', error);
+            return NextResponse.json(response, { status: 200 });
+        } catch (error: unknown) {
+            console.error('[candidates/GET] Error:', error);
 
-      const message =
-        error instanceof Error ? error.message : 'Unknown error occurred';
+            const message =
+                error instanceof Error ? error.message : 'Unknown error occurred';
 
-      const errorResponse: ErrorResponse = {
-        success: false,
-        message: 'Failed to fetch candidates.',
-        error: process.env.NODE_ENV === 'development' ? message : undefined,
-      };
+            const errorResponse: ErrorResponse = {
+                success: false,
+                message: 'Failed to fetch candidates.',
+                error: process.env.NODE_ENV === 'development' ? message : undefined,
+            };
 
-      return NextResponse.json(errorResponse, { status: 500 });
+            return NextResponse.json(errorResponse, { status: 500 });
+        }
     }
-  }
 );
