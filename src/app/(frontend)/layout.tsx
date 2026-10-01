@@ -1,17 +1,10 @@
 import type { ReactNode } from 'react';
 import Providers from '@/app/(frontend)/providers';
-import '../../../global.css';
 
-type RootLayoutProps = {
+type FrontendLayoutProps = {
   children: ReactNode;
 };
 
-export default function RootLayout({ children }: RootLayoutProps) {
-  return (
-    <html lang="en">
-      <body>
-        <Providers>{children}</Providers>
-      </body>
-    </html>
-  );
+export default function FrontendLayout({ children }: FrontendLayoutProps) {
+  return <Providers>{children}</Providers>;
 }

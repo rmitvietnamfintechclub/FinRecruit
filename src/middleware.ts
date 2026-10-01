@@ -70,6 +70,22 @@ export async function middleware(request: NextRequest) {
     if (role === 'Executive Board') {
       return NextResponse.redirect(new URL('/MasterViewDashboard', request.url));
     }
+    if (role === 'Member') {
+      return NextResponse.redirect(new URL('/MemberDashboard', request.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith('/MemberDashboard')) {
+    if (!isLoggedIn) {
+      return NextResponse.redirect(new URL('/loginPage', request.url));
+    }
+    if (role === 'Guest') {
+      return NextResponse.redirect(new URL('/waiting-room', request.url));
+    }
+    if (role !== 'Member') {
+      return NextResponse.redirect(new URL(getHomePathForRole(role), request.url));
+    }
     return NextResponse.next();
   }
 

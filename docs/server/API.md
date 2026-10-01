@@ -51,7 +51,10 @@ These APIs manage candidate lists, department configurations, and evaluations.
 | `GET` | `/head-dashboard/candidates` | HEAD | Retrieves paginated candidates assigned to the Head's department. Includes aggregated scores for ranking. | 1 & 2 (Story 5.2) | TODO |
 | `GET` | `/head-dashboard/candidates/:id` | HEAD | Retrieves full details and form answers for a specific candidate. | 1 | DONE |
 | `PATCH` | `/head-dashboard/candidates/:id/status` | HEAD | Updates candidate evaluation status (includes complex Choice 2 reroute logic). | 1 | DONE |
-| `POST` | `/head-dashboard/lock-round-1` | HEAD | Locks department Round 1 results, moving passed candidates into the Round 2 interview pool. | 2 (Story 1.1) | TODO |
+| `POST` | `/head-dashboard/lock-round-1` | HEAD | Marks the department's Round 1 as locked (Round 2 pool = the `Pass` list). Rejects if any candidate is still `Pending`. | 2 (Story 1.1) | DONE |
+| `GET` | `/head-dashboard/round-states` | HEAD, EB | Returns every department's Round 1 / Round 2 lock state for the active cohort. | 2 (Story 1.1, 1.2) | DONE |
+| `GET` | `/head-dashboard/members` | HEAD | Returns active Guests waiting for a role plus the active Members of the Head's department. | 2 (Story 1.3) | DONE |
+| `POST` | `/head-dashboard/members` | HEAD | Grants the `Member` role to a waiting Guest, scoped to the Head's department. Body `{ userId }`. | 2 (Story 1.3) | DONE |
 | `PATCH` | `/head-dashboard/config` | HEAD | Configures dynamic interview questions and toggles numeric scoring. | 2 (Story 3.2, 5.1) | TODO |
 | `POST` | `/head-dashboard/close-round-2` | HEAD | Locks the department's final Round 2 results so the dashboard becomes read-only. | 2 (Story 4.1) | TODO |
 
@@ -113,6 +116,7 @@ Provides master views, aggregate statistics, and system exports.
 | `GET` | `/executive/candidates` | EXEC | Read-only master view of all candidates across departments. | 1 | DONE |
 | `GET` | `/executive/export` | EXEC | Downloads an Excel (.xlsx) file containing R1 Pass/Fail lists. | 1 | DONE |
 | `GET` | `/executive/export/round-2` | EXEC | Downloads an Excel (.xlsx) file containing finalized R2 Pass/Fail lists. | 2 (Story 4.2) | TODO |
+| `GET` | `/executive/round1-lock` | EXEC | Returns each department's Round 1 lock state (`{ departments: [{ department, isRound1Locked }] }`). | 2 (Story 1.2) | DONE |
 
 ## 5. System Config & Logs APIs
 **Base Path**: `/api/executive`

@@ -1,7 +1,7 @@
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import RecruitmentGeneration from '@/app/(backend)/models/RecruitmentGeneration';
 import SystemConfig from '@/app/(backend)/models/SystemConfig';
-import { CANDIDATE_CHOICES, type ISystemConfig }  from '@/app/(backend)/types';
+import { CANDIDATE_CHOICES, type IDepartmentState, type ISystemConfig }  from '@/app/(backend)/types';
 
 export const GLOBAL_CONFIG_NAME = 'global_settings';
 export const UM_DEFAULT_SEMESTER = '2026A';
@@ -37,7 +37,28 @@ export async function getOrCreateGlobalConfig(): Promise<ISystemConfig> {
                 };
             }),
         });
+        return cfg;
     }
+
+    // Backfill department states for configs created before the feature existed.
+    let changed = false;
+    for (const dept of CANDIDATE_CHOICES) {
+        const exists = cfg.departmentStates.some(
+            (state: IDepartmentState) => state.department === dept
+        );
+        if (!exists) {
+            cfg.departmentStates.push({
+                department: dept,
+                isRound1Locked: false,
+                isRound2Locked: false,
+            });
+            changed = true;
+        }
+    }
+    if (changed) {
+        await cfg.save();
+    }
+
     return cfg;
 }
 

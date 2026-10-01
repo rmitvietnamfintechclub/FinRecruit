@@ -1,4 +1,10 @@
-import type { ICustomAnswer } from '@/app/(backend)/types';
+import type {
+  CandidateChoiceType,
+  DepartmentType,
+  ICustomAnswer,
+  IRound2Evaluation,
+  StatusType,
+} from '@/app/(backend)/types';
 import {
   normalizeCustomAnswers,
   normalizeGeneralAnswers,
@@ -8,11 +14,6 @@ import type {
   CandidateRoutingStage,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
 import { isHeadDepartment } from '@/app/(backend)/libs/departments';
-import type {
-  CandidateChoiceType,
-  DepartmentType,
-  StatusType,
-} from '@/app/(backend)/types';
 import type {
   HeadDashboardCandidateDetailApi,
   HeadDashboardListCandidate,
@@ -105,7 +106,7 @@ export type ExecutiveListRow = {
   semester: string;
   appliedAt: string;
   createdAt?: string;
-  updatedAt: string;
+  updatedAt?: string;
 };
 
 export function mapExecutiveListItemToHeadRow(
@@ -177,10 +178,17 @@ export function mapExecutiveDetailToHeadDetail(
     cvLink: String(raw.cvLink ?? ''),
     generalAnswers: normalizeGeneralAnswers(raw),
     customAnswers,
+    round2Evaluation:
+      (raw.round2Evaluation as IRound2Evaluation | undefined) ?? {
+        templateAnswers: [],
+        adHocQuestions: [],
+        notes: { note1: '', note2: '', note3: '' },
+        score: null,
+      },
     personalInformation: {
       dob: String(raw.dob ?? ''),
       majorAndYear: String(raw.majorAndYear ?? ''),
       facebookLink: String(raw.facebookLink ?? ''),
     },
   };
-}
+};
