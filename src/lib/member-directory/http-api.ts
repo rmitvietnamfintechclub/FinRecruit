@@ -1,5 +1,6 @@
 import type { DepartmentType } from '@/app/(backend)/types';
 import type {
+  DirectoryAccount,
   GrantMemberResult,
   MemberDirectoryPayload,
 } from '@/types/memberDirectory';
@@ -9,8 +10,19 @@ export async function httpGetDirectory(): Promise<MemberDirectoryPayload> {
     credentials: 'include',
   });
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return (await res.json()) as MemberDirectoryPayload;
+  const json = (await res.json()) as Partial<MemberDirectoryPayload>;
+  return {
+    waitingGuests: json.waitingGuests ?? [],
+    members: json.members ?? [],
+  };
 }
+
+type GrantResponse = {
+  success?: boolean;
+  message?: string;
+  user?: DirectoryAccount;
+  member?: DirectoryAccount;
+};
 
 export async function httpGrantMember(
   userId: string,
@@ -22,9 +34,9 @@ export async function httpGrantMember(
     credentials: 'include',
     body: JSON.stringify({ userId, role: 'Member', department }),
   });
-  const json = (await res.json()) as GrantMemberResult;
+  const json = (await res.json()) as GrantResponse;
   if (!res.ok || !json.success) {
     return { success: false, message: json.message ?? `Request failed (${res.status})` };
   }
-  return json;
+  return { success: true, message: json.message, member: json.member ?? json.user };
 }

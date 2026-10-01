@@ -65,6 +65,18 @@ export function lockDepartmentRound1(
   return states;
 }
 
+/** Replace local state with server state (used when NEXT_PUBLIC_USE_MOCK_DATA=false). */
+export function syncDepartmentStates(next: DepartmentState[]): void {
+  if (!Array.isArray(next) || next.length === 0) return;
+  states = next;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(states));
+  } catch {
+    /* storage unavailable - keep in-memory */
+  }
+  emit();
+}
+
 export function readDepartmentState(
   department: DepartmentType
 ): DepartmentState | undefined {

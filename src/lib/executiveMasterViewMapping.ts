@@ -15,12 +15,6 @@ import type {
 } from '@/app/(backend)/libs/departmentHeadDashboard';
 import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import type {
-  CandidateChoiceType,
-  DepartmentType,
-  IRound2Evaluation,
-  StatusType,
-} from '@/app/(backend)/types';
-import type {
   HeadDashboardCandidateDetailApi,
   HeadDashboardListCandidate,
 } from '@/types/headDashboard';
@@ -196,6 +190,5 @@ export function mapExecutiveDetailToHeadDetail(
       majorAndYear: String(raw.majorAndYear ?? ''),
       facebookLink: String(raw.facebookLink ?? ''),
     },
-    round2Evaluation: raw.round2Evaluation as IRound2Evaluation,
   };
 };

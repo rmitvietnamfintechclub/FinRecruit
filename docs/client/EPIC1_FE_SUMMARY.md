@@ -26,17 +26,17 @@ Head routes: `withRBAC`/`withActiveRBAC('Department Head')`, derive the departme
 
 | Method + path | Request | Response |
 |---|---|---|
-| GET `/api/head-dashboard/round-states` | – | `{ departmentStates: DepartmentState[] }` (`DepartmentState = { department, isRound1Locked, isRound2Locked }`) |
-| POST `/api/head-dashboard/lock-round-1` | `{ department }` | `{ success: true, roundStatus: DepartmentState }`; **409** `{ success: false, message }` if any candidate in the dept/cohort is still `Pending` |
-| GET `/api/head-dashboard/members` | – | `{ waitingGuests: DirectoryAccount[], members: DirectoryAccount[] }`, scoped to the Head's department |
-| POST `/api/head-dashboard/members` | `{ userId, role: 'Member', department }` | `{ success: true, member: DirectoryAccount }` |
-| (EB read) department states | – | Prefer a new `GET /api/executive/department-states` → `{ departmentStates }`. Do **not** change the Phase-1 `GET /api/executive/dashboard` contract. |
+| GET `/api/head-dashboard/round-states` | – | `{ success, departmentStates: DepartmentState[] }` (`DepartmentState = { department, isRound1Locked, isRound2Locked }`); access Head + EB |
+| POST `/api/head-dashboard/lock-round-1` | `{ department }` (server derives it from the session) | `{ success: true, message, locked, department, activeCohort }`; pending candidates → **400** `{ success: false, message, pendingCount }` |
+| GET `/api/head-dashboard/members` | – | `{ success, department, waitingGuests: DirectoryAccount[], members: DirectoryAccount[] }`, scoped to the Head's department |
+| POST `/api/head-dashboard/members` | `{ userId }` (department comes from the session) | `{ success: true, message, user: DirectoryAccount, department }` |
+| (EB read) `GET /api/executive/round1-lock` | – | `{ success, departments: [{ department, isRound1Locked }] }` |
 
 Do **not** extend `PATCH /api/users` for this — it is the Phase-1 EB user-management contract. Use the dedicated `/api/head-dashboard/members` endpoints above.
 
 `DirectoryAccount = { id, name, email, avatar, role, department, isActive }`.
 
-Note: the frontend HTTP stub currently points department-state reads at the Head-scoped `/api/head-dashboard/round-states`, but the EB strip also needs them (read path not wired yet — see gotchas). Coordinate the final path.
+Note: the frontend read hooks (`useDepartmentStates`, `useMemberDirectory`) now fetch these endpoints when `NEXT_PUBLIC_USE_MOCK_DATA=false` (see gotchas); the writes (`lockRound1`, `grantMember`) already go through the HTTP stubs.
 
 ## Logic rules
 - **Lock is server-authoritative**: recompute the pending count; reject if `> 0` (the UI disables the button, but never trust it).
@@ -47,14 +47,14 @@ Note: the frontend HTTP stub currently points department-state reads at the Head
 - Departments use full names: `'Technology Department' | 'Business Department' | 'HR Department' | 'Marketing Department'`; waiting guests use `department: 'Unassigned'`.
 
 ## Model gaps
-- `SystemConfig.departmentStates: { department, isRound1Locked, isRound2Locked }[]` exists but must be **populated/kept in sync** per department (default `isRound1Locked:false` for all four).
+- `SystemConfig.departmentStates: { department, isRound1Locked, isRound2Locked }[]` exists. `getOrCreateGlobalConfig()` now **backfills** any missing department (all four) for configs created before the feature, so the lock routes can rely on it.
 - `RoleType` already includes `'Member'`; `User.role` enum and `User` model already accept it.
 - `Candidate.round2Status` / `round2Evaluation` / `interviewSlotId` already exist (for the future cockpit).
 - `getUserManagementPayloadFromDb` (Phase-1 EB user list) filters only `Department Head`/`Executive Board`, and `displayRoleLabel` maps any other role to `Guest`. If the EB UI should show Members, that logic needs extending — the FE intentionally left it untouched.
 - Role changes are not reflected in middleware until re-login (JWT strategy). Consider rotating/invalidating the session (or forcing re-auth) when granting `Member` so access works immediately.
 
 ## Frontend gotchas
-- **Read hooks are still mock-only.** `useDepartmentStates()` (`src/hooks/use-round-transition.ts`) and `useMemberDirectory()` (`src/hooks/use-member-directory.ts`) subscribe to the mock store directly — they never call `getRoundTransitionApi().getDepartmentStates()` / `getMemberDirectoryApi().getDirectory()`. So with `NEXT_PUBLIC_USE_MOCK_DATA=false`, the EB strip and the Head waiting-room/active-member lists still render the mock/`serverSnapshot`. Both hooks are marked `TODO(backend)`. A backend dev must switch them to API-backed hooks (or accept the mock for those reads). The **write** paths (`lockRound1`, `grantMember`) already go through the adapter and will hit the HTTP stubs.
+- **Read hooks now sync from the API in real mode.** `useDepartmentStates()` (`src/hooks/use-round-transition.ts`) and `useMemberDirectory()` (`src/hooks/use-member-directory.ts`) subscribe to a local store, but when `NEXT_PUBLIC_USE_MOCK_DATA=false` they fetch `GET /api/head-dashboard/round-states` / `GET /api/head-dashboard/members` on mount and write the result into that store. The `lockRound1` / `grantMember` actions also update it locally, so the UI reflects changes without a refetch. On fetch failure they keep the last local snapshot (the mock seed), so a 403/500 shows stale data rather than an error.
 - **Round 2 pool uses the existing endpoint**: `GET /api/head-dashboard/candidates?status=Pass&limit=100&page=1`. It is capped at 100 and not paginated; flag if the pool can exceed that.
 - **Hydration fix**: `src/app/(frontend)/layout.tsx` is now a passthrough (`Providers` only); the root `src/app/layout.tsx` owns `<html>/<body>` + the Manrope font. Keep it that way — nested `<html>/<body>` caused a hydration mismatch.
 - The `/MemberDashboard` route is a placeholder; do not expect interview data there yet.

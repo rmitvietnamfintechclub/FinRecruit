@@ -1,18 +1,38 @@
 'use client';
 
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { DepartmentType } from '@/app/(backend)/types';
 import type { GrantMemberResult, MemberDirectoryPayload } from '@/types/memberDirectory';
 import { getMemberDirectoryApi } from '@/lib/member-directory/api';
 import {
   getServerSnapshot,
   getSnapshot,
+  grantMemberInStore,
   subscribe,
+  syncDirectory,
 } from '@/lib/member-directory/mock-store';
 
-// TODO(backend): wire getMemberDirectoryApi().getDirectory() once reads move server-side.
 export function useMemberDirectory(): MemberDirectoryPayload {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const isMock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
+  const directory = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  useEffect(() => {
+    if (isMock) return;
+    let active = true;
+    getMemberDirectoryApi()
+      .getDirectory()
+      .then((next) => {
+        if (active) syncDirectory(next);
+      })
+      .catch(() => {
+        /* keep the local snapshot on failure */
+      });
+    return () => {
+      active = false;
+    };
+  }, [isMock]);
+
+  return directory;
 }
 
 export function useGrantMember() {
@@ -30,6 +50,9 @@ export function useGrantMember() {
         const result = await getMemberDirectoryApi().grantMember(userId, department);
         if (!result.success) {
           setError(result.message ?? 'Failed to grant the Member role.');
+        } else {
+          // Keep the local store in sync so the list updates immediately.
+          grantMemberInStore(userId, department);
         }
         return result;
       } catch (e) {

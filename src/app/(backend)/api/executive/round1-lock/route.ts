@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import dbConnect from '@/app/(backend)/libs/dbConnect';
+import { getOrCreateGlobalConfig } from '@/app/(backend)/libs/system-config/service';
 import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
-import SystemConfig from '@/app/(backend)/models/SystemConfig';
-import type { IDepartmentState } from '@/app/(backend)/types';
 
 export const runtime = 'nodejs';
 
@@ -13,9 +12,7 @@ export const GET = withActiveRBAC(
         try {
             await dbConnect();
 
-            const config = await SystemConfig.findOne({ key: 'global' })
-                .lean()
-                .exec();
+            const config = await getOrCreateGlobalConfig();
 
             if (!config) {
                 return NextResponse.json(
@@ -28,7 +25,7 @@ export const GET = withActiveRBAC(
             }
 
             const departments = config.departmentStates.map(
-                (state: IDepartmentState) => ({
+                (state) => ({
                     department: state.department,
                     isRound1Locked: state.isRound1Locked,
                 })

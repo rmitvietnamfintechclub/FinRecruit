@@ -64,3 +64,17 @@ export function grantMemberInStore(
   emit();
   return directory;
 }
+
+/** Replace local state with server state (used when NEXT_PUBLIC_USE_MOCK_DATA=false). */
+export function syncDirectory(next: MemberDirectoryPayload): void {
+  if (!next || !Array.isArray(next.waitingGuests) || !Array.isArray(next.members)) {
+    return;
+  }
+  directory = next;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(directory));
+  } catch {
+    /* storage unavailable - keep in-memory */
+  }
+  emit();
+}
