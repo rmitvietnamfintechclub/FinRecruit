@@ -11,6 +11,7 @@ import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import type {
   CandidateChoiceType,
   DepartmentType,
+  IRound2Evaluation,
   StatusType,
 } from '@/app/(backend)/types';
 import type {
@@ -177,6 +178,13 @@ export function mapExecutiveDetailToHeadDetail(
     cvLink: String(raw.cvLink ?? ''),
     generalAnswers: normalizeGeneralAnswers(raw),
     customAnswers,
+    round2Evaluation:
+      (raw.round2Evaluation as IRound2Evaluation | undefined) ?? {
+        templateAnswers: [],
+        adHocQuestions: [],
+        notes: { note1: '', note2: '', note3: '' },
+        score: null,
+      },
     personalInformation: {
       dob: String(raw.dob ?? ''),
       majorAndYear: String(raw.majorAndYear ?? ''),

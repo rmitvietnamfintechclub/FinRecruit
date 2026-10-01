@@ -1,109 +1,108 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import type { DepartmentType, RoleType } from '@/app/(backend)/types';
+import { ROLES, type DepartmentType, type RoleType } from '@/app/(backend)/types';
 import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import mongoose from 'mongoose';
 import {
-  getUserManagementPayloadFromDb,
-  patchUserInDb,
+    getUserManagementPayloadFromDb,
+    patchUserInDb,
 } from '@/lib/user-management/db-user-management';
 
 export const runtime = 'nodejs';
 
 function isRoleType(value: unknown): value is RoleType {
-  return (
-    typeof value === 'string' &&
-    ['Guest', 'Department Head', 'Executive Board'].includes(value)
-  );
+    return (
+        typeof value === 'string' && (ROLES as readonly string[]).includes(value)
+    );
 }
 
 function isDepartmentType(value: unknown): value is DepartmentType {
-  return typeof value === 'string';
+    return typeof value === 'string';
 }
 
 export const GET = withActiveRBAC('Executive Board', async () => {
-  const payload = await getUserManagementPayloadFromDb();
-  return NextResponse.json(payload);
+    const payload = await getUserManagementPayloadFromDb();
+    return NextResponse.json(payload);
 });
 
 type PatchBody = {
-  userId?: string;
-  role?: RoleType;
-  department?: DepartmentType;
-  isActive?: boolean;
+    userId?: string;
+    role?: RoleType;
+    department?: DepartmentType;
+    isActive?: boolean;
 };
 
 function getClientIp(req: NextRequest): string | undefined {
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0]?.trim() || undefined;
-  return req.headers.get('x-real-ip') ?? undefined;
+    const xff = req.headers.get('x-forwarded-for');
+    if (xff) return xff.split(',')[0]?.trim() || undefined;
+    return req.headers.get('x-real-ip') ?? undefined;
 }
 
-export const PATCH = withActiveRBAC('Executive Board', async (req: NextRequest, { session }) => {
-  let body: PatchBody;
-  try {
-    body = (await req.json()) as PatchBody;
-  } catch {
-    return NextResponse.json(
-      { success: false, message: 'Invalid JSON payload.' },
-      { status: 400 }
-    );
-  }
+export const PATCH = withActiveRBAC(['Executive Board'], async (req: NextRequest, { session }) => {
+    let body: PatchBody;
+    try {
+        body = (await req.json()) as PatchBody;
+    } catch {
+        return NextResponse.json(
+            { success: false, message: 'Invalid JSON payload.' },
+            { status: 400 }
+        );
+    }
 
-  const { userId, role, department, isActive } = body;
+    const { userId, role, department, isActive } = body;
 
-  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-    return NextResponse.json(
-      { success: false, message: 'A valid userId is required.' },
-      { status: 400 }
-    );
-  }
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+        return NextResponse.json(
+            { success: false, message: 'A valid userId is required.' },
+            { status: 400 }
+        );
+    }
 
-  if (
-    role !== undefined &&
-    role !== null &&
-    !isRoleType(role)
-  ) {
-    return NextResponse.json(
-      { success: false, message: 'Invalid role.' },
-      { status: 400 }
-    );
-  }
+    if (
+        role !== undefined &&
+        role !== null &&
+        !isRoleType(role)
+    ) {
+        return NextResponse.json(
+            { success: false, message: 'Invalid role.' },
+            { status: 400 }
+        );
+    }
 
-  if (
-    department !== undefined &&
-    department !== null &&
-    !isDepartmentType(department)
-  ) {
-    return NextResponse.json(
-      { success: false, message: 'Invalid department.' },
-      { status: 400 }
-    );
-  }
+    if (
+        department !== undefined &&
+        department !== null &&
+        !isDepartmentType(department)
+    ) {
+        return NextResponse.json(
+            { success: false, message: 'Invalid department.' },
+            { status: 400 }
+        );
+    }
 
-  const result = await patchUserInDb({
-    userId,
-    role,
-    department,
-    isActive,
-    actor: {
-      userId: session.user.id,
-      email: session.user.email,
-      role: session.user.role,
-      ipAddress: getClientIp(req),
-      userAgent: req.headers.get('user-agent') ?? undefined,
-    },
-  });
+    const result = await patchUserInDb({
+        userId,
+        role,
+        department,
+        isActive,
+        actor: {
+            userId: session.user.id,
+            email: session.user.email,
+            role: session.user.role,
+            ipAddress: getClientIp(req),
+            userAgent: req.headers.get('user-agent') ?? undefined,
+        },
+    });
 
-  if (!result.ok) {
-    return NextResponse.json(
-      { success: false, message: result.message },
-      { status: result.status }
-    );
-  }
+    if (!result.ok) {
+        return NextResponse.json(
+            { success: false, message: result.message },
+            { status: result.status }
+        );
+    }
 
-  return NextResponse.json({
-    success: true,
-    message: 'User updated.',
-    user: result.user,
-  });
+    return NextResponse.json({
+        success: true,
+        message: 'User updated.',
+        user: result.user,
+    });
 });
