@@ -103,6 +103,8 @@ export interface IInterviewerAvailability extends Document {
     slotId: Types.ObjectId;
     department: DepartmentType;
     interviewerName: string;
+    interviewerEmail?: string;
+    interviewerRole?: 'Executive Board' | 'Department Head' | 'Member';
     isHead: boolean;
     createdAt: Date;
     updatedAt: Date;
