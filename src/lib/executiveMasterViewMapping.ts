@@ -1,4 +1,10 @@
-import type { ICustomAnswer } from '@/app/(backend)/types';
+import type {
+  CandidateChoiceType,
+  DepartmentType,
+  ICustomAnswer,
+  IRound2Evaluation,
+  StatusType,
+} from '@/app/(backend)/types';
 import {
   normalizeCustomAnswers,
   normalizeGeneralAnswers,
@@ -106,7 +112,7 @@ export type ExecutiveListRow = {
   semester: string;
   appliedAt: string;
   createdAt?: string;
-  updatedAt: string;
+  updatedAt?: string;
 };
 
 export function mapExecutiveListItemToHeadRow(
@@ -190,5 +196,6 @@ export function mapExecutiveDetailToHeadDetail(
       majorAndYear: String(raw.majorAndYear ?? ''),
       facebookLink: String(raw.facebookLink ?? ''),
     },
+    round2Evaluation: raw.round2Evaluation as IRound2Evaluation,
   };
-}
+};
