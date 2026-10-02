@@ -1,0 +1,1 @@
+export { POST } from '@/app/(backend)/api/public/interview-booking/route';
