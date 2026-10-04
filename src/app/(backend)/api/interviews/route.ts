@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
-import Candidate from '../../models/Candidate';
-import SystemConfig from '../../models/SystemConfig';
-import { withRBAC } from '../../middleware/auth&RBAC';
+import Candidate from '@/app/(backend)/models/Candidate';
+import SystemConfig from '@/app/(backend)/models/SystemConfig';
+import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 
 export const GET = withRBAC(['Department Head', 'Member'], async (req: NextRequest, sessionUser: any) => {
   try {
