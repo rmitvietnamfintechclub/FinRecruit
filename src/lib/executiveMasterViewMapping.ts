@@ -1,4 +1,4 @@
-import type { ICustomAnswer } from '@/app/(backend)/types';
+import type { ICustomAnswer, IRound2Evaluation } from '@/app/(backend)/types';
 import {
   normalizeCustomAnswers,
   normalizeGeneralAnswers,
@@ -71,9 +71,7 @@ function routingFromChoices(args: {
       : null;
 
   const isChoice2Valid =
-    Boolean(c2) &&
-    c2 !== args.choice1 &&
-    isHeadDepartment(c2 ?? undefined);
+    Boolean(c2) && c2 !== args.choice1 && isHeadDepartment(c2 ?? undefined);
 
   const currentStage: CandidateRoutingStage =
     args.department === args.choice1
@@ -171,12 +169,30 @@ export function mapExecutiveDetailToHeadDetail(
       ? (raw.customAnswers as ICustomAnswer[])
       : [],
   });
+  const rawRound2 = raw.round2Evaluation as
+    | Partial<IRound2Evaluation>
+    | undefined;
+  const round2Evaluation: IRound2Evaluation = {
+    templateAnswers: Array.isArray(rawRound2?.templateAnswers)
+      ? rawRound2.templateAnswers
+      : [],
+    adHocQuestions: Array.isArray(rawRound2?.adHocQuestions)
+      ? rawRound2.adHocQuestions
+      : [],
+    notes: {
+      note1: String(rawRound2?.notes?.note1 ?? ''),
+      note2: String(rawRound2?.notes?.note2 ?? ''),
+      note3: String(rawRound2?.notes?.note3 ?? ''),
+    },
+    score: typeof rawRound2?.score === 'number' ? rawRound2.score : null,
+  };
 
   return {
     ...listBase,
     cvLink: String(raw.cvLink ?? ''),
     generalAnswers: normalizeGeneralAnswers(raw),
     customAnswers,
+    round2Evaluation,
     personalInformation: {
       dob: String(raw.dob ?? ''),
       majorAndYear: String(raw.majorAndYear ?? ''),
