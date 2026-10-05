@@ -1,11 +1,8 @@
 export const BACKEND_ROUND_2_STATUSES = ['Pending', 'Pass', 'Fail'] as const;
-export const ROUND_2_STATUSES = [
-  ...BACKEND_ROUND_2_STATUSES,
-  'No Show',
-] as const;
+export const ROUND_2_DECISIONS = ['Pass', 'Fail', 'No Show'] as const;
 
 export type BackendRound2Status = (typeof BACKEND_ROUND_2_STATUSES)[number];
-export type Round2Status = (typeof ROUND_2_STATUSES)[number];
+export type Round2Decision = (typeof ROUND_2_DECISIONS)[number];
 export type CockpitRole = 'Department Head' | 'Member';
 export type SaveState = 'saved' | 'saving' | 'error';
 export type EvaluationNoteKey = 'note1' | 'note2' | 'note3';
@@ -30,6 +27,12 @@ export type Round2CandidateSummary = {
   semester: string;
   interviewSlot: string;
   status: BackendRound2Status;
+  /**
+   * The decision selected in the UI. `No Show` intentionally remains distinct
+   * here even though the current backend stores it as `Fail`.
+   */
+  selectedDecision: Round2Decision | null;
+  score: number | null;
 };
 
 export type InterviewCandidate = Round2CandidateSummary & {
@@ -42,14 +45,10 @@ export type InterviewCandidate = Round2CandidateSummary & {
   evaluationAnswers: InterviewAnswer[];
   adHocQuestions: InterviewAnswer[];
   notes: EvaluationNotes;
-  score: number | null;
   isScoringEnabled: boolean;
 };
 
-export type SettingsLoadSource =
-  | 'backend-candidate-snapshot'
-  | 'saved-browser-cache'
-  | 'empty';
+export type SettingsLoadSource = 'backend-config' | 'empty';
 
 export type InterviewSettings = {
   department: string;
@@ -74,12 +73,15 @@ export interface InterviewCockpitRepository {
   ): Promise<EvaluationNotes>;
   addCustomQuestion(
     candidateId: string,
-    question: string,
-    answer: string
+    question: string
+  ): Promise<InterviewAnswer[]>;
+  saveCustomAnswers(
+    candidateId: string,
+    answers: InterviewAnswer[]
   ): Promise<InterviewAnswer[]>;
   setStatus(
     candidateId: string,
-    status: BackendRound2Status
+    status: Round2Decision
   ): Promise<BackendRound2Status>;
   getSettings(): Promise<InterviewSettings>;
   saveSettings(settings: InterviewSettings): Promise<InterviewSettings>;

@@ -6,11 +6,17 @@ import type {
   InterviewCandidate,
   InterviewCockpitRepository,
   InterviewSettings,
+  Round2Decision,
   Round2CandidateSummary,
 } from './types';
 
-const SETTINGS_CACHE_KEY = 'finrecruit.round2.settings-cache.v1';
 const PAGE_SIZE = 100;
+const DECISION_STORAGE_KEY = 'finrecruit:round2-decision-selections:v1';
+
+type StoredDecision = {
+  decision: Round2Decision;
+  backendStatus: BackendRound2Status;
+};
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -42,6 +48,9 @@ type RawCandidateSummary = {
   generation?: unknown;
   semester?: unknown;
   interviewSlot?: RawInterviewSlot | null;
+  evaluationSummary?: {
+    score?: unknown;
+  };
 };
 
 type RawCandidateList = {
@@ -76,6 +85,7 @@ type RawEvaluationUpdate = {
   notes?: Partial<Record<EvaluationNoteKey, unknown>>;
   score?: unknown;
   templateAnswers?: RawFormAnswer[];
+  adHocQuestions?: RawFormAnswer[];
 };
 
 type RawStatusUpdate = {
@@ -95,8 +105,87 @@ function stringValue(value: unknown) {
 }
 
 function backendStatus(value: unknown): BackendRound2Status {
-  if (value === 'Pass' || value === 'Fail') return value;
+  if (value === 'Pass') return 'Pass';
+  if (value === 'Fail' || value === 'No Show') return 'Fail';
   return 'Pending';
+}
+
+function readStoredDecisions(): Record<string, StoredDecision> {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const value = window.localStorage.getItem(DECISION_STORAGE_KEY);
+    if (!value) return {};
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, StoredDecision>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredDecisions(decisions: Record<string, StoredDecision>) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(
+      DECISION_STORAGE_KEY,
+      JSON.stringify(decisions)
+    );
+  } catch {
+    // The API status remains authoritative when browser storage is unavailable.
+  }
+}
+
+function forgetStoredDecision(candidateId: string) {
+  if (!candidateId) return;
+  const decisions = readStoredDecisions();
+  if (!(candidateId in decisions)) return;
+  delete decisions[candidateId];
+  writeStoredDecisions(decisions);
+}
+
+function rememberDecision(
+  candidateId: string,
+  decision: Round2Decision,
+  status: BackendRound2Status
+) {
+  if (!candidateId) return;
+  const decisions = readStoredDecisions();
+  decisions[candidateId] = { decision, backendStatus: status };
+  writeStoredDecisions(decisions);
+}
+
+function selectedDecisionForStatus(
+  candidateId: string,
+  status: BackendRound2Status
+): Round2Decision | null {
+  if (status === 'Pending') {
+    forgetStoredDecision(candidateId);
+    return null;
+  }
+
+  if (status === 'Pass') {
+    rememberDecision(candidateId, 'Pass', status);
+    return 'Pass';
+  }
+
+  const stored = readStoredDecisions()[candidateId];
+  if (
+    stored?.backendStatus === 'Fail' &&
+    (stored.decision === 'Fail' || stored.decision === 'No Show')
+  ) {
+    return stored.decision;
+  }
+
+  return 'Fail';
+}
+
+export function decisionToBackendStatus(
+  decision: Round2Decision
+): Exclude<BackendRound2Status, 'Pending'> {
+  return decision === 'Pass' ? 'Pass' : 'Fail';
 }
 
 function studentIdFromEmail(email: string) {
@@ -160,9 +249,11 @@ function mapNotes(
 }
 
 function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
+  const id = stringValue(candidate.id);
   const email = stringValue(candidate.email);
+  const status = backendStatus(candidate.round2Status);
   return {
-    id: stringValue(candidate.id),
+    id,
     fullName: stringValue(candidate.fullName),
     email,
     studentId: studentIdFromEmail(email),
@@ -170,7 +261,12 @@ function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
     generation: stringValue(candidate.generation),
     semester: stringValue(candidate.semester),
     interviewSlot: formatInterviewSlot(candidate.interviewSlot),
-    status: backendStatus(candidate.round2Status),
+    status,
+    selectedDecision: selectedDecisionForStatus(id, status),
+    score:
+      typeof candidate.evaluationSummary?.score === 'number'
+        ? candidate.evaluationSummary.score
+        : null,
   };
 }
 
@@ -178,13 +274,15 @@ function mapCandidate(
   candidate: RawInterviewDetail,
   summary?: Round2CandidateSummary
 ): InterviewCandidate {
+  const id = stringValue(candidate.id);
   const email = stringValue(candidate.email);
   const evaluation = candidate.evaluation;
   const rawScore = evaluation?.score;
   const score = typeof rawScore === 'number' ? rawScore : null;
+  const status = backendStatus(candidate.round2Status);
 
   return {
-    id: stringValue(candidate.id),
+    id,
     fullName: stringValue(candidate.fullName),
     email,
     studentId: studentIdFromEmail(email),
@@ -192,7 +290,12 @@ function mapCandidate(
     generation: summary?.generation ?? '',
     semester: summary?.semester ?? '',
     interviewSlot: summary?.interviewSlot ?? 'Not scheduled',
-    status: backendStatus(candidate.round2Status),
+    status,
+    selectedDecision:
+      summary?.status === status
+        ? summary.selectedDecision
+        : selectedDecisionForStatus(id, status),
+    score,
     majorAndYear: stringValue(candidate.majorAndYear),
     phone: stringValue(candidate.phone),
     facebookLink: stringValue(candidate.facebookLink) || undefined,
@@ -202,50 +305,16 @@ function mapCandidate(
     evaluationAnswers: mapAnswers(evaluation?.templateAnswers, 'template'),
     adHocQuestions: mapAnswers(evaluation?.adHocQuestions, 'ad-hoc', true),
     notes: mapNotes(evaluation?.notes),
-    score,
     isScoringEnabled: evaluation?.isScoringEnabled === true,
   };
 }
 
 function toRawAnswers(answers: InterviewAnswer[]): RawFormAnswer[] {
-  return answers.map(({ question, answer }) => ({ question, answer }));
-}
-
-function readSettingsCache(): InterviewSettings | null {
-  if (typeof window === 'undefined') return null;
-  const stored = window.localStorage.getItem(SETTINGS_CACHE_KEY);
-  if (!stored) return null;
-
-  try {
-    const parsed = JSON.parse(stored) as Partial<InterviewSettings>;
-    if (!Array.isArray(parsed.questions)) return null;
-    return {
-      department: stringValue(parsed.department),
-      generation: stringValue(parsed.generation),
-      semester: stringValue(parsed.semester),
-      questions: parsed.questions.filter(
-        (question): question is string => typeof question === 'string'
-      ),
-      isScoringEnabled: parsed.isScoringEnabled === true,
-      loadSource: 'saved-browser-cache',
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeSettingsCache(settings: InterviewSettings) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(
-    SETTINGS_CACHE_KEY,
-    JSON.stringify({
-      department: settings.department,
-      generation: settings.generation,
-      semester: settings.semester,
-      questions: settings.questions,
-      isScoringEnabled: settings.isScoringEnabled,
-    })
-  );
+  return answers.map(({ question, answer, addedBy }) => ({
+    question,
+    answer,
+    ...(addedBy ? { addedBy } : {}),
+  }));
 }
 
 export class HttpInterviewCockpitRepository implements InterviewCockpitRepository {
@@ -334,67 +403,58 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
     return mapNotes(result.notes);
   }
 
-  async addCustomQuestion(
-    candidateId: string,
-    question: string,
-    answer: string
-  ) {
+  async addCustomQuestion(candidateId: string, question: string) {
     const result = await this.request<RawFormAnswer[]>(
       `/api/interviews/${candidateId}/ad-hoc-questions`,
       {
         method: 'POST',
-        body: JSON.stringify({ question, answer }),
+        body: JSON.stringify({ question }),
       }
     );
     return mapAnswers(result, 'ad-hoc', true);
   }
 
-  async setStatus(candidateId: string, status: BackendRound2Status) {
+  async saveCustomAnswers(candidateId: string, answers: InterviewAnswer[]) {
+    const result = await this.request<RawEvaluationUpdate>(
+      `/api/interviews/${candidateId}/notes`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ adHocQuestions: toRawAnswers(answers) }),
+      }
+    );
+    return mapAnswers(result.adHocQuestions, 'ad-hoc', true);
+  }
+
+  async setStatus(candidateId: string, status: Round2Decision) {
+    const round2Status = decisionToBackendStatus(status);
     const result = await this.request<RawStatusUpdate>(
       `/api/interviews/${candidateId}/status`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ round2Status: status }),
+        body: JSON.stringify({ round2Status }),
       }
     );
-    return backendStatus(result.round2Status);
+    const savedStatus = backendStatus(result.round2Status);
+    rememberDecision(candidateId, status, savedStatus);
+    return savedStatus;
   }
 
   async getSettings(): Promise<InterviewSettings> {
-    try {
-      const [summary] = await this.listCandidates();
-      if (summary) {
-        const detail = await this.request<RawInterviewDetail>(
-          `/api/interviews/${summary.id}`
-        );
-        const candidate = mapCandidate(detail, summary);
-        return {
-          department: candidate.department,
-          generation: candidate.generation,
-          semester: candidate.semester,
-          questions: candidate.evaluationAnswers.map(
-            (answer) => answer.question
-          ),
-          isScoringEnabled: candidate.isScoringEnabled,
-          loadSource: 'backend-candidate-snapshot',
-        };
-      }
-    } catch (error) {
-      const cached = readSettingsCache();
-      if (cached) return cached;
-      throw error;
-    }
-
-    return (
-      readSettingsCache() ?? {
-        department: '',
-        generation: '',
-        semester: '',
-        questions: [],
-        isScoringEnabled: false,
-        loadSource: 'empty',
-      }
+    const result = await this.request<RawDepartmentConfig>(
+      '/api/head-dashboard/config'
     );
+    return {
+      department: stringValue(result.department),
+      generation: stringValue(result.generation),
+      semester: stringValue(result.semester),
+      questions: Array.isArray(result.interviewQuestions)
+        ? result.interviewQuestions.filter(
+            (question): question is string => typeof question === 'string'
+          )
+        : [],
+      isScoringEnabled: result.isScoringEnabled === true,
+      loadSource: 'backend-config',
+    };
   }
 
   async saveSettings(settings: InterviewSettings) {
@@ -419,9 +479,8 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
       semester: stringValue(result.semester) || settings.semester,
       questions,
       isScoringEnabled: result.isScoringEnabled === true,
-      loadSource: 'saved-browser-cache',
+      loadSource: 'backend-config',
     };
-    writeSettingsCache(saved);
     return saved;
   }
 

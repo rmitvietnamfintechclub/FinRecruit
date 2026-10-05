@@ -65,13 +65,6 @@ export function InterviewSettingsClient() {
         </AppNotice>
       )}
       {error && <AppNotice variant="error">{error}</AppNotice>}
-      <AppNotice variant="info" title="Current backend read limitation">
-        Team02 currently exposes PATCH but no GET for department configuration.
-        This editor starts from a real candidate cockpit snapshot when one is
-        available; after a successful save, it can also restore the last saved
-        values from this browser. The cockpit itself always reads scoring and
-        questions from its candidate API.
-      </AppNotice>
       <div>
         <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-purple-600">
           Department configuration
@@ -184,8 +177,9 @@ export function InterviewSettingsClient() {
               Current state: {settings.isScoringEnabled ? 'ON' : 'OFF'}
             </p>
             <p className="mt-2 text-muted-foreground">
-              No per-question score and no invented scoring range are
-              introduced.
+              One Overall Score is used for the complete interview. It accepts
+              whole numbers from 0 to 100; there is no per-question score or
+              automatic average.
             </p>
           </div>
         </aside>

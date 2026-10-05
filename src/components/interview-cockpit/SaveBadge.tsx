@@ -1,20 +1,8 @@
-import { AlertTriangle, Check, LoaderCircle, UserX } from 'lucide-react';
+import { AlertTriangle, Check, LoaderCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Round2Status, SaveState } from '@/lib/interview-cockpit/types';
+import type { SaveState } from '@/lib/interview-cockpit/types';
 
-export function SaveBadge({
-  state,
-  status,
-}: {
-  state: SaveState;
-  status: Round2Status;
-}) {
-  if (status === 'No Show')
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1.5 text-xs font-extrabold text-orange-800">
-        <UserX className="h-4 w-4" /> No Show
-      </span>
-    );
+export function SaveBadge({ state }: { state: SaveState }) {
   const config =
     state === 'saving'
       ? [LoaderCircle, 'Saving…', 'bg-blue-50 text-blue-700']

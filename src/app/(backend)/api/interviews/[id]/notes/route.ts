@@ -17,6 +17,43 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
 
       const updatePayload: Record<string, any> = {};
 
+      if (
+        body.score !== undefined &&
+        body.score !== null &&
+        (!Number.isInteger(body.score) || body.score < 0 || body.score > 100)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'INVALID_SCORE',
+            message: 'Overall score must be a whole number from 0 to 100.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (
+        body.adHocQuestions !== undefined &&
+        (!Array.isArray(body.adHocQuestions) ||
+          body.adHocQuestions.some(
+            (item: unknown) =>
+              !item ||
+              typeof item !== 'object' ||
+              typeof (item as { question?: unknown }).question !== 'string' ||
+              typeof (item as { answer?: unknown }).answer !== 'string'
+          ))
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'INVALID_AD_HOC_QUESTIONS',
+            message:
+              'Custom questions must contain string question and answer fields.',
+          },
+          { status: 400 }
+        );
+      }
+
       if (body.$set) {
         Object.keys(body.$set).forEach((key) => {
           if (
@@ -41,6 +78,9 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
         if (body.templateAnswers !== undefined)
           updatePayload['round2Evaluation.templateAnswers'] =
             body.templateAnswers;
+        if (body.adHocQuestions !== undefined)
+          updatePayload['round2Evaluation.adHocQuestions'] =
+            body.adHocQuestions;
       }
 
       if (Object.keys(updatePayload).length === 0) {
@@ -78,6 +118,7 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
           notes: updatedCandidate.round2Evaluation?.notes,
           score: updatedCandidate.round2Evaluation?.score,
           templateAnswers: updatedCandidate.round2Evaluation?.templateAnswers,
+          adHocQuestions: updatedCandidate.round2Evaluation?.adHocQuestions,
         },
       });
     } catch (error: any) {

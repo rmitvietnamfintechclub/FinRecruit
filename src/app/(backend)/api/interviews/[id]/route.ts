@@ -50,15 +50,28 @@ export const GET = withRBAC<InterviewRouteContext>(
       });
 
       const isScoringEnabled = deptConfig?.isScoringEnabled ?? false;
-      const templateQuestions = deptConfig?.interviewQuestions || [];
+      const storedTemplateAnswers =
+        candidate.round2Evaluation?.templateAnswers || [];
+      let templateAnswers = storedTemplateAnswers;
 
-      // Map template answers if empty
-      let templateAnswers = candidate.round2Evaluation?.templateAnswers || [];
-      if (templateAnswers.length === 0 && templateQuestions.length > 0) {
-        templateAnswers = templateQuestions.map((q: string) => ({
-          question: q,
-          answer: '',
-        }));
+      // A saved DepartmentConfig is the source of truth for the current
+      // template. Reuse answers for unchanged questions, add blank answers for
+      // new questions, and omit questions removed by Save & Apply.
+      if (deptConfig) {
+        const savedAnswerByQuestion = new Map(
+          storedTemplateAnswers.map(
+            (item: { question: string; answer: string }) => [
+              String(item.question),
+              String(item.answer ?? ''),
+            ]
+          )
+        );
+        templateAnswers = (deptConfig.interviewQuestions || []).map(
+          (question: string) => ({
+            question,
+            answer: savedAnswerByQuestion.get(question) ?? '',
+          })
+        );
       }
 
       const payload = {

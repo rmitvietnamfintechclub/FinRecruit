@@ -2,30 +2,37 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Clock3, UserX, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock3, XCircle } from 'lucide-react';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { DecisionBar } from './DecisionBar';
+import { Round2StatusBadge } from './Round2StatusBadge';
 import { interviewCockpitRepository } from '@/lib/interview-cockpit/repository';
 import type {
   BackendRound2Status,
+  Round2Decision,
   Round2CandidateSummary,
-  Round2Status,
 } from '@/lib/interview-cockpit/types';
 
 export function Round2DashboardClient() {
   const [candidates, setCandidates] = useState<Round2CandidateSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'All' | Round2Status>('All');
+  const [scoringEnabled, setScoringEnabled] = useState(false);
+  const [filter, setFilter] = useState<'All' | BackendRound2Status>('All');
   const [pendingAction, setPendingAction] = useState<{
     candidate: Round2CandidateSummary;
-    status: BackendRound2Status;
+    status: Round2Decision;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    void interviewCockpitRepository
-      .listCandidates()
-      .then(setCandidates)
+    void Promise.all([
+      interviewCockpitRepository.listCandidates(),
+      interviewCockpitRepository.getSettings(),
+    ])
+      .then(([items, settings]) => {
+        setCandidates(items);
+        setScoringEnabled(settings.isScoringEnabled);
+      })
       .catch((cause: unknown) =>
         setError(
           cause instanceof Error ? cause.message : 'Could not load interviews.'
@@ -39,7 +46,6 @@ export function Round2DashboardClient() {
       pending: candidates.filter((item) => item.status === 'Pending').length,
       pass: candidates.filter((item) => item.status === 'Pass').length,
       fail: candidates.filter((item) => item.status === 'Fail').length,
-      noShow: 0,
     }),
     [candidates]
   );
@@ -57,7 +63,13 @@ export function Round2DashboardClient() {
       );
       setCandidates((current) =>
         current.map((item) =>
-          item.id === pendingAction.candidate.id ? { ...item, status } : item
+          item.id === pendingAction.candidate.id
+            ? {
+                ...item,
+                status,
+                selectedDecision: pendingAction.status,
+              }
+            : item
         )
       );
       setPendingAction(null);
@@ -106,18 +118,12 @@ export function Round2DashboardClient() {
             : 'Conducting interviews and evaluating candidates.'}
         </p>
       </section>
-      <AppNotice variant="info" title="Team02 backend status contract">
-        The Final design includes No Show, but the current API accepts only
-        Pending, Pass and Fail. No Show remains visible for design parity and is
-        disabled until the backend adds that status.
-      </AppNotice>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           ['Total', stats.total, Clock3, 'text-blue-600'],
           ['Pending', stats.pending, Clock3, 'text-amber-600'],
           ['Passed', stats.pass, CheckCircle2, 'text-emerald-600'],
           ['Failed', stats.fail, XCircle, 'text-red-600'],
-          ['No Show', stats.noShow, UserX, 'text-orange-600'],
         ].map(([label, value, Icon, colorClass]) => {
           const CardIcon = Icon as typeof Clock3;
           return (
@@ -137,17 +143,15 @@ export function Round2DashboardClient() {
       <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-            {(['All', 'Pending', 'Pass', 'Fail', 'No Show'] as const).map(
-              (status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilter(status)}
-                  className={`min-h-9 rounded-lg px-2 py-2 text-xs font-bold sm:px-3 ${filter === status ? 'bg-blue-600 text-white' : 'bg-muted text-muted-foreground'}`}
-                >
-                  {status}
-                </button>
-              )
-            )}
+            {(['All', 'Pending', 'Pass', 'Fail'] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter(status)}
+                className={`min-h-9 rounded-lg px-2 py-2 text-xs font-bold sm:px-3 ${filter === status ? 'bg-blue-600 text-white' : 'bg-muted text-muted-foreground'}`}
+              >
+                {status}
+              </button>
+            ))}
           </div>
           <Link
             href="/HeadDashboard/interview-settings"
@@ -183,9 +187,7 @@ export function Round2DashboardClient() {
                       .join(' · ')}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-extrabold">
-                  {candidate.status}
-                </span>
+                <Round2StatusBadge status={candidate.status} />
               </div>
               <dl className="grid grid-cols-1 gap-2 text-sm min-[420px]:grid-cols-2">
                 <div className="rounded-xl bg-muted/50 p-3">
@@ -202,6 +204,16 @@ export function Round2DashboardClient() {
                     {candidate.interviewSlot}
                   </dd>
                 </div>
+                {scoringEnabled && (
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <dt className="text-[10px] font-extrabold uppercase text-muted-foreground">
+                      Overall score
+                    </dt>
+                    <dd className="mt-1 font-semibold">
+                      {candidate.score ?? 'Not scored'}
+                    </dd>
+                  </div>
+                )}
               </dl>
               <div>
                 <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
@@ -209,15 +221,8 @@ export function Round2DashboardClient() {
                 </p>
                 <DecisionBar
                   compact
-                  value={candidate.status}
-                  disabled={candidate.status !== 'Pending'}
-                  disabledStatuses={['No Show']}
-                  disabledStatusReason="The Team02 backend does not support No Show yet."
-                  onChange={(status) => {
-                    if (status === 'Pass' || status === 'Fail') {
-                      setPendingAction({ candidate, status });
-                    }
-                  }}
+                  value={candidate.selectedDecision}
+                  onChange={(status) => setPendingAction({ candidate, status })}
                 />
               </div>
               <Link
@@ -230,13 +235,16 @@ export function Round2DashboardClient() {
           ))}
         </div>
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[1050px] text-left text-sm">
+          <table
+            className={`w-full text-left text-sm ${scoringEnabled ? 'min-w-[1150px]' : 'min-w-[1050px]'}`}
+          >
             <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="p-4">Candidate</th>
                 <th className="p-4">Department</th>
                 <th className="p-4">Interview slot</th>
                 <th className="p-4">Status</th>
+                {scoringEnabled && <th className="p-4">Overall score</th>}
                 <th className="p-4">Quick decision</th>
                 <th className="p-4">Actions</th>
               </tr>
@@ -255,22 +263,20 @@ export function Round2DashboardClient() {
                   <td className="p-4">{candidate.department}</td>
                   <td className="p-4">{candidate.interviewSlot}</td>
                   <td className="p-4">
-                    <span className="rounded-full bg-muted px-3 py-1 text-xs font-extrabold">
-                      {candidate.status}
-                    </span>
+                    <Round2StatusBadge status={candidate.status} />
                   </td>
+                  {scoringEnabled && (
+                    <td className="p-4 font-extrabold">
+                      {candidate.score ?? '—'}
+                    </td>
+                  )}
                   <td className="p-4">
                     <DecisionBar
                       compact
-                      value={candidate.status}
-                      disabled={candidate.status !== 'Pending'}
-                      disabledStatuses={['No Show']}
-                      disabledStatusReason="The Team02 backend does not support No Show yet."
-                      onChange={(status) => {
-                        if (status === 'Pass' || status === 'Fail') {
-                          setPendingAction({ candidate, status });
-                        }
-                      }}
+                      value={candidate.selectedDecision}
+                      onChange={(status) =>
+                        setPendingAction({ candidate, status })
+                      }
                     />
                   </td>
                   <td className="p-4">
@@ -290,7 +296,11 @@ export function Round2DashboardClient() {
       <ConfirmDialog
         open={pendingAction !== null}
         title={`Confirm ${pendingAction?.status ?? ''}`}
-        description="This Round 2 result is terminal. You will not be able to change it from the dashboard after confirmation."
+        description={
+          pendingAction?.status === 'No Show'
+            ? 'No Show will be recorded as Fail. Apply this decision? You can change it later, but every change requires confirmation.'
+            : 'Apply this Round 2 decision? You can change it later, but every change requires confirmation.'
+        }
         confirmLabel="Confirm result"
         variant={pendingAction?.status === 'Pass' ? 'default' : 'destructive'}
         onConfirm={() => void commit()}

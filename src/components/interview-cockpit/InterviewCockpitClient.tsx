@@ -15,16 +15,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DecisionBar } from './DecisionBar';
+import { Round2StatusBadge } from './Round2StatusBadge';
 import { SaveBadge } from './SaveBadge';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { interviewCockpitRepository } from '@/lib/interview-cockpit/repository';
 import type {
-  BackendRound2Status,
   CockpitRole,
   EvaluationNoteKey,
   EvaluationNotes,
   InterviewAnswer,
   InterviewCandidate,
+  Round2Decision,
   SaveState,
 } from '@/lib/interview-cockpit/types';
 import { cn } from '@/lib/utils';
@@ -143,26 +144,36 @@ function NoteFieldEditor({
   );
 }
 
-function SavedCustomQuestion({ answer }: { answer: InterviewAnswer }) {
+function SavedCustomQuestion({
+  answer,
+  disabled,
+  onSaved,
+  onSaveState,
+}: {
+  answer: InterviewAnswer;
+  disabled: boolean;
+  onSaved: (answer: InterviewAnswer) => Promise<void>;
+  onSaveState: (state: SaveState) => void;
+}) {
   return (
     <article className="rounded-2xl border border-dashed border-purple-400 bg-purple-50/40 p-4 dark:bg-purple-950/20">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-purple-700 dark:bg-purple-950 dark:text-purple-300">
           Custom · Candidate only
         </span>
-        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-          Saved
-        </span>
+        {answer.addedBy && (
+          <span className="text-xs text-muted-foreground">
+            Added by {answer.addedBy}
+          </span>
+        )}
       </div>
       <h3 className="mt-4 text-sm font-extrabold">{answer.question}</h3>
-      <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-        {answer.answer || 'No candidate response was recorded.'}
-      </p>
-      {answer.addedBy && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          Added by {answer.addedBy}
-        </p>
-      )}
+      <AutoSaveTextarea
+        answer={answer}
+        disabled={disabled}
+        onSaved={onSaved}
+        onSaveState={onSaveState}
+      />
     </article>
   );
 }
@@ -171,11 +182,10 @@ function CustomQuestionComposer({
   onCreate,
   onCancel,
 }: {
-  onCreate: (question: string, answer: string) => Promise<void>;
+  onCreate: (question: string) => Promise<void>;
   onCancel: () => void;
 }) {
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -184,7 +194,7 @@ function CustomQuestionComposer({
     setSaving(true);
     setError(null);
     try {
-      await onCreate(question.trim(), answer.trim());
+      await onCreate(question.trim());
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -198,7 +208,7 @@ function CustomQuestionComposer({
   return (
     <article className="rounded-2xl border border-dashed border-purple-400 bg-purple-50/40 p-4 dark:bg-purple-950/20">
       <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-purple-700 dark:bg-purple-950 dark:text-purple-300">
-        New custom Q&amp;A · Candidate only
+        New custom question · Candidate only
       </span>
       <label
         htmlFor="new-custom-question"
@@ -214,22 +224,10 @@ function CustomQuestionComposer({
         placeholder="Type the custom question…"
         className="mt-2 h-11 border-purple-200 bg-card"
       />
-      <label
-        htmlFor="new-custom-answer"
-        className="mt-4 block text-xs font-extrabold uppercase tracking-wider text-muted-foreground"
-      >
-        Candidate response
-      </label>
-      <Textarea
-        id="new-custom-answer"
-        value={answer}
-        onChange={(event) => setAnswer(event.target.value)}
-        placeholder="Record the candidate’s response…"
-        className="mt-2 min-h-24 border-purple-200 bg-card"
-      />
       <p className="mt-2 text-xs text-muted-foreground">
-        The current Team02 API creates one complete Q&amp;A at a time and does
-        not expose an update endpoint after it is saved.
+        After creation, this question is shared with authorized interviewers for
+        this candidate and its response can be recorded like a template
+        question.
       </p>
       {error && (
         <p className="mt-2 text-sm font-semibold text-red-600">{error}</p>
@@ -249,10 +247,91 @@ function CustomQuestionComposer({
           disabled={!question.trim() || saving}
           className="bg-purple-600 text-white hover:bg-purple-700"
         >
-          {saving ? 'Saving…' : 'Save custom Q&A'}
+          {saving ? 'Saving…' : 'Add question'}
         </Button>
       </div>
     </article>
+  );
+}
+
+function OverallScoreEditor({
+  candidateId,
+  initialScore,
+  disabled,
+  onSaved,
+  onSaveState,
+}: {
+  candidateId: string;
+  initialScore: number | null;
+  disabled: boolean;
+  onSaved: (score: number | null) => void;
+  onSaveState: (state: SaveState) => void;
+}) {
+  const [value, setValue] = useState(
+    initialScore === null ? '' : String(initialScore)
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    const score = value === '' ? null : Number(value);
+    onSaveState('saving');
+    setError(null);
+    try {
+      const savedScore = await interviewCockpitRepository.saveScore(
+        candidateId,
+        score
+      );
+      setValue(savedScore === null ? '' : String(savedScore));
+      onSaved(savedScore);
+      onSaveState('saved');
+    } catch (cause) {
+      onSaveState('error');
+      setError(
+        cause instanceof Error ? cause.message : 'Could not save score.'
+      );
+    }
+  };
+
+  return (
+    <div className="mt-5 max-w-xs rounded-2xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-800 dark:bg-blue-950/30">
+      <label
+        htmlFor="overall-score"
+        className="text-sm font-extrabold text-blue-950 dark:text-blue-200"
+      >
+        Overall Score
+      </label>
+      <Input
+        id="overall-score"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        disabled={disabled}
+        value={value}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (next === '' || (/^\d{1,3}$/.test(next) && Number(next) <= 100)) {
+            setValue(next);
+            setError(null);
+          } else {
+            setError('Enter a whole number from 0 to 100.');
+          }
+        }}
+        onBlur={() => void save()}
+        placeholder="0–100"
+        aria-describedby="overall-score-help"
+        aria-invalid={Boolean(error)}
+        className="mt-2 border-blue-200 bg-card"
+      />
+      <p
+        id="overall-score-help"
+        className={cn(
+          'mt-2 text-xs',
+          error ? 'font-semibold text-red-600' : 'text-muted-foreground'
+        )}
+      >
+        {error ?? 'Whole numbers only, from 0 to 100.'}
+      </p>
+    </div>
   );
 }
 
@@ -389,7 +468,7 @@ export function InterviewCockpitClient({
     'profile'
   );
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
-  const [decision, setDecision] = useState<BackendRound2Status | null>(null);
+  const [decision, setDecision] = useState<Round2Decision | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showCustomComposer, setShowCustomComposer] = useState(false);
@@ -467,16 +546,37 @@ export function InterviewCockpitClient({
     [candidateId]
   );
 
+  const saveCustomAnswer = useCallback(
+    async (answer: InterviewAnswer) => {
+      const current = candidateRef.current;
+      if (!current) return;
+      const nextAnswers = current.adHocQuestions.map((item) =>
+        item.id === answer.id ? answer : item
+      );
+      const optimistic = { ...current, adHocQuestions: nextAnswers };
+      candidateRef.current = optimistic;
+      setCandidate(optimistic);
+
+      const savedAnswers = await interviewCockpitRepository.saveCustomAnswers(
+        candidateId,
+        nextAnswers
+      );
+      setCandidate((latest) =>
+        latest ? { ...latest, adHocQuestions: savedAnswers } : latest
+      );
+    },
+    [candidateId]
+  );
+
   const createCustomQuestion = useCallback(
-    async (question: string, answer: string) => {
+    async (question: string) => {
       updateState('custom-question', 'saving');
       setActionError(null);
       try {
         const adHocQuestions =
           await interviewCockpitRepository.addCustomQuestion(
             candidateId,
-            question,
-            answer
+            question
           );
         setCandidate((current) =>
           current ? { ...current, adHocQuestions } : current
@@ -508,7 +608,7 @@ export function InterviewCockpitClient({
   }, []);
 
   const confirmDecision = async () => {
-    if (!candidate || !decision || !isDepartmentHead || terminal) return;
+    if (!candidate || !decision || !isDepartmentHead) return;
     updateState('decision', 'saving');
     setActionError(null);
     try {
@@ -516,7 +616,7 @@ export function InterviewCockpitClient({
         candidate.id,
         decision
       );
-      setCandidate({ ...candidate, status });
+      setCandidate({ ...candidate, status, selectedDecision: decision });
       updateState('decision', 'saved');
       setDecision(null);
     } catch (cause) {
@@ -556,10 +656,10 @@ export function InterviewCockpitClient({
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
             {role}
           </span>
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold uppercase text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-            Round 2 · {candidate.status}
-          </span>
-          <SaveBadge state={saveState} status={candidate.status} />
+          {candidate.status !== 'Pending' && (
+            <Round2StatusBadge status={candidate.status} />
+          )}
+          <SaveBadge state={saveState} />
         </div>
       </div>
 
@@ -681,7 +781,8 @@ export function InterviewCockpitClient({
 
             {terminal && (
               <AppNotice variant="info" title="Evaluation closed">
-                This result is final and the cockpit is now read-only.
+                Answers and notes are read-only after a decision. A Department
+                Head can still change the decision below after confirmation.
               </AppNotice>
             )}
 
@@ -716,6 +817,9 @@ export function InterviewCockpitClient({
                 <SavedCustomQuestion
                   key={`${candidate.id}:${answer.id}`}
                   answer={answer}
+                  disabled={terminal}
+                  onSaved={saveCustomAnswer}
+                  onSaveState={(state) => updateState(answer.id, state)}
                 />
               ))}
 
@@ -740,46 +844,18 @@ export function InterviewCockpitClient({
             </button>
 
             {candidate.isScoringEnabled && (
-              <div className="mt-5 max-w-xs rounded-2xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
-                <label
-                  htmlFor="overall-score"
-                  className="text-sm font-extrabold text-blue-950 dark:text-blue-300"
-                >
-                  Overall Score
-                </label>
-                <Input
-                  id="overall-score"
-                  type="number"
-                  disabled={terminal}
-                  defaultValue={candidate.score ?? ''}
-                  onBlur={(event) => {
-                    const score =
-                      event.target.value === ''
-                        ? null
-                        : Number(event.target.value);
-                    updateState('score', 'saving');
-                    setActionError(null);
-                    void interviewCockpitRepository
-                      .saveScore(candidate.id, score)
-                      .then((savedScore) => {
-                        setCandidate((current) =>
-                          current ? { ...current, score: savedScore } : current
-                        );
-                        updateState('score', 'saved');
-                      })
-                      .catch((cause: unknown) => {
-                        updateState('score', 'error');
-                        setActionError(
-                          cause instanceof Error
-                            ? cause.message
-                            : 'Could not save score.'
-                        );
-                      });
-                  }}
-                  placeholder="Enter score"
-                  className="mt-2 border-blue-200 bg-card"
-                />
-              </div>
+              <OverallScoreEditor
+                key={candidate.id}
+                candidateId={candidate.id}
+                initialScore={candidate.score}
+                disabled={terminal}
+                onSaved={(score) =>
+                  setCandidate((current) =>
+                    current ? { ...current, score } : current
+                  )
+                }
+                onSaveState={(state) => updateState('score', state)}
+              />
             )}
           </div>
 
@@ -822,21 +898,15 @@ export function InterviewCockpitClient({
                 )}
               </div>
               <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                Pass and Fail are terminal. No Show is present in the Final
-                design but disabled because the current Team02 API does not
-                accept it.
+                Choose Pass, Fail or No Show. No Show is recorded as Fail. An
+                existing decision can be changed, and every change requires
+                confirmation.
               </p>
               <DecisionBar
-                value={candidate.status}
-                disabled={!isDepartmentHead || terminal}
-                disabledStatuses={['No Show']}
-                disabledStatusReason="The Team02 backend accepts only Pending, Pass and Fail."
+                value={candidate.selectedDecision}
+                disabled={!isDepartmentHead}
                 compact
-                onChange={(status) => {
-                  if (status === 'Pass' || status === 'Fail') {
-                    setDecision(status);
-                  }
-                }}
+                onChange={setDecision}
               />
             </div>
           </div>
@@ -846,7 +916,11 @@ export function InterviewCockpitClient({
       <ConfirmDialog
         open={decision !== null}
         title={`Confirm ${decision ?? ''}`}
-        description={`Submit a final ${decision ?? ''} decision? Round 2 will become read-only for this candidate.`}
+        description={
+          decision === 'No Show'
+            ? 'No Show will be recorded as Fail. Apply this decision? You can change it later, but each change requires confirmation.'
+            : `Apply ${decision ?? ''} to this candidate? You can change the decision later, but each change requires confirmation.`
+        }
         confirmLabel={`Confirm ${decision ?? ''}`}
         variant={decision === 'Pass' ? 'default' : 'destructive'}
         onConfirm={() => void confirmDecision()}
