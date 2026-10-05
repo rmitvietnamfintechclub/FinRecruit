@@ -26,11 +26,15 @@ const ICON = {
 export function DecisionBar({
   value,
   disabled,
+  disabledStatuses = [],
+  disabledStatusReason,
   onChange,
   compact = false,
 }: {
   value: Round2Status;
   disabled?: boolean;
+  disabledStatuses?: Round2Status[];
+  disabledStatusReason?: string;
   onChange: (status: Round2Status) => void;
   compact?: boolean;
 }) {
@@ -45,11 +49,17 @@ export function DecisionBar({
     >
       {ROUND_2_STATUSES.map((status) => {
         const Icon = ICON[status];
+        const statusDisabled = disabled || disabledStatuses.includes(status);
         return (
           <button
             key={status}
             type="button"
-            disabled={disabled}
+            disabled={statusDisabled}
+            title={
+              disabledStatuses.includes(status)
+                ? disabledStatusReason
+                : undefined
+            }
             onClick={() => onChange(status)}
             className={cn(
               'inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-xs font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60 sm:gap-2 sm:text-sm',

@@ -12,27 +12,66 @@ import type { InterviewSettings } from '@/lib/interview-cockpit/types';
 export function InterviewSettingsClient() {
   const [settings, setSettings] = useState<InterviewSettings | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    void interviewCockpitRepository.getSettings().then(setSettings);
+    void interviewCockpitRepository
+      .getSettings()
+      .then(setSettings)
+      .catch((cause: unknown) =>
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : 'Could not load interview settings.'
+        )
+      );
   }, []);
+
+  if (error && !settings) return <AppNotice variant="error">{error}</AppNotice>;
   if (!settings)
     return (
       <p className="py-16 text-center text-sm text-muted-foreground">
         Loading settings…
       </p>
     );
+
   const save = async () => {
-    await interviewCockpitRepository.saveSettings(settings);
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2500);
+    setSaving(true);
+    setSaved(false);
+    setError(null);
+    try {
+      const result = await interviewCockpitRepository.saveSettings(settings);
+      setSettings(result);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2500);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Could not save interview settings.'
+      );
+    } finally {
+      setSaving(false);
+    }
   };
+
   return (
     <div className="space-y-6">
       {saved && (
         <AppNotice variant="success" title="Configuration saved">
-          The cockpit preview now follows this department configuration.
+          Questions and scoring were saved through the Team02 department
+          configuration API.
         </AppNotice>
       )}
+      {error && <AppNotice variant="error">{error}</AppNotice>}
+      <AppNotice variant="info" title="Current backend read limitation">
+        Team02 currently exposes PATCH but no GET for department configuration.
+        This editor starts from a real candidate cockpit snapshot when one is
+        available; after a successful save, it can also restore the last saved
+        values from this browser. The cockpit itself always reads scoring and
+        questions from its candidate API.
+      </AppNotice>
       <div>
         <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-purple-600">
           Department configuration
@@ -57,11 +96,19 @@ export function InterviewSettingsClient() {
                 <p className="text-[10px] font-extrabold uppercase text-muted-foreground">
                   {label}
                 </p>
-                <p className="mt-1 text-sm font-bold">{value}</p>
+                <p className="mt-1 text-sm font-bold">
+                  {value || 'Not returned by current API'}
+                </p>
               </div>
             ))}
           </div>
           <div className="mt-6 space-y-3">
+            {settings.questions.length === 0 && (
+              <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
+                No interview questions are available yet. Add the first question
+                below.
+              </p>
+            )}
             {settings.questions.map((question, index) => (
               <div
                 key={index}
@@ -147,9 +194,10 @@ export function InterviewSettingsClient() {
         <Button
           type="button"
           onClick={() => void save()}
+          disabled={saving}
           className="h-11 w-full bg-blue-900 px-6 font-extrabold text-white shadow-sm hover:bg-blue-800 sm:w-auto"
         >
-          Save & Apply
+          {saving ? 'Saving…' : 'Save & Apply'}
         </Button>
       </div>
     </div>

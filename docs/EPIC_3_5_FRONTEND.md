@@ -1,26 +1,38 @@
-# Epic 3 & 5 Frontend Handoff
+# Epic 3 & 5 Backend Integration Handoff
 
-This implementation is frontend-only and follows the Figma `Final` section first. Missing responsive, terminal-decision, collaboration, and scoring states are completed from the Story 3.1, 3.3, 3.4, 3.5, and 5.1 frames.
+This implementation follows the Figma `Final` flow first and fills uncovered
+states from Stories 3.1, 3.3, 3.4, 3.5, and 5.1. The Epic 3–5 frontend now uses
+the Team02 API routes directly. No file under `src/app/(backend)` was edited.
 
 ## Routes
 
 - `/HeadDashboard/interviews`: Round 2 candidate dashboard and quick decisions.
 - `/InterviewCockpit/[candidateId]`: responsive interview cockpit inside the
   shared dashboard shell and navigation.
-- `/HeadDashboard/interview-settings`: question template and optional scoring configuration.
+- `/HeadDashboard/interview-settings`: question template and optional scoring
+  configuration.
 
-## Integration boundary
+## API mapping
 
-UI components depend on `InterviewCockpitRepository` in `src/lib/interview-cockpit/types.ts`.
+The typed frontend adapter lives in
+`src/lib/interview-cockpit/repository.ts`. It follows the existing application
+convention: TypeScript, standard `fetch`, JSON payloads, and
+`credentials: 'include'` for the Team02 application session cookie.
 
-- `MockInterviewCockpitRepository` is active now and persists demo state to `localStorage`.
-- `HttpInterviewCockpitRepository` contains the typed `fetch` integration skeleton. It follows the existing project convention by using TypeScript, standard `fetch`, and `credentials: 'include'`.
-- When Epic 3/5 backend routes are ready, switch the exported repository instance in `src/lib/interview-cockpit/repository.ts` after aligning the response envelope.
+| Frontend action | Team02 route | Payload used |
+| --- | --- | --- |
+| Load Round 2 dashboard | `GET /api/interviews` | `page`, `limit` |
+| Load cockpit | `GET /api/interviews/:id` | none |
+| Save template responses | `PATCH /api/interviews/:id/notes` | `templateAnswers` |
+| Save collaborative notes | `PATCH /api/interviews/:id/notes` | one of `note1`, `note2`, `note3` |
+| Save Overall Score | `PATCH /api/interviews/:id/notes` | `score` |
+| Create candidate-only Q&A | `POST /api/interviews/:id/ad-hoc-questions` | `question`, `answer` |
+| Final Pass/Fail | `PATCH /api/interviews/:id/status` | `round2Status` |
+| Save question/scoring config | `PATCH /api/head-dashboard/config` | `interviewQuestions`, `isScoringEnabled` |
 
-The mock repository currently persists standard answers, candidate-specific
-custom Q&A blocks, General Notes, Overall Score, and the final Round 2 status.
-This is browser-local demo persistence only; it is intentionally isolated
-behind the repository interface for the later backend integration.
+The old mock repository and mock candidate data were removed. Candidate names,
+answers, schedules, notes, scores, and decisions displayed by these routes now
+come from the backend response.
 
 ## Cockpit layout and permissions
 
@@ -30,22 +42,42 @@ behind the repository interface for the later backend integration.
   resize between 30/70 and 70/30, use the arrow keys in 5% steps, or
   double-click the separator to reset to 40/60.
 - Mobile keeps the Figma Profile/Evaluation tab flow.
-- General Notes and the four Final Decision controls remain docked at the
-  bottom of the Evaluation panel while the question area scrolls independently.
-- Final-decision access comes from the authenticated NextAuth session. The
-  client no longer has a role-preview selector: Department Heads can decide;
-  Members receive a read-only decision bar.
-- Adding a custom question immediately creates a visible candidate-only Q&A
-  block. Its question and answer auto-save after typing stops and reappear
-  after refresh through the mock repository.
+- Three independent note fields and all four Final Decision controls remain
+  docked at the bottom of the Evaluation panel while questions scroll.
+- Both Head and Member can save answers and notes through the backend. Final
+  Pass/Fail is enabled only for an authenticated Department Head.
+- Pass/Fail makes the cockpit read-only in the UI.
+- Standard responses and the three independent notes auto-save after typing
+  stops. Custom Q&A uses an explicit create action because the supplied backend
+  exposes POST creation but no update route.
+- Optional scoring is read from each cockpit response and adds exactly one
+  Overall Score field.
 
-## Six review notes covered
+## Supplied backend limitations kept intact
 
-1. `Pending`, `Pass`, `Fail`, and `No Show` are represented as four Round 2 statuses.
-2. Evaluation fields auto-save after typing stops.
-3. `No Show` replaces the normal saved badge with a warning-style status badge.
-4. Four decision controls stay together in a fixed four-column bar; they do not become a horizontal scroller.
-5. The dashboard changes to `ROUND 2 COMPLETED` and the probation-ready subtext when no candidates remain Pending.
-6. Dashboard rows include quick decision controls as well as `Access Cockpit`.
+The frontend does not work around these limitations by modifying or faking
+backend data:
 
-`Pass`, `Fail`, and `No Show` are terminal in the mock flow. Members can view and edit evaluation content but cannot submit a terminal decision. Optional scoring adds one `Overall Score` only; it does not invent per-question scores or a numeric range.
+1. The Figma Final flow contains `No Show`, but Team02 accepts only `Pending`,
+   `Pass`, and `Fail`. `No Show` stays visible and disabled with an explanation;
+   it is never mapped silently to another result.
+2. Saved ad-hoc questions cannot be edited because Team02 exposes POST only.
+   The composer submits a complete question and response, then renders the
+   server-returned item read-only.
+3. `/api/head-dashboard/config` exposes PATCH but no GET. The settings editor
+   initializes from a real candidate cockpit snapshot when available and keeps
+   the last successful save as a browser cache. Cockpit scoring itself always
+   comes from `GET /api/interviews/:id`.
+4. The cockpit detail response does not include date of birth or Round 1 choice
+   fields, so the UI does not invent them. Schedule/cohort data is matched from
+   `GET /api/interviews` by candidate ID.
+
+## Review notes
+
+1. `Pending`, `Pass`, `Fail`, and `No Show` remain represented visually.
+2. Supported evaluation fields auto-save after typing stops.
+3. The No Show design state is retained without sending an invalid API value.
+4. Four decision controls stay together in a fixed responsive grid.
+5. The dashboard changes to `ROUND 2 COMPLETED` when no candidate remains
+   Pending.
+6. Dashboard rows include quick decisions and `Access Cockpit`.

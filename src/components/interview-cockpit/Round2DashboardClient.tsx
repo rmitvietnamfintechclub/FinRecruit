@@ -8,16 +8,18 @@ import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { DecisionBar } from './DecisionBar';
 import { interviewCockpitRepository } from '@/lib/interview-cockpit/repository';
 import type {
+  BackendRound2Status,
   Round2CandidateSummary,
   Round2Status,
 } from '@/lib/interview-cockpit/types';
 
 export function Round2DashboardClient() {
   const [candidates, setCandidates] = useState<Round2CandidateSummary[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'All' | Round2Status>('All');
   const [pendingAction, setPendingAction] = useState<{
     candidate: Round2CandidateSummary;
-    status: Round2Status;
+    status: BackendRound2Status;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -28,7 +30,8 @@ export function Round2DashboardClient() {
         setError(
           cause instanceof Error ? cause.message : 'Could not load interviews.'
         )
-      );
+      )
+      .finally(() => setLoading(false));
   }, []);
   const stats = useMemo(
     () => ({
@@ -36,7 +39,7 @@ export function Round2DashboardClient() {
       pending: candidates.filter((item) => item.status === 'Pending').length,
       pass: candidates.filter((item) => item.status === 'Pass').length,
       fail: candidates.filter((item) => item.status === 'Fail').length,
-      noShow: candidates.filter((item) => item.status === 'No Show').length,
+      noShow: 0,
     }),
     [candidates]
   );
@@ -47,19 +50,27 @@ export function Round2DashboardClient() {
       : candidates.filter((item) => item.status === filter);
   const commit = async () => {
     if (!pendingAction) return;
-    await interviewCockpitRepository.setStatus(
-      pendingAction.candidate.id,
-      pendingAction.status
-    );
-    setCandidates((current) =>
-      current.map((item) =>
-        item.id === pendingAction.candidate.id
-          ? { ...item, status: pendingAction.status }
-          : item
-      )
-    );
-    setPendingAction(null);
+    try {
+      const status = await interviewCockpitRepository.setStatus(
+        pendingAction.candidate.id,
+        pendingAction.status
+      );
+      setCandidates((current) =>
+        current.map((item) =>
+          item.id === pendingAction.candidate.id ? { ...item, status } : item
+        )
+      );
+      setPendingAction(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Could not save decision.'
+      );
+    }
   };
+  const firstCandidate = candidates[0];
+  const cohortLabel = [firstCandidate?.semester, firstCandidate?.generation]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <div className="space-y-6">
       {error && <AppNotice variant="error">{error}</AppNotice>}
@@ -70,10 +81,13 @@ export function Round2DashboardClient() {
               Active cohort
             </p>
             <h1 className="mt-1 text-2xl font-black text-blue-950 dark:text-blue-300">
-              2026B · Gen 7
+              {cohortLabel || 'Active recruitment cycle'}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Department Head view · Technology Department
+              Department Head view
+              {firstCandidate?.department
+                ? ` · ${firstCandidate.department}`
+                : ''}
             </p>
           </div>
           <div
@@ -92,6 +106,11 @@ export function Round2DashboardClient() {
             : 'Conducting interviews and evaluating candidates.'}
         </p>
       </section>
+      <AppNotice variant="info" title="Team02 backend status contract">
+        The Final design includes No Show, but the current API accepts only
+        Pending, Pass and Fail. No Show remains visible for design parity and is
+        disabled until the backend adds that status.
+      </AppNotice>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {[
           ['Total', stats.total, Clock3, 'text-blue-600'],
@@ -137,6 +156,16 @@ export function Round2DashboardClient() {
             Question Template & Scoring
           </Link>
         </div>
+        {loading && (
+          <p className="p-8 text-center text-sm font-semibold text-muted-foreground">
+            Loading Round 2 candidates…
+          </p>
+        )}
+        {!loading && visible.length === 0 && (
+          <p className="p-8 text-center text-sm font-semibold text-muted-foreground">
+            No candidates match this status.
+          </p>
+        )}
         <div className="grid gap-3 p-3 md:hidden">
           {visible.map((candidate) => (
             <article
@@ -149,7 +178,9 @@ export function Round2DashboardClient() {
                     {candidate.fullName}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {candidate.studentId} · {candidate.generation}
+                    {[candidate.studentId, candidate.generation]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-extrabold">
@@ -180,10 +211,13 @@ export function Round2DashboardClient() {
                   compact
                   value={candidate.status}
                   disabled={candidate.status !== 'Pending'}
-                  onChange={(status) =>
-                    status !== 'Pending' &&
-                    setPendingAction({ candidate, status })
-                  }
+                  disabledStatuses={['No Show']}
+                  disabledStatusReason="The Team02 backend does not support No Show yet."
+                  onChange={(status) => {
+                    if (status === 'Pass' || status === 'Fail') {
+                      setPendingAction({ candidate, status });
+                    }
+                  }}
                 />
               </div>
               <Link
@@ -213,7 +247,9 @@ export function Round2DashboardClient() {
                   <td className="p-4">
                     <p className="font-extrabold">{candidate.fullName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {candidate.studentId} · {candidate.generation}
+                      {[candidate.studentId, candidate.generation]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </p>
                   </td>
                   <td className="p-4">{candidate.department}</td>
@@ -228,10 +264,13 @@ export function Round2DashboardClient() {
                       compact
                       value={candidate.status}
                       disabled={candidate.status !== 'Pending'}
-                      onChange={(status) =>
-                        status !== 'Pending' &&
-                        setPendingAction({ candidate, status })
-                      }
+                      disabledStatuses={['No Show']}
+                      disabledStatusReason="The Team02 backend does not support No Show yet."
+                      onChange={(status) => {
+                        if (status === 'Pass' || status === 'Fail') {
+                          setPendingAction({ candidate, status });
+                        }
+                      }}
                     />
                   </td>
                   <td className="p-4">
