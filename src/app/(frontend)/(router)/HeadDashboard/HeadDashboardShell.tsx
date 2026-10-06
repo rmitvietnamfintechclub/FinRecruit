@@ -16,7 +16,14 @@ type HeadDashboardShellProps = {
   title?: string;
   userSubtitle?: string;
   showNavigation?: boolean;
+  navigationItems?: ReadonlyArray<readonly [href: string, label: string]>;
 };
+
+const HEAD_NAVIGATION_ITEMS = [
+  ['/HeadDashboard', 'Application Form (Round 1)'],
+  ['/HeadDashboard/interviews', 'Interview (Round 2)'],
+  ['/HeadDashboard/interview-settings', 'Question Template'],
+] as const;
 
 export function HeadDashboardShell({
   children,
@@ -27,6 +34,7 @@ export function HeadDashboardShell({
   title = 'Department Head Dashboard',
   userSubtitle = 'Department Head',
   showNavigation = true,
+  navigationItems = HEAD_NAVIGATION_ITEMS,
 }: HeadDashboardShellProps) {
   const pathname = usePathname();
   return (
@@ -44,18 +52,14 @@ export function HeadDashboardShell({
           className="mb-6 flex max-w-full gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-sm"
           aria-label="Recruitment rounds"
         >
-          {[
-            ['/HeadDashboard', 'Application Form (Round 1)'],
-            ['/HeadDashboard/interviews', 'Interview (Round 2)'],
-            ['/HeadDashboard/interview-settings', 'Question Template'],
-          ].map(([href, label]) => {
+          {navigationItems.map(([href, label]) => {
             const active =
               href === '/HeadDashboard'
                 ? pathname === href
                 : href === '/HeadDashboard/interviews'
                   ? pathname.startsWith(href) ||
                     pathname.startsWith('/InterviewCockpit')
-                  : pathname.startsWith(href);
+                  : pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
                 key={href}

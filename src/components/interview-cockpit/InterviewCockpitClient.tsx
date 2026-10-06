@@ -529,6 +529,9 @@ export function InterviewCockpitClient({
   );
   const terminal = candidate?.status !== 'Pending';
   const isDepartmentHead = currentUser.role === 'Department Head';
+  const dashboardHref = isDepartmentHead
+    ? '/HeadDashboard/interviews'
+    : '/MemberDashboard';
 
   const updateState = useCallback(
     (key: string, state: SaveState) =>
@@ -686,7 +689,7 @@ export function InterviewCockpitClient({
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <Link
-            href="/HeadDashboard/interviews"
+            href={dashboardHref}
             className="text-sm font-bold text-blue-600 hover:text-blue-700"
           >
             ← Back to Recruitment Dashboard

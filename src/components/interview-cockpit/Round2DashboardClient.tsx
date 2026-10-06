@@ -10,6 +10,7 @@ import { Round2StatusBadge } from './Round2StatusBadge';
 import { interviewCockpitRepository } from '@/lib/interview-cockpit/repository';
 import type {
   BackendRound2Status,
+  CockpitRole,
   Round2Decision,
   Round2CandidateSummary,
 } from '@/lib/interview-cockpit/types';
@@ -19,7 +20,11 @@ function formatOverallScore(score: number | null) {
   return Number.isInteger(score) ? String(score) : score.toFixed(2);
 }
 
-export function Round2DashboardClient() {
+export function Round2DashboardClient({
+  viewerRole,
+}: {
+  viewerRole: CockpitRole;
+}) {
   const [candidates, setCandidates] = useState<Round2CandidateSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [scoringEnabled, setScoringEnabled] = useState(false);
@@ -29,22 +34,68 @@ export function Round2DashboardClient() {
     status: Round2Decision;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isDepartmentHead = viewerRole === 'Department Head';
+
   useEffect(() => {
-    void Promise.all([
-      interviewCockpitRepository.listCandidates(),
-      interviewCockpitRepository.getSettings(),
-    ])
-      .then(([items, settings]) => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        if (isDepartmentHead) {
+          const [items, settings] = await Promise.all([
+            interviewCockpitRepository.listCandidates(),
+            interviewCockpitRepository.getSettings(),
+          ]);
+          if (!active) return;
+          setCandidates(items);
+          setScoringEnabled(settings.isScoringEnabled);
+          return;
+        }
+
+        const items = await interviewCockpitRepository.listCandidates();
+        if (!active) return;
         setCandidates(items);
-        setScoringEnabled(settings.isScoringEnabled);
-      })
-      .catch((cause: unknown) =>
-        setError(
-          cause instanceof Error ? cause.message : 'Could not load interviews.'
-        )
-      )
-      .finally(() => setLoading(false));
-  }, []);
+
+        // The configuration endpoint is intentionally Head-only. Reuse the
+        // first accessible cockpit response to determine whether scoring is
+        // enabled without widening backend permissions for Members.
+        if (items[0]) {
+          try {
+            const candidate = await interviewCockpitRepository.getCandidate(
+              items[0].id
+            );
+            if (active) setScoringEnabled(candidate.isScoringEnabled);
+          } catch (cause) {
+            if (active) {
+              setError(
+                cause instanceof Error
+                  ? cause.message
+                  : 'Could not load scoring visibility.'
+              );
+            }
+          }
+        }
+      } catch (cause) {
+        if (active) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : 'Could not load interviews.'
+          );
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [isDepartmentHead]);
   const stats = useMemo(
     () => ({
       total: candidates.length,
@@ -60,7 +111,7 @@ export function Round2DashboardClient() {
       ? candidates
       : candidates.filter((item) => item.status === filter);
   const commit = async () => {
-    if (!pendingAction) return;
+    if (!pendingAction || !isDepartmentHead) return;
     try {
       const result = await interviewCockpitRepository.setStatus(
         pendingAction.candidate.id,
@@ -101,7 +152,7 @@ export function Round2DashboardClient() {
               {cohortLabel || 'Active recruitment cycle'}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Department Head view
+              {isDepartmentHead ? 'Department Head view' : 'Member view'}
               {firstCandidate?.department
                 ? ` · ${firstCandidate.department}`
                 : ''}
@@ -158,12 +209,14 @@ export function Round2DashboardClient() {
               </button>
             ))}
           </div>
-          <Link
-            href="/HeadDashboard/interview-settings"
-            className="w-full rounded-xl border border-purple-300 px-4 py-2 text-center text-sm font-bold text-purple-700 sm:w-auto"
-          >
-            Question Template & Scoring
-          </Link>
+          {isDepartmentHead && (
+            <Link
+              href="/HeadDashboard/interview-settings"
+              className="w-full rounded-xl border border-purple-300 px-4 py-2 text-center text-sm font-bold text-purple-700 sm:w-auto"
+            >
+              Question Template & Scoring
+            </Link>
+          )}
         </div>
         {loading && (
           <p className="p-8 text-center text-sm font-semibold text-muted-foreground">
@@ -222,16 +275,20 @@ export function Round2DashboardClient() {
                   </div>
                 )}
               </dl>
-              <div>
-                <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
-                  Quick decision
-                </p>
-                <DecisionBar
-                  compact
-                  value={candidate.selectedDecision}
-                  onChange={(status) => setPendingAction({ candidate, status })}
-                />
-              </div>
+              {isDepartmentHead && (
+                <div>
+                  <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                    Quick decision
+                  </p>
+                  <DecisionBar
+                    compact
+                    value={candidate.selectedDecision}
+                    onChange={(status) =>
+                      setPendingAction({ candidate, status })
+                    }
+                  />
+                </div>
+              )}
               <Link
                 href={`/InterviewCockpit/${candidate.id}`}
                 className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-50 px-4 py-2.5 font-extrabold text-blue-600 hover:bg-blue-100"
@@ -243,7 +300,15 @@ export function Round2DashboardClient() {
         </div>
         <div className="hidden overflow-x-auto md:block">
           <table
-            className={`w-full text-left text-sm ${scoringEnabled ? 'min-w-[1150px]' : 'min-w-[1050px]'}`}
+            className={`w-full text-left text-sm ${
+              isDepartmentHead
+                ? scoringEnabled
+                  ? 'min-w-[1150px]'
+                  : 'min-w-[1050px]'
+                : scoringEnabled
+                  ? 'min-w-[900px]'
+                  : 'min-w-[800px]'
+            }`}
           >
             <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
@@ -252,7 +317,7 @@ export function Round2DashboardClient() {
                 <th className="p-4">Interview slot</th>
                 <th className="p-4">Status</th>
                 {scoringEnabled && <th className="p-4">Overall score</th>}
-                <th className="p-4">Quick decision</th>
+                {isDepartmentHead && <th className="p-4">Quick decision</th>}
                 <th className="p-4">Actions</th>
               </tr>
             </thead>
@@ -279,15 +344,17 @@ export function Round2DashboardClient() {
                         : '—'}
                     </td>
                   )}
-                  <td className="p-4">
-                    <DecisionBar
-                      compact
-                      value={candidate.selectedDecision}
-                      onChange={(status) =>
-                        setPendingAction({ candidate, status })
-                      }
-                    />
-                  </td>
+                  {isDepartmentHead && (
+                    <td className="p-4">
+                      <DecisionBar
+                        compact
+                        value={candidate.selectedDecision}
+                        onChange={(status) =>
+                          setPendingAction({ candidate, status })
+                        }
+                      />
+                    </td>
+                  )}
                   <td className="p-4">
                     <Link
                       href={`/InterviewCockpit/${candidate.id}`}
@@ -302,19 +369,21 @@ export function Round2DashboardClient() {
           </table>
         </div>
       </section>
-      <ConfirmDialog
-        open={pendingAction !== null}
-        title={`Confirm ${pendingAction?.status ?? ''}`}
-        description={
-          pendingAction?.status === 'No Show'
-            ? 'No Show will be recorded as Fail. Apply this decision? You can change it later, but every change requires confirmation.'
-            : 'Apply this Round 2 decision? You can change it later, but every change requires confirmation.'
-        }
-        confirmLabel="Confirm result"
-        variant={pendingAction?.status === 'Pass' ? 'default' : 'destructive'}
-        onConfirm={() => void commit()}
-        onCancel={() => setPendingAction(null)}
-      />
+      {isDepartmentHead && (
+        <ConfirmDialog
+          open={pendingAction !== null}
+          title={`Confirm ${pendingAction?.status ?? ''}`}
+          description={
+            pendingAction?.status === 'No Show'
+              ? 'No Show will be recorded as Fail. Apply this decision? You can change it later, but every change requires confirmation.'
+              : 'Apply this Round 2 decision? You can change it later, but every change requires confirmation.'
+          }
+          confirmLabel="Confirm result"
+          variant={pendingAction?.status === 'Pass' ? 'default' : 'destructive'}
+          onConfirm={() => void commit()}
+          onCancel={() => setPendingAction(null)}
+        />
+      )}
     </div>
   );
 }
