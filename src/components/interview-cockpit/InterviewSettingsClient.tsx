@@ -1,24 +1,42 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
+import {
+  SortableQuestionList,
+  type DraftInterviewQuestion,
+} from './SortableQuestionList';
 import { interviewCockpitRepository } from '@/lib/interview-cockpit/repository';
 import type { InterviewSettings } from '@/lib/interview-cockpit/types';
 
+type InterviewSettingsDraft = Omit<InterviewSettings, 'questions'> & {
+  questions: DraftInterviewQuestion[];
+};
+
+function toDraft(settings: InterviewSettings): InterviewSettingsDraft {
+  return {
+    ...settings,
+    questions: settings.questions.map((text) => ({
+      id: crypto.randomUUID(),
+      text,
+    })),
+  };
+}
+
 export function InterviewSettingsClient() {
-  const [settings, setSettings] = useState<InterviewSettings | null>(null);
+  const [settings, setSettings] = useState<InterviewSettingsDraft | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
 
   useEffect(() => {
     void interviewCockpitRepository
       .getSettings()
-      .then(setSettings)
+      .then((result) => setSettings(toDraft(result)))
       .catch((cause: unknown) =>
         setError(
           cause instanceof Error
@@ -41,8 +59,11 @@ export function InterviewSettingsClient() {
     setSaved(false);
     setError(null);
     try {
-      const result = await interviewCockpitRepository.saveSettings(settings);
-      setSettings(result);
+      const result = await interviewCockpitRepository.saveSettings({
+        ...settings,
+        questions: settings.questions.map((question) => question.text),
+      });
+      setSettings(toDraft(result));
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2500);
     } catch (cause) {
@@ -96,58 +117,43 @@ export function InterviewSettingsClient() {
             ))}
           </div>
           <div className="mt-6 space-y-3">
-            {settings.questions.length === 0 && (
-              <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
-                No interview questions are available yet. Add the first question
-                below.
+            {settings.questions.length > 1 && (
+              <p
+                id="question-reorder-help"
+                className="text-xs font-semibold text-muted-foreground"
+              >
+                Drag the six-dot handle to reorder questions. When the handle is
+                focused, you can also use the Up and Down arrow keys.
               </p>
             )}
-            {settings.questions.map((question, index) => (
-              <div
-                key={index}
-                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 rounded-2xl border border-border p-3 sm:gap-3 sm:p-4"
-              >
-                <span className="rounded-lg bg-blue-100 px-3 py-2 text-xs font-extrabold text-blue-700">
-                  Q{index + 1}
-                </span>
-                <Textarea
-                  value={question}
-                  onChange={(event) =>
-                    setSettings({
-                      ...settings,
-                      questions: settings.questions.map((item, itemIndex) =>
-                        itemIndex === index ? event.target.value : item
-                      ),
-                    })
-                  }
-                  className="min-h-20"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSettings({
-                      ...settings,
-                      questions: settings.questions.filter(
-                        (_, itemIndex) => itemIndex !== index
-                      ),
-                    })
-                  }
-                  className="self-start rounded-lg p-2 text-red-600 hover:bg-red-50"
-                  aria-label={`Remove question ${index + 1}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+            {settings.questions.length === 0 && (
+              <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
+                No interview questions are available yet.
+              </p>
+            )}
+            <SortableQuestionList
+              questions={settings.questions}
+              disabled={saving}
+              onDraggingChange={setIsReordering}
+              onChange={(questions) => {
+                setSettings({ ...settings, questions });
+                setSaved(false);
+              }}
+            />
           </div>
           <Button
             type="button"
-            onClick={() =>
+            disabled={saving || isReordering}
+            onClick={() => {
               setSettings({
                 ...settings,
-                questions: [...settings.questions, ''],
-              })
-            }
+                questions: [
+                  ...settings.questions,
+                  { id: crypto.randomUUID(), text: '' },
+                ],
+              });
+              setSaved(false);
+            }}
             variant="outline"
             className="mt-4 h-10 border-blue-300 px-4 font-bold text-blue-700"
           >
@@ -155,9 +161,6 @@ export function InterviewSettingsClient() {
           </Button>
         </section>
         <aside className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-purple-600">
-            Story 5.1
-          </p>
           <div className="mt-3 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-black">Optional Numeric Scoring</h2>
@@ -167,6 +170,7 @@ export function InterviewSettingsClient() {
               </p>
             </div>
             <Switch
+              disabled={saving || isReordering}
               checked={settings.isScoringEnabled}
               onCheckedChange={(checked) =>
                 setSettings({ ...settings, isScoringEnabled: checked })
@@ -189,7 +193,7 @@ export function InterviewSettingsClient() {
         <Button
           type="button"
           onClick={() => void save()}
-          disabled={saving}
+          disabled={saving || isReordering}
           className="h-11 w-full bg-blue-900 px-6 font-extrabold text-white shadow-sm hover:bg-blue-800 sm:w-auto"
         >
           {saving ? 'Saving…' : 'Save & Apply'}

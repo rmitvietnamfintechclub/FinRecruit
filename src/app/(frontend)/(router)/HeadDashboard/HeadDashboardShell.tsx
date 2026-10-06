@@ -65,10 +65,10 @@ export function HeadDashboardShell({
                 key={href}
                 href={href}
                 className={cn(
-                  'shrink-0 rounded-lg px-4 py-2 text-sm font-bold transition',
+                  'shrink-0 rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
                   active
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-muted-foreground hover:bg-muted'
+                    ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
                 {label}

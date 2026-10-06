@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { DecisionBar } from './DecisionBar';
 import { Round2StatusBadge } from './Round2StatusBadge';
 import { interviewCockpitRepository } from '@/lib/interview-cockpit/repository';
+import { cn } from '@/lib/utils';
 import type {
   BackendRound2Status,
   CockpitRole,
@@ -202,8 +203,15 @@ export function Round2DashboardClient({
             {(['All', 'Pending', 'Pass', 'Fail'] as const).map((status) => (
               <button
                 key={status}
+                type="button"
+                aria-pressed={filter === status}
                 onClick={() => setFilter(status)}
-                className={`min-h-9 rounded-lg px-2 py-2 text-xs font-bold sm:px-3 ${filter === status ? 'bg-blue-600 text-white' : 'bg-muted text-muted-foreground'}`}
+                className={cn(
+                  'min-h-9 cursor-pointer rounded-lg px-2 py-2 text-xs font-bold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-card sm:px-3',
+                  filter === status
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:text-blue-200'
+                )}
               >
                 {status}
               </button>
@@ -212,7 +220,7 @@ export function Round2DashboardClient({
           {isDepartmentHead && (
             <Link
               href="/HeadDashboard/interview-settings"
-              className="w-full rounded-xl border border-purple-300 px-4 py-2 text-center text-sm font-bold text-purple-700 sm:w-auto"
+              className="w-full rounded-xl border border-purple-300 px-4 py-2 text-center text-sm font-bold text-purple-700 transition-colors duration-150 hover:border-purple-400 hover:bg-purple-50 hover:text-purple-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-card dark:text-purple-400 dark:hover:border-purple-400 dark:hover:bg-purple-950/60 dark:hover:text-purple-200 sm:w-auto"
             >
               Question Template & Scoring
             </Link>
@@ -291,7 +299,7 @@ export function Round2DashboardClient({
               )}
               <Link
                 href={`/InterviewCockpit/${candidate.id}`}
-                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-50 px-4 py-2.5 font-extrabold text-blue-600 hover:bg-blue-100"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-50 px-4 py-2.5 font-extrabold text-blue-600 transition-colors duration-150 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-card"
               >
                 Access Cockpit
               </Link>
@@ -358,7 +366,7 @@ export function Round2DashboardClient({
                   <td className="p-4">
                     <Link
                       href={`/InterviewCockpit/${candidate.id}`}
-                      className="inline-flex whitespace-nowrap rounded-xl bg-blue-50 px-4 py-2.5 font-extrabold text-blue-600 hover:bg-blue-100"
+                      className="inline-flex whitespace-nowrap rounded-xl bg-blue-50 px-4 py-2.5 font-extrabold text-blue-600 transition-colors duration-150 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-card"
                     >
                       Access Cockpit
                     </Link>
