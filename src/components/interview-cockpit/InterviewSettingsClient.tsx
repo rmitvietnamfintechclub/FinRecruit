@@ -73,8 +73,8 @@ export function InterviewSettingsClient() {
           Interview Question Template
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Define standard questions and choose whether the cockpit shows one
-          Overall Score field.
+          Define standard questions and choose whether interviewers can score
+          each Round 2 question.
         </p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
@@ -162,7 +162,8 @@ export function InterviewSettingsClient() {
             <div>
               <h2 className="text-xl font-black">Optional Numeric Scoring</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                When enabled, one Overall Score field appears in every cockpit.
+                When enabled, a score field appears beside every template and
+                additional question.
               </p>
             </div>
             <Switch
@@ -177,9 +178,9 @@ export function InterviewSettingsClient() {
               Current state: {settings.isScoringEnabled ? 'ON' : 'OFF'}
             </p>
             <p className="mt-2 text-muted-foreground">
-              One Overall Score is used for the complete interview. It accepts
-              whole numbers from 0 to 100; there is no per-question score or
-              automatic average.
+              Each scored question accepts a whole number from 0 to 100. Overall
+              Score is calculated automatically from scored questions only;
+              unanswered score fields are excluded from the average.
             </p>
           </div>
         </aside>

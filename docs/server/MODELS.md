@@ -249,6 +249,31 @@ const FormAnswerSchema = new Schema(
     question: { type: String, required: true },
     answer: { type: String, default: '' },
     addedBy: { type: String }, // Used for R2 Ad-hoc tracking
+    score: {
+      type: Number,
+      default: null,
+      validate: {
+        validator: (value) =>
+          value === null ||
+          (Number.isInteger(value) && value >= 0 && value <= 100),
+      },
+    },
+  },
+  { _id: false }
+);
+
+const CollaborativeNoteSchema = new Schema(
+  {
+    authorId: { type: String, required: true },
+    authorEmail: { type: String, required: true },
+    authorName: { type: String, required: true },
+    role: {
+      type: String,
+      enum: ['Department Head', 'Member'],
+      required: true,
+    },
+    content: { type: String, default: '' },
+    updatedAt: { type: Date, required: true },
   },
   { _id: false }
 );
@@ -289,6 +314,11 @@ const CandidateSchema = new Schema<ICandidate>(
       enum: [...STATUSES],
       default: 'Pending',
     },
+    round2Decision: {
+      type: String,
+      enum: ['Pass', 'Fail', 'No Show'],
+      default: null,
+    },
     round2Evaluation: {
       templateAnswers: { type: [FormAnswerSchema], default: [] },
       adHocQuestions: { type: [FormAnswerSchema], default: [] },
@@ -296,6 +326,10 @@ const CandidateSchema = new Schema<ICandidate>(
         note1: { type: String, default: '' },
         note2: { type: String, default: '' },
         note3: { type: String, default: '' },
+      },
+      collaborativeNotes: {
+        type: [CollaborativeNoteSchema],
+        default: [],
       },
       score: { type: Number, default: null },
     },

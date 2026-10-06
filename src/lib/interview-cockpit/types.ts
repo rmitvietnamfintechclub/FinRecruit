@@ -5,17 +5,41 @@ export type BackendRound2Status = (typeof BACKEND_ROUND_2_STATUSES)[number];
 export type Round2Decision = (typeof ROUND_2_DECISIONS)[number];
 export type CockpitRole = 'Department Head' | 'Member';
 export type SaveState = 'saved' | 'saving' | 'error';
-export type EvaluationNoteKey = 'note1' | 'note2' | 'note3';
 
 export type InterviewAnswer = {
   id: string;
   question: string;
   answer: string;
+  score: number | null;
   isCustom?: boolean;
   addedBy?: string;
 };
 
-export type EvaluationNotes = Record<EvaluationNoteKey, string>;
+export type CollaborativeNote = {
+  authorId: string;
+  authorEmail: string;
+  authorName: string;
+  role: CockpitRole;
+  content: string;
+  updatedAt: string;
+};
+
+export type CockpitUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: CockpitRole;
+};
+
+export type EvaluationSaveResult = {
+  answers: InterviewAnswer[];
+  overallScore: number | null;
+};
+
+export type Round2DecisionResult = {
+  status: BackendRound2Status;
+  decision: Round2Decision | null;
+};
 
 export type Round2CandidateSummary = {
   id: string;
@@ -28,8 +52,8 @@ export type Round2CandidateSummary = {
   interviewSlot: string;
   status: BackendRound2Status;
   /**
-   * The decision selected in the UI. `No Show` intentionally remains distinct
-   * here even though the current backend stores it as `Fail`.
+   * The selected decision. `No Show` remains distinct here and in
+   * `round2Decision`, while the workflow `round2Status` is stored as `Fail`.
    */
   selectedDecision: Round2Decision | null;
   score: number | null;
@@ -44,7 +68,7 @@ export type InterviewCandidate = Round2CandidateSummary & {
   departmentAnswers: InterviewAnswer[];
   evaluationAnswers: InterviewAnswer[];
   adHocQuestions: InterviewAnswer[];
-  notes: EvaluationNotes;
+  collaborativeNotes: CollaborativeNote[];
   isScoringEnabled: boolean;
 };
 
@@ -65,12 +89,12 @@ export interface InterviewCockpitRepository {
   saveTemplateAnswers(
     candidateId: string,
     answers: InterviewAnswer[]
-  ): Promise<InterviewAnswer[]>;
-  saveNote(
+  ): Promise<EvaluationSaveResult>;
+  getCollaborativeNotes(candidateId: string): Promise<CollaborativeNote[]>;
+  saveCollaborativeNote(
     candidateId: string,
-    key: EvaluationNoteKey,
-    note: string
-  ): Promise<EvaluationNotes>;
+    content: string
+  ): Promise<CollaborativeNote[]>;
   addCustomQuestion(
     candidateId: string,
     question: string
@@ -78,12 +102,11 @@ export interface InterviewCockpitRepository {
   saveCustomAnswers(
     candidateId: string,
     answers: InterviewAnswer[]
-  ): Promise<InterviewAnswer[]>;
+  ): Promise<EvaluationSaveResult>;
   setStatus(
     candidateId: string,
     status: Round2Decision
-  ): Promise<BackendRound2Status>;
+  ): Promise<Round2DecisionResult>;
   getSettings(): Promise<InterviewSettings>;
   saveSettings(settings: InterviewSettings): Promise<InterviewSettings>;
-  saveScore(candidateId: string, score: number | null): Promise<number | null>;
 }

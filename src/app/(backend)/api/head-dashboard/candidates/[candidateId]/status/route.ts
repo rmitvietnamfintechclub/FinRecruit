@@ -141,6 +141,10 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
           }
         : {
             status: decision.nextStatus,
+            ...(decision.nextStatus === 'Pass' &&
+            candidate.department === 'Unassigned'
+              ? { department: assignedDepartment }
+              : {}),
           };
 
     const updatedCandidate = await Candidate.findOneAndUpdate(

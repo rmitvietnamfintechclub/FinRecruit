@@ -1,8 +1,16 @@
+import mongoose from 'mongoose';
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import Candidate from '@/app/(backend)/models/Candidate';
 import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
 import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
+import '@/app/(backend)/models/MasterInterviewSlot';
+import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
+import {
+  calculateOverallScore,
+  reconcileTemplateAnswers,
+} from '@/app/(backend)/libs/round2Evaluation';
+import type { ICustomAnswer } from '@/app/(backend)/types';
 
 type InterviewRouteContext = {
   params: Promise<{ id: string }>;
@@ -14,8 +22,38 @@ export const GET = withRBAC<InterviewRouteContext>(
     try {
       await dbConnect();
       const { id: candidateId } = await params;
+      const assignedDepartment = normalizeHeadDepartment(
+        session.user.department
+      );
 
-      const candidate = await Candidate.findById(candidateId);
+      if (!assignedDepartment) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'INVALID_DEPARTMENT',
+            message:
+              'Your account does not have a valid department assignment.',
+          },
+          { status: 403 }
+        );
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(candidateId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'INVALID_CANDIDATE_ID',
+            message: 'A valid candidate ID is required.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const candidate = await Candidate.findOne({
+        _id: candidateId,
+        department: assignedDepartment,
+        status: 'Pass',
+      });
       if (!candidate) {
         return NextResponse.json(
           {
@@ -27,21 +65,6 @@ export const GET = withRBAC<InterviewRouteContext>(
         );
       }
 
-      // Verify departmental access for non-EXEC users
-      if (
-        session.user.role !== 'Executive Board' &&
-        candidate.department !== session.user.department
-      ) {
-        return NextResponse.json(
-          {
-            success: false,
-            code: 'FORBIDDEN',
-            message: 'Access denied for this department candidate',
-          },
-          { status: 403 }
-        );
-      }
-
       // Fetch department question template & scoring toggle
       const deptConfig = await DepartmentConfig.findOne({
         department: candidate.department,
@@ -50,29 +73,26 @@ export const GET = withRBAC<InterviewRouteContext>(
       });
 
       const isScoringEnabled = deptConfig?.isScoringEnabled ?? false;
-      const storedTemplateAnswers =
-        candidate.round2Evaluation?.templateAnswers || [];
+      const storedTemplateAnswers = (candidate.round2Evaluation
+        ?.templateAnswers || []) as ICustomAnswer[];
       let templateAnswers = storedTemplateAnswers;
 
       // A saved DepartmentConfig is the source of truth for the current
       // template. Reuse answers for unchanged questions, add blank answers for
       // new questions, and omit questions removed by Save & Apply.
       if (deptConfig) {
-        const savedAnswerByQuestion = new Map(
-          storedTemplateAnswers.map(
-            (item: { question: string; answer: string }) => [
-              String(item.question),
-              String(item.answer ?? ''),
-            ]
-          )
-        );
-        templateAnswers = (deptConfig.interviewQuestions || []).map(
-          (question: string) => ({
-            question,
-            answer: savedAnswerByQuestion.get(question) ?? '',
-          })
+        templateAnswers = reconcileTemplateAnswers(
+          deptConfig.interviewQuestions || [],
+          storedTemplateAnswers
         );
       }
+
+      const adHocQuestions = (candidate.round2Evaluation?.adHocQuestions ||
+        []) as ICustomAnswer[];
+      const overallScore = calculateOverallScore(
+        templateAnswers,
+        adHocQuestions
+      );
 
       const payload = {
         id: candidate.id,
@@ -87,16 +107,19 @@ export const GET = withRBAC<InterviewRouteContext>(
         department: candidate.department,
         status: candidate.status,
         round2Status: candidate.round2Status,
+        round2Decision: candidate.round2Decision ?? null,
         evaluation: {
           isScoringEnabled,
           templateAnswers,
-          adHocQuestions: candidate.round2Evaluation?.adHocQuestions || [],
+          adHocQuestions,
           notes: candidate.round2Evaluation?.notes || {
             note1: '',
             note2: '',
             note3: '',
           },
-          score: candidate.round2Evaluation?.score ?? null,
+          collaborativeNotes:
+            candidate.round2Evaluation?.collaborativeNotes || [],
+          score: overallScore,
         },
       };
 
@@ -105,9 +128,16 @@ export const GET = withRBAC<InterviewRouteContext>(
         message: 'Cockpit candidate data retrieved',
         data: payload,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return NextResponse.json(
-        { success: false, code: 'SERVER_ERROR', message: error.message },
+        {
+          success: false,
+          code: 'SERVER_ERROR',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Could not retrieve cockpit candidate data.',
+        },
         { status: 500 }
       );
     }

@@ -1,22 +1,15 @@
 import type {
   BackendRound2Status,
-  EvaluationNoteKey,
-  EvaluationNotes,
+  CollaborativeNote,
   InterviewAnswer,
   InterviewCandidate,
   InterviewCockpitRepository,
   InterviewSettings,
-  Round2Decision,
   Round2CandidateSummary,
+  Round2Decision,
 } from './types';
 
 const PAGE_SIZE = 100;
-const DECISION_STORAGE_KEY = 'finrecruit:round2-decision-selections:v1';
-
-type StoredDecision = {
-  decision: Round2Decision;
-  backendStatus: BackendRound2Status;
-};
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -29,6 +22,16 @@ type RawFormAnswer = {
   question?: unknown;
   answer?: unknown;
   addedBy?: unknown;
+  score?: unknown;
+};
+
+type RawCollaborativeNote = {
+  authorId?: unknown;
+  authorEmail?: unknown;
+  authorName?: unknown;
+  role?: unknown;
+  content?: unknown;
+  updatedAt?: unknown;
 };
 
 type RawInterviewSlot = {
@@ -45,6 +48,7 @@ type RawCandidateSummary = {
   email?: unknown;
   department?: unknown;
   round2Status?: unknown;
+  round2Decision?: unknown;
   generation?: unknown;
   semester?: unknown;
   interviewSlot?: RawInterviewSlot | null;
@@ -72,24 +76,26 @@ type RawInterviewDetail = {
   customAnswers?: RawFormAnswer[];
   department?: unknown;
   round2Status?: unknown;
+  round2Decision?: unknown;
   evaluation?: {
     isScoringEnabled?: unknown;
     templateAnswers?: RawFormAnswer[];
     adHocQuestions?: RawFormAnswer[];
-    notes?: Partial<Record<EvaluationNoteKey, unknown>>;
+    collaborativeNotes?: RawCollaborativeNote[];
     score?: unknown;
   };
 };
 
 type RawEvaluationUpdate = {
-  notes?: Partial<Record<EvaluationNoteKey, unknown>>;
   score?: unknown;
   templateAnswers?: RawFormAnswer[];
   adHocQuestions?: RawFormAnswer[];
+  collaborativeNotes?: RawCollaborativeNote[];
 };
 
 type RawStatusUpdate = {
   round2Status?: unknown;
+  round2Decision?: unknown;
 };
 
 type RawDepartmentConfig = {
@@ -110,82 +116,33 @@ function backendStatus(value: unknown): BackendRound2Status {
   return 'Pending';
 }
 
-function readStoredDecisions(): Record<string, StoredDecision> {
-  if (typeof window === 'undefined') return {};
-
-  try {
-    const value = window.localStorage.getItem(DECISION_STORAGE_KEY);
-    if (!value) return {};
-    const parsed: unknown = JSON.parse(value);
-    return parsed && typeof parsed === 'object'
-      ? (parsed as Record<string, StoredDecision>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeStoredDecisions(decisions: Record<string, StoredDecision>) {
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.localStorage.setItem(
-      DECISION_STORAGE_KEY,
-      JSON.stringify(decisions)
-    );
-  } catch {
-    // The API status remains authoritative when browser storage is unavailable.
-  }
-}
-
-function forgetStoredDecision(candidateId: string) {
-  if (!candidateId) return;
-  const decisions = readStoredDecisions();
-  if (!(candidateId in decisions)) return;
-  delete decisions[candidateId];
-  writeStoredDecisions(decisions);
-}
-
-function rememberDecision(
-  candidateId: string,
-  decision: Round2Decision,
-  status: BackendRound2Status
-) {
-  if (!candidateId) return;
-  const decisions = readStoredDecisions();
-  decisions[candidateId] = { decision, backendStatus: status };
-  writeStoredDecisions(decisions);
-}
-
-function selectedDecisionForStatus(
-  candidateId: string,
-  status: BackendRound2Status
+function backendDecision(
+  value: unknown,
+  status: BackendRound2Status,
+  legacyStatus?: unknown
 ): Round2Decision | null {
-  if (status === 'Pending') {
-    forgetStoredDecision(candidateId);
-    return null;
+  if (value === 'Pass' || value === 'Fail' || value === 'No Show') {
+    return value;
   }
-
-  if (status === 'Pass') {
-    rememberDecision(candidateId, 'Pass', status);
-    return 'Pass';
-  }
-
-  const stored = readStoredDecisions()[candidateId];
-  if (
-    stored?.backendStatus === 'Fail' &&
-    (stored.decision === 'Fail' || stored.decision === 'No Show')
-  ) {
-    return stored.decision;
-  }
-
-  return 'Fail';
+  if (legacyStatus === 'No Show') return 'No Show';
+  if (status === 'Pass') return 'Pass';
+  if (status === 'Fail') return 'Fail';
+  return null;
 }
 
 export function decisionToBackendStatus(
   decision: Round2Decision
 ): Exclude<BackendRound2Status, 'Pending'> {
   return decision === 'Pass' ? 'Pass' : 'Fail';
+}
+
+function questionScore(value: unknown) {
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 100
+    ? value
+    : null;
 }
 
 function studentIdFromEmail(email: string) {
@@ -223,6 +180,7 @@ function mapAnswer(
     id: `${prefix}-${index + 1}`,
     question: stringValue(answer.question),
     answer: stringValue(answer.answer),
+    score: questionScore(answer.score),
     ...(isCustom ? { isCustom: true } : {}),
     ...(typeof answer.addedBy === 'string' ? { addedBy: answer.addedBy } : {}),
   };
@@ -238,22 +196,31 @@ function mapAnswers(
   );
 }
 
-function mapNotes(
-  notes?: Partial<Record<EvaluationNoteKey, unknown>>
-): EvaluationNotes {
-  return {
-    note1: stringValue(notes?.note1),
-    note2: stringValue(notes?.note2),
-    note3: stringValue(notes?.note3),
-  };
+function mapCollaborativeNotes(
+  notes: RawCollaborativeNote[] | undefined
+): CollaborativeNote[] {
+  return (Array.isArray(notes) ? notes : [])
+    .map((note) => ({
+      authorId: stringValue(note.authorId),
+      authorEmail: stringValue(note.authorEmail),
+      authorName:
+        stringValue(note.authorName) ||
+        stringValue(note.authorEmail).split('@')[0],
+      role:
+        note.role === 'Department Head'
+          ? ('Department Head' as const)
+          : ('Member' as const),
+      content: stringValue(note.content),
+      updatedAt: stringValue(note.updatedAt),
+    }))
+    .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
 }
 
 function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
-  const id = stringValue(candidate.id);
   const email = stringValue(candidate.email);
   const status = backendStatus(candidate.round2Status);
   return {
-    id,
+    id: stringValue(candidate.id),
     fullName: stringValue(candidate.fullName),
     email,
     studentId: studentIdFromEmail(email),
@@ -262,7 +229,11 @@ function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
     semester: stringValue(candidate.semester),
     interviewSlot: formatInterviewSlot(candidate.interviewSlot),
     status,
-    selectedDecision: selectedDecisionForStatus(id, status),
+    selectedDecision: backendDecision(
+      candidate.round2Decision,
+      status,
+      candidate.round2Status
+    ),
     score:
       typeof candidate.evaluationSummary?.score === 'number'
         ? candidate.evaluationSummary.score
@@ -274,15 +245,12 @@ function mapCandidate(
   candidate: RawInterviewDetail,
   summary?: Round2CandidateSummary
 ): InterviewCandidate {
-  const id = stringValue(candidate.id);
   const email = stringValue(candidate.email);
   const evaluation = candidate.evaluation;
-  const rawScore = evaluation?.score;
-  const score = typeof rawScore === 'number' ? rawScore : null;
   const status = backendStatus(candidate.round2Status);
 
   return {
-    id,
+    id: stringValue(candidate.id),
     fullName: stringValue(candidate.fullName),
     email,
     studentId: studentIdFromEmail(email),
@@ -291,11 +259,12 @@ function mapCandidate(
     semester: summary?.semester ?? '',
     interviewSlot: summary?.interviewSlot ?? 'Not scheduled',
     status,
-    selectedDecision:
-      summary?.status === status
-        ? summary.selectedDecision
-        : selectedDecisionForStatus(id, status),
-    score,
+    selectedDecision: backendDecision(
+      candidate.round2Decision ?? summary?.selectedDecision,
+      status,
+      candidate.round2Status
+    ),
+    score: typeof evaluation?.score === 'number' ? evaluation.score : null,
     majorAndYear: stringValue(candidate.majorAndYear),
     phone: stringValue(candidate.phone),
     facebookLink: stringValue(candidate.facebookLink) || undefined,
@@ -304,15 +273,16 @@ function mapCandidate(
     departmentAnswers: mapAnswers(candidate.customAnswers, 'department'),
     evaluationAnswers: mapAnswers(evaluation?.templateAnswers, 'template'),
     adHocQuestions: mapAnswers(evaluation?.adHocQuestions, 'ad-hoc', true),
-    notes: mapNotes(evaluation?.notes),
+    collaborativeNotes: mapCollaborativeNotes(evaluation?.collaborativeNotes),
     isScoringEnabled: evaluation?.isScoringEnabled === true,
   };
 }
 
 function toRawAnswers(answers: InterviewAnswer[]): RawFormAnswer[] {
-  return answers.map(({ question, answer, addedBy }) => ({
+  return answers.map(({ question, answer, addedBy, score }) => ({
     question,
     answer,
+    score,
     ...(addedBy ? { addedBy } : {}),
   }));
 }
@@ -389,18 +359,28 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
         body: JSON.stringify({ templateAnswers: toRawAnswers(answers) }),
       }
     );
-    return mapAnswers(result.templateAnswers, 'template');
+    return {
+      answers: mapAnswers(result.templateAnswers, 'template'),
+      overallScore: typeof result.score === 'number' ? result.score : null,
+    };
   }
 
-  async saveNote(candidateId: string, key: EvaluationNoteKey, note: string) {
+  async getCollaborativeNotes(candidateId: string) {
+    const result = await this.request<RawEvaluationUpdate>(
+      `/api/interviews/${candidateId}/notes`
+    );
+    return mapCollaborativeNotes(result.collaborativeNotes);
+  }
+
+  async saveCollaborativeNote(candidateId: string, content: string) {
     const result = await this.request<RawEvaluationUpdate>(
       `/api/interviews/${candidateId}/notes`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ [key]: note }),
+        body: JSON.stringify({ collaborativeNote: content }),
       }
     );
-    return mapNotes(result.notes);
+    return mapCollaborativeNotes(result.collaborativeNotes);
   }
 
   async addCustomQuestion(candidateId: string, question: string) {
@@ -422,21 +402,33 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
         body: JSON.stringify({ adHocQuestions: toRawAnswers(answers) }),
       }
     );
-    return mapAnswers(result.adHocQuestions, 'ad-hoc', true);
+    return {
+      answers: mapAnswers(result.adHocQuestions, 'ad-hoc', true),
+      overallScore: typeof result.score === 'number' ? result.score : null,
+    };
   }
 
-  async setStatus(candidateId: string, status: Round2Decision) {
-    const round2Status = decisionToBackendStatus(status);
+  async setStatus(candidateId: string, decision: Round2Decision) {
+    const round2Status = decisionToBackendStatus(decision);
     const result = await this.request<RawStatusUpdate>(
       `/api/interviews/${candidateId}/status`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ round2Status }),
+        body: JSON.stringify({
+          round2Status,
+          round2Decision: decision,
+        }),
       }
     );
-    const savedStatus = backendStatus(result.round2Status);
-    rememberDecision(candidateId, status, savedStatus);
-    return savedStatus;
+    const status = backendStatus(result.round2Status);
+    return {
+      status,
+      decision: backendDecision(
+        result.round2Decision,
+        status,
+        result.round2Status
+      ),
+    };
   }
 
   async getSettings(): Promise<InterviewSettings> {
@@ -473,26 +465,14 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
           (question): question is string => typeof question === 'string'
         )
       : settings.questions;
-    const saved: InterviewSettings = {
+    return {
       department: stringValue(result.department) || settings.department,
       generation: stringValue(result.generation) || settings.generation,
       semester: stringValue(result.semester) || settings.semester,
       questions,
       isScoringEnabled: result.isScoringEnabled === true,
-      loadSource: 'backend-config',
+      loadSource: 'backend-config' as const,
     };
-    return saved;
-  }
-
-  async saveScore(candidateId: string, score: number | null) {
-    const result = await this.request<RawEvaluationUpdate>(
-      `/api/interviews/${candidateId}/notes`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ score }),
-      }
-    );
-    return typeof result.score === 'number' ? result.score : null;
   }
 }
 

@@ -7,6 +7,7 @@ import {
   GripVertical,
   Lock,
   Plus,
+  Users,
   UserRound,
 } from 'lucide-react';
 import { AppNotice } from '@/components/feedback/AppNotice';
@@ -20,9 +21,8 @@ import { SaveBadge } from './SaveBadge';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { interviewCockpitRepository } from '@/lib/interview-cockpit/repository';
 import type {
-  CockpitRole,
-  EvaluationNoteKey,
-  EvaluationNotes,
+  CockpitUser,
+  CollaborativeNote,
   InterviewAnswer,
   InterviewCandidate,
   Round2Decision,
@@ -33,23 +33,30 @@ import { cn } from '@/lib/utils';
 const MIN_PROFILE_PERCENT = 30;
 const MAX_PROFILE_PERCENT = 70;
 const DEFAULT_PROFILE_PERCENT = 40;
+const NOTES_SYNC_INTERVAL_MS = 2000;
 
 function clampProfilePercent(value: number) {
   return Math.min(MAX_PROFILE_PERCENT, Math.max(MIN_PROFILE_PERCENT, value));
 }
 
-function AutoSaveTextarea({
+function EvaluationAnswerEditor({
   answer,
   disabled,
+  scoringEnabled,
   onSaved,
   onSaveState,
 }: {
   answer: InterviewAnswer;
   disabled: boolean;
+  scoringEnabled: boolean;
   onSaved: (answer: InterviewAnswer) => Promise<void>;
   onSaveState: (state: SaveState) => void;
 }) {
-  const [value, setValue] = useState(answer.answer);
+  const [draft, setDraft] = useState({
+    answer: answer.answer,
+    score: answer.score === null ? '' : String(answer.score),
+  });
+  const [scoreError, setScoreError] = useState<string | null>(null);
   const onSaveStateRef = useRef(onSaveState);
 
   useEffect(() => {
@@ -57,44 +64,109 @@ function AutoSaveTextarea({
   }, [onSaveState]);
 
   const save = useCallback(
-    async (nextValue: string) => {
-      await onSaved({ ...answer, answer: nextValue });
+    async (nextDraft: { answer: string; score: string }) => {
+      await onSaved({
+        ...answer,
+        answer: nextDraft.answer,
+        score: nextDraft.score === '' ? null : Number(nextDraft.score),
+      });
     },
     [answer, onSaved]
   );
-  const state = useDebouncedSave(value, save);
+  const state = useDebouncedSave(draft, save);
 
   useEffect(() => onSaveStateRef.current(state), [state]);
 
   return (
-    <Textarea
-      disabled={disabled}
-      value={value}
-      onChange={(event) => setValue(event.target.value)}
-      placeholder="Record the candidate’s response…"
-      className="mt-3 disabled:bg-muted/40"
-    />
+    <div
+      className={cn(
+        'mt-3 grid gap-3',
+        scoringEnabled && 'sm:grid-cols-[minmax(0,1fr)_8rem]'
+      )}
+    >
+      <Textarea
+        disabled={disabled}
+        value={draft.answer}
+        onChange={(event) =>
+          setDraft((current) => ({
+            ...current,
+            answer: event.target.value,
+          }))
+        }
+        placeholder="Record the candidate’s response…"
+        className="disabled:bg-muted/40"
+      />
+      {scoringEnabled && (
+        <div>
+          <label
+            htmlFor={`score-${answer.id}`}
+            className="text-[11px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-300"
+          >
+            Score
+          </label>
+          <Input
+            id={`score-${answer.id}`}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            disabled={disabled}
+            value={draft.score}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (
+                next === '' ||
+                (/^\d{1,3}$/.test(next) && Number(next) <= 100)
+              ) {
+                setDraft((current) => ({ ...current, score: next }));
+                setScoreError(null);
+              } else {
+                setScoreError('Use a whole number from 0 to 100.');
+              }
+            }}
+            placeholder="0–100"
+            aria-invalid={Boolean(scoreError)}
+            className="mt-1.5 border-blue-200 bg-card text-center font-extrabold"
+          />
+          {scoreError && (
+            <p className="mt-1 text-[10px] font-semibold text-red-600">
+              {scoreError}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
-function NoteFieldEditor({
+function formatNoteTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function CollaborativeNotesPanel({
   candidateId,
-  noteKey,
-  initialValue,
+  currentUser,
+  notes,
   disabled,
   onSaved,
   onSaveState,
 }: {
   candidateId: string;
-  noteKey: EvaluationNoteKey;
-  initialValue: string;
+  currentUser: CockpitUser;
+  notes: CollaborativeNote[];
   disabled: boolean;
-  onSaved: (notes: EvaluationNotes) => void;
+  onSaved: (notes: CollaborativeNote[]) => void;
   onSaveState: (state: SaveState) => void;
 }) {
-  const [value, setValue] = useState(initialValue);
+  const ownNote = notes.find((note) => note.authorId === currentUser.id);
+  const [value, setValue] = useState(ownNote?.content ?? '');
   const onSaveStateRef = useRef(onSaveState);
-  const label = `Note ${Number(noteKey.slice(-1))}`;
 
   useEffect(() => {
     onSaveStateRef.current = onSaveState;
@@ -102,44 +174,91 @@ function NoteFieldEditor({
 
   const save = useCallback(
     async (nextValue: string) => {
-      const notes = await interviewCockpitRepository.saveNote(
+      const savedNotes = await interviewCockpitRepository.saveCollaborativeNote(
         candidateId,
-        noteKey,
         nextValue
       );
-      onSaved(notes);
+      onSaved(savedNotes);
     },
-    [candidateId, noteKey, onSaved]
+    [candidateId, onSaved]
   );
   const state = useDebouncedSave(value, save);
 
   useEffect(() => onSaveStateRef.current(state), [state]);
 
+  const teammateNotes = notes.filter(
+    (note) => note.authorId !== currentUser.id && note.content.trim()
+  );
+
   return (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        <label
-          htmlFor={`evaluation-${noteKey}`}
-          className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground"
-        >
-          {label}
-        </label>
-        <span className="text-[10px] font-semibold text-muted-foreground">
-          {state === 'saving'
-            ? 'Saving…'
-            : state === 'error'
-              ? 'Failed'
-              : 'Saved'}
-        </span>
+    <div className="mt-2 grid gap-3">
+      <div className="rounded-xl border border-border bg-background/80 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-extrabold">
+              {currentUser.name}{' '}
+              <span className="font-semibold text-muted-foreground">
+                ({currentUser.role})
+              </span>
+            </p>
+            <p className="text-[10px] text-muted-foreground">Your note</p>
+          </div>
+          <span className="text-[10px] font-semibold text-muted-foreground">
+            {state === 'saving'
+              ? 'Saving…'
+              : state === 'error'
+                ? 'Save failed'
+                : 'All changes saved'}
+          </span>
+        </div>
+        <Textarea
+          id="collaborative-note"
+          disabled={disabled}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder="Record your interview insight…"
+          className="mt-2 min-h-16 resize-none disabled:bg-muted/40"
+        />
       </div>
-      <Textarea
-        id={`evaluation-${noteKey}`}
-        disabled={disabled}
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder={`Add ${label.toLowerCase()}…`}
-        className="mt-1.5 min-h-16 resize-none disabled:bg-muted/40"
-      />
+
+      <div>
+        <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+          <Users className="h-3.5 w-3.5" />
+          Team insights
+          <span className="normal-case tracking-normal">
+            · syncs every 2 seconds
+          </span>
+        </div>
+        {teammateNotes.length === 0 ? (
+          <p className="mt-2 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+            No notes from other interviewers yet.
+          </p>
+        ) : (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {teammateNotes.map((note) => (
+              <article
+                key={note.authorId}
+                className="rounded-xl border border-border bg-background/80 p-3"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-extrabold">{note.authorName}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {note.role}
+                    </p>
+                  </div>
+                  <time className="text-[10px] text-muted-foreground">
+                    {formatNoteTime(note.updatedAt)}
+                  </time>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed">
+                  {note.content}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -147,11 +266,13 @@ function NoteFieldEditor({
 function SavedCustomQuestion({
   answer,
   disabled,
+  scoringEnabled,
   onSaved,
   onSaveState,
 }: {
   answer: InterviewAnswer;
   disabled: boolean;
+  scoringEnabled: boolean;
   onSaved: (answer: InterviewAnswer) => Promise<void>;
   onSaveState: (state: SaveState) => void;
 }) {
@@ -168,9 +289,10 @@ function SavedCustomQuestion({
         )}
       </div>
       <h3 className="mt-4 text-sm font-extrabold">{answer.question}</h3>
-      <AutoSaveTextarea
+      <EvaluationAnswerEditor
         answer={answer}
         disabled={disabled}
+        scoringEnabled={scoringEnabled}
         onSaved={onSaved}
         onSaveState={onSaveState}
       />
@@ -254,82 +376,39 @@ function CustomQuestionComposer({
   );
 }
 
-function OverallScoreEditor({
-  candidateId,
-  initialScore,
-  disabled,
-  onSaved,
-  onSaveState,
+function OverallScoreSummary({
+  score,
+  answers,
 }: {
-  candidateId: string;
-  initialScore: number | null;
-  disabled: boolean;
-  onSaved: (score: number | null) => void;
-  onSaveState: (state: SaveState) => void;
+  score: number | null;
+  answers: InterviewAnswer[];
 }) {
-  const [value, setValue] = useState(
-    initialScore === null ? '' : String(initialScore)
-  );
-  const [error, setError] = useState<string | null>(null);
-
-  const save = async () => {
-    const score = value === '' ? null : Number(value);
-    onSaveState('saving');
-    setError(null);
-    try {
-      const savedScore = await interviewCockpitRepository.saveScore(
-        candidateId,
-        score
-      );
-      setValue(savedScore === null ? '' : String(savedScore));
-      onSaved(savedScore);
-      onSaveState('saved');
-    } catch (cause) {
-      onSaveState('error');
-      setError(
-        cause instanceof Error ? cause.message : 'Could not save score.'
-      );
-    }
-  };
+  const scoredCount = answers.filter((answer) => answer.score !== null).length;
+  const displayScore =
+    score === null
+      ? 'Not scored'
+      : Number.isInteger(score)
+        ? String(score)
+        : score.toFixed(2);
 
   return (
-    <div className="mt-5 max-w-xs rounded-2xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-800 dark:bg-blue-950/30">
-      <label
-        htmlFor="overall-score"
-        className="text-sm font-extrabold text-blue-950 dark:text-blue-200"
-      >
-        Overall Score
-      </label>
-      <Input
-        id="overall-score"
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        disabled={disabled}
-        value={value}
-        onChange={(event) => {
-          const next = event.target.value;
-          if (next === '' || (/^\d{1,3}$/.test(next) && Number(next) <= 100)) {
-            setValue(next);
-            setError(null);
-          } else {
-            setError('Enter a whole number from 0 to 100.');
-          }
-        }}
-        onBlur={() => void save()}
-        placeholder="0–100"
-        aria-describedby="overall-score-help"
-        aria-invalid={Boolean(error)}
-        className="mt-2 border-blue-200 bg-card"
-      />
-      <p
-        id="overall-score-help"
-        className={cn(
-          'mt-2 text-xs',
-          error ? 'font-semibold text-red-600' : 'text-muted-foreground'
+    <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-800 dark:bg-blue-950/30">
+      <p className="text-xs font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-300">
+        Computed Overall Score
+      </p>
+      <p className="mt-1 text-2xl font-black text-blue-950 dark:text-blue-100">
+        {displayScore}
+        {score !== null && (
+          <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
+            {' '}
+            / 100
+          </span>
         )}
-      >
-        {error ?? 'Whole numbers only, from 0 to 100.'}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Average of {scoredCount} scored{' '}
+        {scoredCount === 1 ? 'question' : 'questions'}. Unscored questions are
+        excluded.
       </p>
     </div>
   );
@@ -457,10 +536,10 @@ function ProfilePanel({ candidate }: { candidate: InterviewCandidate }) {
 
 export function InterviewCockpitClient({
   candidateId,
-  role,
+  currentUser,
 }: {
   candidateId: string;
-  role: CockpitRole;
+  currentUser: CockpitUser;
 }) {
   const [candidate, setCandidate] = useState<InterviewCandidate | null>(null);
   const candidateRef = useRef<InterviewCandidate | null>(null);
@@ -495,6 +574,42 @@ export function InterviewCockpitClient({
   }, [candidate]);
 
   useEffect(() => {
+    let active = true;
+    let requestInFlight = false;
+
+    const syncNotes = async () => {
+      if (requestInFlight || document.visibilityState !== 'visible') {
+        return;
+      }
+
+      requestInFlight = true;
+      try {
+        const collaborativeNotes =
+          await interviewCockpitRepository.getCollaborativeNotes(candidateId);
+        if (!active) return;
+        setCandidate((current) =>
+          current ? { ...current, collaborativeNotes } : current
+        );
+      } catch {
+        // Keep the last successful snapshot. The next interval retries without
+        // interrupting any local draft currently being typed.
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    const interval = window.setInterval(
+      () => void syncNotes(),
+      NOTES_SYNC_INTERVAL_MS
+    );
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [candidateId]);
+
+  useEffect(() => {
     if (!isResizing) return;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
@@ -516,7 +631,7 @@ export function InterviewCockpitClient({
     [saveStates]
   );
   const terminal = candidate?.status !== 'Pending';
-  const isDepartmentHead = role === 'Department Head';
+  const isDepartmentHead = currentUser.role === 'Department Head';
 
   const updateState = useCallback(
     (key: string, state: SaveState) =>
@@ -535,13 +650,20 @@ export function InterviewCockpitClient({
       candidateRef.current = optimistic;
       setCandidate(optimistic);
 
-      const savedAnswers = await interviewCockpitRepository.saveTemplateAnswers(
+      const result = await interviewCockpitRepository.saveTemplateAnswers(
         candidateId,
         nextAnswers
       );
-      setCandidate((latest) =>
-        latest ? { ...latest, evaluationAnswers: savedAnswers } : latest
-      );
+      setCandidate((latest) => {
+        if (!latest) return latest;
+        const updated = {
+          ...latest,
+          evaluationAnswers: result.answers,
+          score: result.overallScore,
+        };
+        candidateRef.current = updated;
+        return updated;
+      });
     },
     [candidateId]
   );
@@ -557,13 +679,20 @@ export function InterviewCockpitClient({
       candidateRef.current = optimistic;
       setCandidate(optimistic);
 
-      const savedAnswers = await interviewCockpitRepository.saveCustomAnswers(
+      const result = await interviewCockpitRepository.saveCustomAnswers(
         candidateId,
         nextAnswers
       );
-      setCandidate((latest) =>
-        latest ? { ...latest, adHocQuestions: savedAnswers } : latest
-      );
+      setCandidate((latest) => {
+        if (!latest) return latest;
+        const updated = {
+          ...latest,
+          adHocQuestions: result.answers,
+          score: result.overallScore,
+        };
+        candidateRef.current = updated;
+        return updated;
+      });
     },
     [candidateId]
   );
@@ -578,9 +707,12 @@ export function InterviewCockpitClient({
             candidateId,
             question
           );
-        setCandidate((current) =>
-          current ? { ...current, adHocQuestions } : current
-        );
+        setCandidate((current) => {
+          if (!current) return current;
+          const updated = { ...current, adHocQuestions };
+          candidateRef.current = updated;
+          return updated;
+        });
         updateState('custom-question', 'saved');
         setShowCustomComposer(false);
       } catch (cause) {
@@ -596,9 +728,22 @@ export function InterviewCockpitClient({
     [candidateId, updateState]
   );
 
-  const updateNotes = useCallback((notes: EvaluationNotes) => {
-    setCandidate((current) => (current ? { ...current, notes } : current));
-  }, []);
+  const updateCollaborativeNotes = useCallback(
+    (collaborativeNotes: CollaborativeNote[]) => {
+      setCandidate((current) =>
+        current ? { ...current, collaborativeNotes } : current
+      );
+    },
+    []
+  );
+
+  const evaluatedAnswers = useMemo(
+    () => [
+      ...(candidate?.evaluationAnswers ?? []),
+      ...(candidate?.adHocQuestions ?? []),
+    ],
+    [candidate?.adHocQuestions, candidate?.evaluationAnswers]
+  );
 
   const updateProfilePercent = useCallback((clientX: number) => {
     const bounds = splitContainerRef.current?.getBoundingClientRect();
@@ -612,11 +757,15 @@ export function InterviewCockpitClient({
     updateState('decision', 'saving');
     setActionError(null);
     try {
-      const status = await interviewCockpitRepository.setStatus(
+      const result = await interviewCockpitRepository.setStatus(
         candidate.id,
         decision
       );
-      setCandidate({ ...candidate, status, selectedDecision: decision });
+      setCandidate({
+        ...candidate,
+        status: result.status,
+        selectedDecision: result.decision,
+      });
       updateState('decision', 'saved');
       setDecision(null);
     } catch (cause) {
@@ -654,7 +803,7 @@ export function InterviewCockpitClient({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-            {role}
+            {currentUser.role}
           </span>
           {candidate.status !== 'Pending' && (
             <Round2StatusBadge status={candidate.status} />
@@ -804,9 +953,10 @@ export function InterviewCockpitClient({
                   <h3 className="mt-2 text-sm font-extrabold">
                     {answer.question}
                   </h3>
-                  <AutoSaveTextarea
+                  <EvaluationAnswerEditor
                     answer={answer}
                     disabled={terminal}
+                    scoringEnabled={candidate.isScoringEnabled}
                     onSaved={saveTemplateAnswer}
                     onSaveState={(state) => updateState(answer.id, state)}
                   />
@@ -818,6 +968,7 @@ export function InterviewCockpitClient({
                   key={`${candidate.id}:${answer.id}`}
                   answer={answer}
                   disabled={terminal}
+                  scoringEnabled={candidate.isScoringEnabled}
                   onSaved={saveCustomAnswer}
                   onSaveState={(state) => updateState(answer.id, state)}
                 />
@@ -844,17 +995,9 @@ export function InterviewCockpitClient({
             </button>
 
             {candidate.isScoringEnabled && (
-              <OverallScoreEditor
-                key={candidate.id}
-                candidateId={candidate.id}
-                initialScore={candidate.score}
-                disabled={terminal}
-                onSaved={(score) =>
-                  setCandidate((current) =>
-                    current ? { ...current, score } : current
-                  )
-                }
-                onSaveState={(state) => updateState('score', state)}
+              <OverallScoreSummary
+                score={candidate.score}
+                answers={evaluatedAnswers}
               />
             )}
           </div>
@@ -862,25 +1005,21 @@ export function InterviewCockpitClient({
           <div className="relative z-20 max-h-[52dvh] shrink-0 overflow-y-auto border-t border-border bg-card/95 p-3 shadow-[0_-10px_30px_rgba(15,23,42,0.10)] backdrop-blur sm:p-4 lg:max-h-[50%]">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                General Notes · Independent fields
+                Collaborative Notes · One note per interviewer
               </p>
               <span className="text-[10px] font-semibold text-muted-foreground">
                 Auto-save
               </span>
             </div>
-            <div className="mt-2 grid gap-3 sm:grid-cols-3">
-              {(['note1', 'note2', 'note3'] as const).map((noteKey) => (
-                <NoteFieldEditor
-                  key={`${candidate.id}:${noteKey}`}
-                  candidateId={candidate.id}
-                  noteKey={noteKey}
-                  initialValue={candidate.notes[noteKey]}
-                  disabled={terminal}
-                  onSaved={updateNotes}
-                  onSaveState={(state) => updateState(noteKey, state)}
-                />
-              ))}
-            </div>
+            <CollaborativeNotesPanel
+              key={`${candidate.id}:${currentUser.id}`}
+              candidateId={candidate.id}
+              currentUser={currentUser}
+              notes={candidate.collaborativeNotes}
+              disabled={terminal}
+              onSaved={updateCollaborativeNotes}
+              onSaveState={(state) => updateState('collaborative-note', state)}
+            />
 
             <div className="mt-3 border-t border-border pt-3">
               <div className="flex flex-wrap items-center justify-between gap-2">

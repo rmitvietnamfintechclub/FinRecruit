@@ -14,6 +14,11 @@ import type {
   Round2CandidateSummary,
 } from '@/lib/interview-cockpit/types';
 
+function formatOverallScore(score: number | null) {
+  if (score === null) return null;
+  return Number.isInteger(score) ? String(score) : score.toFixed(2);
+}
+
 export function Round2DashboardClient() {
   const [candidates, setCandidates] = useState<Round2CandidateSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +62,7 @@ export function Round2DashboardClient() {
   const commit = async () => {
     if (!pendingAction) return;
     try {
-      const status = await interviewCockpitRepository.setStatus(
+      const result = await interviewCockpitRepository.setStatus(
         pendingAction.candidate.id,
         pendingAction.status
       );
@@ -66,8 +71,8 @@ export function Round2DashboardClient() {
           item.id === pendingAction.candidate.id
             ? {
                 ...item,
-                status,
-                selectedDecision: pendingAction.status,
+                status: result.status,
+                selectedDecision: result.decision,
               }
             : item
         )
@@ -210,7 +215,9 @@ export function Round2DashboardClient() {
                       Overall score
                     </dt>
                     <dd className="mt-1 font-semibold">
-                      {candidate.score ?? 'Not scored'}
+                      {formatOverallScore(candidate.score)
+                        ? `${formatOverallScore(candidate.score)} / 100`
+                        : 'Not scored'}
                     </dd>
                   </div>
                 )}
@@ -267,7 +274,9 @@ export function Round2DashboardClient() {
                   </td>
                   {scoringEnabled && (
                     <td className="p-4 font-extrabold">
-                      {candidate.score ?? '—'}
+                      {formatOverallScore(candidate.score)
+                        ? `${formatOverallScore(candidate.score)} / 100`
+                        : '—'}
                     </td>
                   )}
                   <td className="p-4">

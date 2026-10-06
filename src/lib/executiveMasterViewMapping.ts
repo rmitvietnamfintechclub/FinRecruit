@@ -184,6 +184,9 @@ export function mapExecutiveDetailToHeadDetail(
       note2: String(rawRound2?.notes?.note2 ?? ''),
       note3: String(rawRound2?.notes?.note3 ?? ''),
     },
+    collaborativeNotes: Array.isArray(rawRound2?.collaborativeNotes)
+      ? rawRound2.collaborativeNotes
+      : [],
     score: typeof rawRound2?.score === 'number' ? rawRound2.score : null,
   };
 

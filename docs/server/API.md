@@ -36,6 +36,9 @@ This document defines the complete server contract for the Fin-Recruit internal 
 ### Authentication & Authorization
 - Authentication relies on a Cookie-based Session (`__Host-finrecruit_session` in production, `finrecruit_session` in development).  
 - Endpoints are strictly protected by RBAC middleware (`withRBAC`, `withActiveRBAC`).
+- Round 2 candidate reads and mutations additionally require the candidate's
+  current assigned `department` to match the authenticated Head/Member's
+  normalized department and require the candidate to have passed Round 1.
 
 ### Pagination
 *List endpoints use*:  
@@ -85,24 +88,60 @@ These APIs handle Executive Board slot generation, interviewer availability decl
 
 These APIs power the dedicated full-screen interview cockpit for Phase 2, supporting collaborative evaluation.
 
-| Method  | Endpoint                           | Access      | Description                                                                              | Phase / Story             | Process |
-| ------- | ---------------------------------- | ----------- | ---------------------------------------------------------------------------------------- | ------------------------- | ------- |
-| `GET`   | `/interviews/:id`                  | HEAD/MEMBER | Fetches candidate CV, R1 application, and R2 evaluation state for the split-view layout. | 2 (Story 3.1)             | DONE    |
-| `PATCH` | `/interviews/:id/notes`            | HEAD/MEMBER | Saves independent notes, template/custom responses, and optional Overall Score.          | 2 (Stories 3.3, 3.4, 5.1) | DONE    |
-| `POST`  | `/interviews/:id/ad-hoc-questions` | HEAD/MEMBER | Adds a candidate-specific question with an initially empty response.                     | 2 (Story 3.3)             | DONE    |
-| `PATCH` | `/interviews/:id/status`           | HEAD        | Saves or changes `Pending`, `Pass`, or `Fail`; the UI maps No Show to `Fail`.            | 2 (Story 3.5)             | DONE    |
+| Method  | Endpoint                           | Access      | Description                                                                                                            | Phase / Story             | Process |
+| ------- | ---------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------- |
+| `GET`   | `/interviews`                      | HEAD/MEMBER | Lists active-cohort, Round 1-passed candidates assigned to the caller's department, including status and decision.     | 2 (Story 3.1)             | DONE    |
+| `GET`   | `/interviews/:id`                  | HEAD/MEMBER | Fetches the assigned candidate, department template, answers/scores, notes, and Round 2 status/decision.               | 2 (Story 3.1)             | DONE    |
+| `GET`   | `/interviews/:id/notes`            | HEAD/MEMBER | Returns the latest author-aware collaborative note snapshot for near-real-time polling.                                | 2 (Story 3.4)             | DONE    |
+| `PATCH` | `/interviews/:id/notes`            | HEAD/MEMBER | Saves the caller's note or template/additional answers and per-question scores; returns server-computed Overall Score. | 2 (Stories 3.3, 3.4, 5.1) | DONE    |
+| `POST`  | `/interviews/:id/ad-hoc-questions` | HEAD/MEMBER | Adds a candidate-specific question with an initially empty response and score.                                         | 2 (Story 3.3)             | DONE    |
+| `PATCH` | `/interviews/:id/status`           | HEAD        | Saves a consistent `round2Status` + `round2Decision` pair; No Show uses status Fail and decision No Show.              | 2 (Story 3.5)             | DONE    |
 
-### `PATCH` `/interviews/:id/notes` Payload Example
-
-To prevent data loss when evaluating concurrently, updates must target specific note fields using MongoDB $set logic:
+### Collaborative note payload
+The caller supplies only their own content. Author, role, and timestamp are
+derived from the active server session:
 
 ```json
 {
-  "$set": {
-    "notes.note1": "Candidate showed excellent communication skills..."
-  }
+  "collaborativeNote": "Candidate showed excellent communication skills..."
 }
 ```
+
+The response contains the full `collaborativeNotes` snapshot. `GET` on the same
+route supports the frontend's notes-only two-second background refresh.
+
+### Per-question scoring payload
+Template and ad-hoc answer items accept `score: null` or a whole number from
+`0` through `100`. Overall Score cannot be written directly; the server averages
+only scored template/ad-hoc questions and returns the computed result.
+
+```json
+{
+  "templateAnswers": [
+    {
+      "question": "Tell us about your experience.",
+      "answer": "...",
+      "score": 75
+    },
+    {
+      "question": "Why this department?",
+      "answer": "...",
+      "score": null
+    }
+  ]
+}
+```
+
+### Final decision payload
+```json
+{
+  "round2Status": "Fail",
+  "round2Decision": "No Show"
+}
+```
+
+Allowed decision/status pairs are `Pending/null`, `Pass/Pass`, `Fail/Fail`, and
+`Fail/No Show`.
 
 ## 4. Executive Board APIs
 **Base Path**: `/api/executive`
@@ -118,7 +157,6 @@ Provides master views, aggregate statistics, and system exports.
 | `GET`  | `/executive/export/round-2` | EXEC   | Downloads an Excel (.xlsx) file containing finalized R2 Pass/Fail lists.    | 2 (Story 4.2)     | DONE    |
 
 ## 5. System Config & Logs APIs
-
 **Base Path**: `/api/executive`
 
 Handles global recruitment cycles, generation intake, and audit logging.

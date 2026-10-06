@@ -68,7 +68,7 @@ export async function middleware(request: NextRequest) {
 
  
     // Department Head and Member Routing (Epic 1.3 & 3)
-    if (pathname.startsWith('/HeadDashboard') || pathname.startsWith('/interviews')) {
+    if (pathname.startsWith('/HeadDashboard') || pathname.startsWith('/InterviewCockpit') || pathname.startsWith('/interviews')) {
         if (!isLoggedIn) return safeRedirect('/loginPage');
         
         if (role !== 'Department Head' && role !== 'Member') {
