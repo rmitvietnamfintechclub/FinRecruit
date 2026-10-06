@@ -44,8 +44,12 @@ function sanitizeAnswers(value: unknown): ICustomAnswer[] | null {
   }));
 }
 
-function serializeCollaborativeNotes(notes: ICollaborativeNote[] | undefined) {
+function serializeOwnGeneralNote(
+  notes: ICollaborativeNote[] | undefined,
+  authorId: string
+) {
   return [...(notes ?? [])]
+    .filter((note) => String(note.authorId) === authorId)
     .map((note) => ({
       authorId: String(note.authorId),
       authorEmail: String(note.authorEmail),
@@ -82,8 +86,19 @@ function invalidCandidateIdResponse() {
   );
 }
 
+function headOnlyGeneralNotesResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      code: 'HEAD_ONLY_GENERAL_NOTES',
+      message: 'General Notes are available only to the Department Head.',
+    },
+    { status: 403 }
+  );
+}
+
 export const GET = withRBAC<InterviewNotesRouteContext>(
-  ['Department Head', 'Member'],
+  'Department Head',
   async (_req: NextRequest, { params, session }) => {
     try {
       await dbConnect();
@@ -119,10 +134,11 @@ export const GET = withRBAC<InterviewNotesRouteContext>(
 
       return NextResponse.json({
         success: true,
-        message: 'Collaborative notes retrieved successfully.',
+        message: 'General Notes retrieved successfully.',
         data: {
-          collaborativeNotes: serializeCollaborativeNotes(
-            candidate.round2Evaluation?.collaborativeNotes
+          collaborativeNotes: serializeOwnGeneralNote(
+            candidate.round2Evaluation?.collaborativeNotes,
+            session.user.id
           ),
         },
       });
@@ -163,6 +179,26 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
         department: assignedDepartment,
         status: 'Pass',
       };
+      const legacySetKeys =
+        body.$set && typeof body.$set === 'object'
+          ? Object.keys(body.$set as Record<string, unknown>)
+          : [];
+      const hasLegacyGeneralNoteMutation =
+        body.note1 !== undefined ||
+        body.note2 !== undefined ||
+        body.note3 !== undefined ||
+        legacySetKeys.some(
+          (key) =>
+            key.startsWith('notes.') ||
+            key.startsWith('round2Evaluation.notes.')
+        );
+
+      if (
+        session.user.role !== 'Department Head' &&
+        (body.collaborativeNote !== undefined || hasLegacyGeneralNoteMutation)
+      ) {
+        return headOnlyGeneralNotesResponse();
+      }
 
       if (body.collaborativeNote !== undefined) {
         if (typeof body.collaborativeNote !== 'string') {
@@ -182,7 +218,7 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
           session.user.name?.trim() ||
           session.user.email.split('@')[0] ||
           session.user.email;
-        const role = session.user.role as 'Department Head' | 'Member';
+        const role = 'Department Head' as const;
         const updatedAt = new Date();
 
         let updatedCandidate = await Candidate.findOneAndUpdate(
@@ -276,10 +312,11 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
 
         return NextResponse.json({
           success: true,
-          message: 'Collaborative note saved successfully.',
+          message: 'General Notes saved successfully.',
           data: {
-            collaborativeNotes: serializeCollaborativeNotes(
-              updatedCandidate.round2Evaluation?.collaborativeNotes
+            collaborativeNotes: serializeOwnGeneralNote(
+              updatedCandidate.round2Evaluation?.collaborativeNotes,
+              session.user.id
             ),
           },
         });
@@ -418,10 +455,17 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
         success: true,
         message: 'Evaluation updated successfully.',
         data: {
-          notes: updatedCandidate.round2Evaluation?.notes,
-          collaborativeNotes: serializeCollaborativeNotes(
-            updatedCandidate.round2Evaluation?.collaborativeNotes
-          ),
+          notes:
+            session.user.role === 'Department Head'
+              ? updatedCandidate.round2Evaluation?.notes
+              : { note1: '', note2: '', note3: '' },
+          collaborativeNotes:
+            session.user.role === 'Department Head'
+              ? serializeOwnGeneralNote(
+                  updatedCandidate.round2Evaluation?.collaborativeNotes,
+                  session.user.id
+                )
+              : [],
           score: updatedCandidate.round2Evaluation?.score ?? null,
           templateAnswers:
             updatedCandidate.round2Evaluation?.templateAnswers ?? [],

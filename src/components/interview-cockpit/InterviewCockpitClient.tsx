@@ -7,7 +7,6 @@ import {
   GripVertical,
   Lock,
   Plus,
-  Users,
   UserRound,
 } from 'lucide-react';
 import { AppNotice } from '@/components/feedback/AppNotice';
@@ -33,7 +32,6 @@ import { cn } from '@/lib/utils';
 const MIN_PROFILE_PERCENT = 30;
 const MAX_PROFILE_PERCENT = 70;
 const DEFAULT_PROFILE_PERCENT = 40;
-const NOTES_SYNC_INTERVAL_MS = 2000;
 
 function clampProfilePercent(value: number) {
   return Math.min(MAX_PROFILE_PERCENT, Math.max(MIN_PROFILE_PERCENT, value));
@@ -138,33 +136,22 @@ function EvaluationAnswerEditor({
   );
 }
 
-function formatNoteTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('en', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
-
-function CollaborativeNotesPanel({
+function GeneralNoteEditor({
   candidateId,
-  currentUser,
+  currentUserId,
   notes,
   disabled,
   onSaved,
   onSaveState,
 }: {
   candidateId: string;
-  currentUser: CockpitUser;
+  currentUserId: string;
   notes: CollaborativeNote[];
   disabled: boolean;
   onSaved: (notes: CollaborativeNote[]) => void;
   onSaveState: (state: SaveState) => void;
 }) {
-  const ownNote = notes.find((note) => note.authorId === currentUser.id);
+  const ownNote = notes.find((note) => note.authorId === currentUserId);
   const [value, setValue] = useState(ownNote?.content ?? '');
   const onSaveStateRef = useRef(onSaveState);
 
@@ -186,79 +173,25 @@ function CollaborativeNotesPanel({
 
   useEffect(() => onSaveStateRef.current(state), [state]);
 
-  const teammateNotes = notes.filter(
-    (note) => note.authorId !== currentUser.id && note.content.trim()
-  );
-
   return (
-    <div className="mt-2 grid gap-3">
-      <div className="rounded-xl border border-border bg-background/80 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-xs font-extrabold">
-              {currentUser.name}{' '}
-              <span className="font-semibold text-muted-foreground">
-                ({currentUser.role})
-              </span>
-            </p>
-            <p className="text-[10px] text-muted-foreground">Your note</p>
-          </div>
-          <span className="text-[10px] font-semibold text-muted-foreground">
-            {state === 'saving'
-              ? 'Saving…'
-              : state === 'error'
-                ? 'Save failed'
-                : 'All changes saved'}
-          </span>
-        </div>
-        <Textarea
-          id="collaborative-note"
-          disabled={disabled}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="Record your interview insight…"
-          className="mt-2 min-h-16 resize-none disabled:bg-muted/40"
-        />
+    <div className="mt-2 rounded-xl border border-border bg-background/80 p-3">
+      <div className="flex justify-end">
+        <span className="text-[10px] font-semibold text-muted-foreground">
+          {state === 'saving'
+            ? 'Saving…'
+            : state === 'error'
+              ? 'Save failed'
+              : 'All changes saved'}
+        </span>
       </div>
-
-      <div>
-        <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
-          <Users className="h-3.5 w-3.5" />
-          Team insights
-          <span className="normal-case tracking-normal">
-            · syncs every 2 seconds
-          </span>
-        </div>
-        {teammateNotes.length === 0 ? (
-          <p className="mt-2 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
-            No notes from other interviewers yet.
-          </p>
-        ) : (
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {teammateNotes.map((note) => (
-              <article
-                key={note.authorId}
-                className="rounded-xl border border-border bg-background/80 p-3"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-extrabold">{note.authorName}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {note.role}
-                    </p>
-                  </div>
-                  <time className="text-[10px] text-muted-foreground">
-                    {formatNoteTime(note.updatedAt)}
-                  </time>
-                </div>
-                <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed">
-                  {note.content}
-                </p>
-              </article>
-            ))}
-          </div>
-        )}
-      </div>
+      <Textarea
+        id="general-note"
+        disabled={disabled}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Add any additional observations…"
+        className="mt-2 min-h-20 resize-none disabled:bg-muted/40"
+      />
     </div>
   );
 }
@@ -572,42 +505,6 @@ export function InterviewCockpitClient({
   useEffect(() => {
     candidateRef.current = candidate;
   }, [candidate]);
-
-  useEffect(() => {
-    let active = true;
-    let requestInFlight = false;
-
-    const syncNotes = async () => {
-      if (requestInFlight || document.visibilityState !== 'visible') {
-        return;
-      }
-
-      requestInFlight = true;
-      try {
-        const collaborativeNotes =
-          await interviewCockpitRepository.getCollaborativeNotes(candidateId);
-        if (!active) return;
-        setCandidate((current) =>
-          current ? { ...current, collaborativeNotes } : current
-        );
-      } catch {
-        // Keep the last successful snapshot. The next interval retries without
-        // interrupting any local draft currently being typed.
-      } finally {
-        requestInFlight = false;
-      }
-    };
-
-    const interval = window.setInterval(
-      () => void syncNotes(),
-      NOTES_SYNC_INTERVAL_MS
-    );
-
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [candidateId]);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -1002,53 +899,45 @@ export function InterviewCockpitClient({
             )}
           </div>
 
-          <div className="relative z-20 max-h-[52dvh] shrink-0 overflow-y-auto border-t border-border bg-card/95 p-3 shadow-[0_-10px_30px_rgba(15,23,42,0.10)] backdrop-blur sm:p-4 lg:max-h-[50%]">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                Collaborative Notes · One note per interviewer
-              </p>
-              <span className="text-[10px] font-semibold text-muted-foreground">
-                Auto-save
-              </span>
-            </div>
-            <CollaborativeNotesPanel
-              key={`${candidate.id}:${currentUser.id}`}
-              candidateId={candidate.id}
-              currentUser={currentUser}
-              notes={candidate.collaborativeNotes}
-              disabled={terminal}
-              onSaved={updateCollaborativeNotes}
-              onSaveState={(state) => updateState('collaborative-note', state)}
-            />
-
-            <div className="mt-3 border-t border-border pt-3">
+          {isDepartmentHead && (
+            <div className="relative z-20 max-h-[52dvh] shrink-0 overflow-y-auto border-t border-border bg-card/95 p-3 shadow-[0_-10px_30px_rgba(15,23,42,0.10)] backdrop-blur sm:p-4 lg:max-h-[50%]">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                  Final decision · Department Head only
+                  General Notes
                 </p>
-                {isDepartmentHead ? (
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                    Available to your account
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-extrabold uppercase text-muted-foreground">
-                    Read-only for Member
-                  </span>
-                )}
+                <span className="text-[10px] font-semibold text-muted-foreground">
+                  Auto-save
+                </span>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                Choose Pass, Fail or No Show. No Show is recorded as Fail. An
-                existing decision can be changed, and every change requires
-                confirmation.
-              </p>
-              <DecisionBar
-                value={candidate.selectedDecision}
-                disabled={!isDepartmentHead}
-                compact
-                onChange={setDecision}
+              <GeneralNoteEditor
+                key={`${candidate.id}:${currentUser.id}`}
+                candidateId={candidate.id}
+                currentUserId={currentUser.id}
+                notes={candidate.collaborativeNotes}
+                disabled={terminal}
+                onSaved={updateCollaborativeNotes}
+                onSaveState={(state) =>
+                  updateState('collaborative-note', state)
+                }
               />
+
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
+                  Final Decision
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                  Choose Pass, Fail or No Show. No Show is recorded as Fail. An
+                  existing decision can be changed, and every change requires
+                  confirmation.
+                </p>
+                <DecisionBar
+                  value={candidate.selectedDecision}
+                  compact
+                  onChange={setDecision}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </section>
       </div>
 

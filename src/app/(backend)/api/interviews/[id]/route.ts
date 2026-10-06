@@ -10,7 +10,7 @@ import {
   calculateOverallScore,
   reconcileTemplateAnswers,
 } from '@/app/(backend)/libs/round2Evaluation';
-import type { ICustomAnswer } from '@/app/(backend)/types';
+import type { ICollaborativeNote, ICustomAnswer } from '@/app/(backend)/types';
 
 type InterviewRouteContext = {
   params: Promise<{ id: string }>;
@@ -93,6 +93,13 @@ export const GET = withRBAC<InterviewRouteContext>(
         templateAnswers,
         adHocQuestions
       );
+      const isDepartmentHead = session.user.role === 'Department Head';
+      const ownGeneralNotes = isDepartmentHead
+        ? (candidate.round2Evaluation?.collaborativeNotes || []).filter(
+            (note: ICollaborativeNote) =>
+              String(note.authorId) === session.user.id
+          )
+        : [];
 
       const payload = {
         id: candidate.id,
@@ -112,13 +119,14 @@ export const GET = withRBAC<InterviewRouteContext>(
           isScoringEnabled,
           templateAnswers,
           adHocQuestions,
-          notes: candidate.round2Evaluation?.notes || {
-            note1: '',
-            note2: '',
-            note3: '',
-          },
-          collaborativeNotes:
-            candidate.round2Evaluation?.collaborativeNotes || [],
+          notes: isDepartmentHead
+            ? candidate.round2Evaluation?.notes || {
+                note1: '',
+                note2: '',
+                note3: '',
+              }
+            : { note1: '', note2: '', note3: '' },
+          collaborativeNotes: ownGeneralNotes,
           score: overallScore,
         },
       };
