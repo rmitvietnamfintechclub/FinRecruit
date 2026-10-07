@@ -73,3 +73,49 @@ export const POST = withRBAC(
     });
   }
 );
+
+export const PATCH = withRBAC(
+  'Department Head',
+  async (req: NextRequest, { session }: { session: ActiveAppSession }) => {
+    const assignedDepartment = normalizeHeadDepartment(
+      session.user.department
+    );
+
+    if (!assignedDepartment) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid department assignment.',
+        },
+        { status: 403 }
+      );
+    }
+
+    await dbConnect();
+
+    const cfg = await getOrCreateGlobalConfig();
+
+    const deptState = cfg.departmentStates.find(
+      (ds) => ds.department === assignedDepartment
+    );
+
+    if (!deptState) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Department state not found.',
+        },
+        { status: 404 }
+      );
+    }
+
+    deptState.isRound2Locked = false;
+
+    await cfg.save();
+
+    return NextResponse.json({
+      success: true,
+      message: 'Round 2 has been successfully unlocked.',
+    });
+  }
+);

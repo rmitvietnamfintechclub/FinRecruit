@@ -119,12 +119,6 @@ export default function HeadDashboardPage() {
   const handleLockRound2 = async () => {
     if (statsDisplay.pending > 0 || isLockingRound2) return;
 
-    const confirmed = window.confirm(
-      'Are you sure you want to lock Round 2? You will not be able to modify Round 2 evaluations after this.'
-    );
-
-    if (!confirmed) return;
-
     try {
       setIsLockingRound2(true);
       setLockError(null);
@@ -134,6 +128,7 @@ export default function HeadDashboardPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
 
       const data = await res.json();
@@ -143,9 +138,42 @@ export default function HeadDashboardPage() {
       }
 
       setRound2Locked(true);
+      setRound2ConfirmAction(null);
     } catch (error) {
       setLockError(
         error instanceof Error ? error.message : 'Failed to lock Round 2.'
+      );
+    } finally {
+      setIsLockingRound2(false);
+    }
+  };
+
+  const handleUnlockRound2 = async () => {
+    if (isLockingRound2) return;
+
+    try {
+      setIsLockingRound2(true);
+      setLockError(null);
+
+      const res = await fetch('/api/head-dashboard/lock-round-2', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to unlock Round 2.');
+      }
+
+      setRound2Locked(false);
+      setRound2ConfirmAction(null);
+    } catch (error) {
+      setLockError(
+        error instanceof Error ? error.message : 'Failed to unlock Round 2.'
       );
     } finally {
       setIsLockingRound2(false);
@@ -394,6 +422,12 @@ export default function HeadDashboardPage() {
         </AppNotice>
       ) : null}
 
+      {lockError ? (
+        <AppNotice variant="error" onDismiss={() => setLockError(null)}>
+          {lockError}
+        </AppNotice>
+      ) : null}
+
       {patchNotice ? (
         <AppNotice variant="error" onDismiss={() => setPatchNotice(null)}>
           {patchNotice}
@@ -519,9 +553,11 @@ export default function HeadDashboardPage() {
               Round 2 evaluation
             </p>
             <h2 className="mt-1 text-xl font-black tracking-tight">
-              {statsDisplay.pending === 0
-                ? `Complete — ${statsDisplay.passed + statsDisplay.failed} evaluated`
-                : `In progress — ${statsDisplay.passed + statsDisplay.failed} of ${statsDisplay.total} evaluated`}
+              {round2Locked
+                ? `Locked — ${statsDisplay.passed + statsDisplay.failed} evaluated`
+                : statsDisplay.pending === 0
+                  ? `Complete — ${statsDisplay.passed + statsDisplay.failed} evaluated`
+                  : `In progress — ${statsDisplay.passed + statsDisplay.failed} of ${statsDisplay.total} evaluated`}
             </h2>
             <div className="mt-2 h-1.5 w-56 overflow-hidden rounded-full bg-muted">
               <div
@@ -534,17 +570,30 @@ export default function HeadDashboardPage() {
           </div>
           <button
             type="button"
-            onClick={handleLockRound2}
+            onClick={() =>
+              setRound2ConfirmAction(round2Locked ? 'unlock' : 'lock')
+            }
             disabled={
-              statsDisplay.pending > 0 || isLockingRound2 || round2Locked
+              isLockingRound2 || (!round2Locked && statsDisplay.pending > 0)
             }
             className="rounded-lg bg-muted px-4 py-2 text-xs font-bold text-muted-foreground disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isLockingRound2
-              ? 'Locking...'
-              : round2Locked
-                ? 'Round 2 Locked'
-                : 'Confirm & Lock Round 2'}
+            {isLockingRound2 ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin mr-2" />
+                {round2Locked ? 'Unlocking...' : 'Locking...'}
+              </>
+            ) : round2Locked ? (
+              <>
+                <i className="fa-solid fa-lock-open mr-2" />
+                Unlock Round 2
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-lock mr-2" />
+                Confirm & Lock Round 2
+              </>
+            )}
           </button>
         </div>
         {statsDisplay.pending > 0 ? (
@@ -555,6 +604,29 @@ export default function HeadDashboardPage() {
           </p>
         ) : null}
       </section>
+
+      <ConfirmDialog
+        open={round2ConfirmAction !== null}
+        title={
+          round2ConfirmAction === 'unlock' ? 'Unlock Round 2?' : 'Lock Round 2?'
+        }
+        variant={round2ConfirmAction === 'unlock' ? 'default' : 'destructive'}
+        description={
+          round2ConfirmAction === 'unlock'
+            ? 'Are you sure you want to unlock Round 2? This will allow Round 2 evaluations to be modified again.'
+            : 'Are you sure you want to lock Round 2? All Round 2 evaluations will be finalized. You can unlock it later if needed.'
+        }
+        confirmLabel={
+          round2ConfirmAction === 'unlock' ? 'Unlock Round 2' : 'Lock Round 2'
+        }
+        onConfirm={() =>
+          void (round2ConfirmAction === 'unlock'
+            ? handleUnlockRound2()
+            : handleLockRound2())
+        }
+        onCancel={() => setRound2ConfirmAction(null)}
+        loading={isLockingRound2}
+      />
 
       <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="bg-muted/40 -mx-1 flex w-full max-w-full items-center gap-1.5 overflow-x-auto rounded-xl p-1.5 sm:mx-0 sm:w-fit sm:gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
