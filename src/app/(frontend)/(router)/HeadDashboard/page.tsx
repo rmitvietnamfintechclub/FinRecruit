@@ -108,6 +108,49 @@ export default function HeadDashboardPage() {
   } | null>(null);
   const [newCandidateNotice, setNewCandidateNotice] = useState(false);
   const prevListTotalRef = useRef<number | null>(null);
+  const [isLockingRound2, setIsLockingRound2] = useState(false);
+  const [round2Locked, setRound2Locked] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+
+  const [round2ConfirmAction, setRound2ConfirmAction] = useState<
+    'lock' | 'unlock' | null
+  >(null);
+
+  const handleLockRound2 = async () => {
+    if (statsDisplay.pending > 0 || isLockingRound2) return;
+
+    const confirmed = window.confirm(
+      'Are you sure you want to lock Round 2? You will not be able to modify Round 2 evaluations after this.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsLockingRound2(true);
+      setLockError(null);
+
+      const res = await fetch('/api/head-dashboard/lock-round-2', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to lock Round 2.');
+      }
+
+      setRound2Locked(true);
+    } catch (error) {
+      setLockError(
+        error instanceof Error ? error.message : 'Failed to lock Round 2.'
+      );
+    } finally {
+      setIsLockingRound2(false);
+    }
+  };
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -491,10 +534,17 @@ export default function HeadDashboardPage() {
           </div>
           <button
             type="button"
-            disabled={statsDisplay.pending > 0}
+            onClick={handleLockRound2}
+            disabled={
+              statsDisplay.pending > 0 || isLockingRound2 || round2Locked
+            }
             className="rounded-lg bg-muted px-4 py-2 text-xs font-bold text-muted-foreground disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Confirm &amp; Lock Round 2
+            {isLockingRound2
+              ? 'Locking...'
+              : round2Locked
+                ? 'Round 2 Locked'
+                : 'Confirm & Lock Round 2'}
           </button>
         </div>
         {statsDisplay.pending > 0 ? (
