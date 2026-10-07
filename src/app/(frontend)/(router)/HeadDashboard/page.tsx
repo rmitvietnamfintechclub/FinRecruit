@@ -115,6 +115,8 @@ export default function HeadDashboardPage() {
   const [round2ConfirmAction, setRound2ConfirmAction] = useState<
     'lock' | 'unlock' | null
   >(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const fetchRound2LockStatus = useCallback(async () => {
     try {
@@ -195,6 +197,55 @@ export default function HeadDashboardPage() {
       );
     } finally {
       setIsLockingRound2(false);
+    }
+  };
+
+  const handleExportExcel = async (round: 1 | 2, status: 'Pass' | 'Fail') => {
+    if (exporting) return;
+
+    try {
+      setExporting(true);
+      setExportOpen(false);
+
+      const endpoint =
+        round === 1
+          ? `/api/head-dashboard/export/round-1?status=${status}`
+          : `/api/head-dashboard/export/round-2?status=${status}`;
+
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+
+        throw new Error(data?.message || 'Failed to export Excel file.');
+      }
+
+      const blob = await res.blob();
+
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+
+      link.download =
+        round === 1
+          ? `Round_1_${status}_List_Export.xlsx`
+          : `Round_2_Final_${status}_Export.xlsx`;
+
+      document.body.appendChild(link);
+      link.click();
+
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Failed to export Excel file.'
+      );
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -669,14 +720,92 @@ export default function HeadDashboardPage() {
         </div>
 
         <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:items-center lg:w-auto">
-          <button
-            type="button"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted"
-          >
-            <i className="fa-solid fa-file-excel text-emerald-600" />
-            Export Excel
-            <i className="fa-solid fa-chevron-down text-xs text-muted-foreground" />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setExportOpen((prev) => !prev)}
+              disabled={exporting}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {exporting ? (
+                <i className="fa-solid fa-spinner fa-spin text-emerald-600" />
+              ) : (
+                <i className="fa-solid fa-file-excel text-emerald-600" />
+              )}
+
+              {exporting ? 'Exporting...' : 'Export Excel'}
+
+              {!exporting && (
+                <i
+                  className={`fa-solid fa-chevron-down ml-1 text-xs text-muted-foreground transition-transform ${
+                    exportOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              )}
+            </button>
+
+            {exportOpen && (
+              <div className="bg-card border-border absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border p-1.5 shadow-lg">
+                <div className="px-3 py-2">
+                  <p className="text-muted-foreground text-[10px] font-black uppercase tracking-wider">
+                    Export Excel
+                  </p>
+                </div>
+
+                {/* Round 1 */}
+                <div className="px-1 pb-1">
+                  <p className="text-muted-foreground px-2 py-1 text-xs font-bold">
+                    Round 1
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleExportExcel(1, 'Pass')}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
+                  >
+                    <i className="fa-solid fa-check text-green-600" />
+                    Passed candidates
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleExportExcel(1, 'Fail')}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
+                  >
+                    <i className="fa-solid fa-xmark text-red-600" />
+                    Failed candidates
+                  </button>
+                </div>
+
+                <div className="border-border border-t" />
+
+                {/* Round 2 */}
+                <div className="px-1 pt-1">
+                  <p className="text-muted-foreground px-2 py-1 text-xs font-bold">
+                    Round 2
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleExportExcel(2, 'Pass')}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
+                  >
+                    <i className="fa-solid fa-check text-green-600" />
+                    Passed candidates
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleExportExcel(2, 'Fail')}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
+                  >
+                    <i className="fa-solid fa-xmark text-red-600" />
+                    Failed candidates
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="relative w-full sm:w-72">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
               <i className="fa-solid fa-magnifying-glass text-muted-foreground" />
