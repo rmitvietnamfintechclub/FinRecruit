@@ -23,6 +23,7 @@ const HEAD_NAVIGATION_ITEMS = [
   ['/HeadDashboard', 'Application Form (Round 1)'],
   ['/HeadDashboard/interviews', 'Interview (Round 2)'],
   ['/HeadDashboard/interview-settings', 'Question Template'],
+  ['/HeadDashboard/ranking', 'Ranking'],
 ] as const;
 
 export function HeadDashboardShell({
