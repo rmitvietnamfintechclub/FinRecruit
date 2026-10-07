@@ -1,7 +1,15 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import CandidateTable, { type CandidateViewMode } from '@/components/ui/CandidateTable';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import CandidateTable, {
+  type CandidateViewMode,
+} from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import {
   patchCandidateStatus,
@@ -59,7 +67,9 @@ type ListApiResponse = {
 };
 
 export default function HeadDashboardPage() {
-  const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>([]);
+  const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>(
+    []
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -70,7 +80,9 @@ export default function HeadDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [listEmptyHint, setListEmptyHint] = useState<string | null>(null);
   const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
-  const [assignedDepartment, setAssignedDepartment] = useState<string | null>(null);
+  const [assignedDepartment, setAssignedDepartment] = useState<string | null>(
+    null
+  );
 
   const [stats, setStats] = useState({
     total: 0,
@@ -187,7 +199,7 @@ export default function HeadDashboardPage() {
 
         setListEmptyHint(
           rows.length === 0 && !options?.isPoll
-            ? json.meta?.emptyState ?? null
+            ? (json.meta?.emptyState ?? null)
             : null
         );
         if (json.meta?.activeCohort) {
@@ -198,7 +210,9 @@ export default function HeadDashboardPage() {
         }
       } catch (e) {
         if (!options?.isPoll) {
-          setError(e instanceof Error ? e.message : 'Failed to load candidates.');
+          setError(
+            e instanceof Error ? e.message : 'Failed to load candidates.'
+          );
           if (!append) setCandidates([]);
         }
       } finally {
@@ -228,7 +242,10 @@ export default function HeadDashboardPage() {
     enabled: !loading && !loadingMore && !patching,
   });
 
-  const handleUpdateStatusRequest = (id: string, newStatus: DashboardStatus) => {
+  const handleUpdateStatusRequest = (
+    id: string,
+    newStatus: DashboardStatus
+  ) => {
     const candidate = candidates.find((c) => c.id === id);
     if (candidate) {
       setConfirmAction({ id, name: candidate.fullName, newStatus });
@@ -361,28 +378,25 @@ export default function HeadDashboardPage() {
       />
 
       <nav
-        className="bg-card border-border grid grid-cols-3 overflow-hidden rounded-xl border shadow-sm"
+        className="bg-card border-border grid grid-cols-2 overflow-hidden rounded-xl border shadow-sm"
         aria-label="Department head dashboard sections"
       >
         {[
           { label: 'Candidate Evaluation', href: '/HeadDashboard' },
           { label: 'Interview Schedule', href: '#interview-schedule' },
-          { label: 'Question Template', href: '/HeadDashboard/question-template' },
-        ].map(
-          (item, index) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`flex items-center justify-center border-b-2 px-2 py-3 text-center text-xs font-bold transition-colors sm:px-4 sm:text-sm ${
-                index === 0
-                  ? 'border-purple-600 text-purple-600'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {item.label}
-            </Link>
-          )
-        )}
+        ].map((item, index) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className={`flex items-center justify-center border-b-2 px-2 py-3 text-center text-xs font-bold transition-colors sm:px-4 sm:text-sm ${
+              index === 0
+                ? 'border-purple-600 text-purple-600'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
       </nav>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
@@ -579,10 +593,11 @@ export default function HeadDashboardPage() {
             <div className="bg-muted/50 mb-5 flex h-20 w-20 items-center justify-center rounded-full">
               <i className="fa-solid fa-folder-open text-muted-foreground text-3xl" />
             </div>
-            <p className="text-foreground text-xl font-black">No candidates found</p>
+            <p className="text-foreground text-xl font-black">
+              No candidates found
+            </p>
             <p className="text-muted-foreground mt-2 text-sm font-medium">
-              {listEmptyHint ??
-                'Try adjusting your search or filter settings.'}
+              {listEmptyHint ?? 'Try adjusting your search or filter settings.'}
             </p>
           </div>
         )}
