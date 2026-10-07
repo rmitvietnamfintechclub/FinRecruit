@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
 type RouteParams = { id: string };
 
 type RouteContext = {
-  params: Promise<RouteParams> | RouteParams;
+  params: Promise<RouteParams>;
 };
 
 interface SuccessResponse {
@@ -53,7 +53,7 @@ export const GET = withRBAC(
     context: RouteContext & { session: ActiveAppSession }
   ): Promise<Response> => {
     try {
-      const { id } = await Promise.resolve(context.params);
+      const { id } = await context.params;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
         const body: ErrorResponse = {

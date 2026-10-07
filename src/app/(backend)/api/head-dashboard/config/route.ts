@@ -4,9 +4,59 @@ import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
+import Candidate from '@/app/(backend)/models/Candidate';
 import type { ActiveAppSession } from '@/app/(backend)/libs/session';
+import {
+  calculateOverallScore,
+  reconcileTemplateAnswers,
+} from '@/app/(backend)/libs/round2Evaluation';
+import type { ICustomAnswer } from '@/app/(backend)/types';
 
 export const runtime = 'nodejs';
+
+export const GET = withRBAC(
+  'Department Head',
+  async (_req: NextRequest, { session }: { session: ActiveAppSession }) => {
+    const assignedDepartment = normalizeHeadDepartment(session.user.department);
+
+    if (!assignedDepartment) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid department assignment.' },
+        { status: 403 }
+      );
+    }
+
+    try {
+      await dbConnect();
+      const active = await getActiveConfig();
+      const config = await DepartmentConfig.findOne({
+        department: assignedDepartment,
+        generation: active.currentGeneration,
+        semester: active.currentSemester,
+      })
+        .lean()
+        .exec();
+
+      return NextResponse.json({
+        success: true,
+        message: 'Department configuration retrieved successfully.',
+        data: config ?? {
+          department: assignedDepartment,
+          generation: active.currentGeneration,
+          semester: active.currentSemester,
+          interviewQuestions: [],
+          isScoringEnabled: false,
+        },
+      });
+    } catch (error) {
+      console.error('[config/GET] Error:', error);
+      return NextResponse.json(
+        { success: false, message: 'Could not retrieve configuration.' },
+        { status: 500 }
+      );
+    }
+  }
+);
 
 export const PATCH = withRBAC(
   'Department Head',
@@ -38,6 +88,12 @@ export const PATCH = withRBAC(
 
       // Configuration is scoped to the current active recruitment cycle
       const active = await getActiveConfig();
+      const normalizedQuestions = interviewQuestions
+        ? interviewQuestions
+            .map(String)
+            .map((question: string) => question.trim())
+            .filter(Boolean)
+        : [];
 
       // Upsert the configuration for this department/cohort combo
       const config = await DepartmentConfig.findOneAndUpdate(
@@ -48,19 +104,56 @@ export const PATCH = withRBAC(
         },
         {
           $set: {
-            interviewQuestions: interviewQuestions
-              ? interviewQuestions
-                  .map(String)
-                  .map((q: string) => q.trim())
-                  .filter(Boolean)
-              : [],
-            isScoringEnabled: Boolean(isScoringEnabled) ?? false, // Default to false if not provided
+            interviewQuestions: normalizedQuestions,
+            isScoringEnabled: Boolean(isScoringEnabled),
           },
         },
         { new: true, upsert: true }
       )
         .lean()
         .exec();
+
+      if (interviewQuestions !== undefined) {
+        const candidates = await Candidate.find({
+          department: assignedDepartment,
+          generation: active.currentGeneration,
+          semester: active.currentSemester,
+        })
+          .select(
+            '_id round2Evaluation.templateAnswers round2Evaluation.adHocQuestions'
+          )
+          .lean()
+          .exec();
+
+        const updates = candidates.map((candidate) => {
+          const templateAnswers = reconcileTemplateAnswers(
+            normalizedQuestions,
+            (candidate.round2Evaluation?.templateAnswers ||
+              []) as ICustomAnswer[]
+          );
+          const adHocQuestions = (candidate.round2Evaluation?.adHocQuestions ||
+            []) as ICustomAnswer[];
+
+          return {
+            updateOne: {
+              filter: { _id: candidate._id },
+              update: {
+                $set: {
+                  'round2Evaluation.templateAnswers': templateAnswers,
+                  'round2Evaluation.score': calculateOverallScore(
+                    templateAnswers,
+                    adHocQuestions
+                  ),
+                },
+              },
+            },
+          };
+        });
+
+        if (updates.length > 0) {
+          await Candidate.bulkWrite(updates);
+        }
+      }
 
       return NextResponse.json({
         success: true,

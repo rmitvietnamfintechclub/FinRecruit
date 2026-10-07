@@ -1,4 +1,4 @@
-import type { ICustomAnswer } from '@/app/(backend)/types';
+import type { ICustomAnswer, IRound2Evaluation } from '@/app/(backend)/types';
 import {
   normalizeCustomAnswers,
   normalizeGeneralAnswers,
@@ -11,7 +11,6 @@ import { isHeadDepartment } from '@/app/(backend)/libs/departments';
 import type {
   CandidateChoiceType,
   DepartmentType,
-  IRound2Evaluation,
   StatusType,
 } from '@/app/(backend)/types';
 import type {
@@ -137,35 +136,6 @@ export function mapExecutiveListItemToHeadRow(
   };
 }
 
-function normalizeRound2Evaluation(
-  raw: Record<string, unknown>
-): IRound2Evaluation {
-  const evaluation = (raw.round2Evaluation ?? {}) as Partial<IRound2Evaluation>;
-
-  return {
-    templateAnswers: Array.isArray(evaluation.templateAnswers)
-      ? (evaluation.templateAnswers as ICustomAnswer[]).map((item) => ({
-          question: String(item?.question ?? '').trim(),
-          answer: String(item?.answer ?? '').trim(),
-          addedBy: item?.addedBy ? String(item.addedBy) : undefined,
-        }))
-      : [],
-    adHocQuestions: Array.isArray(evaluation.adHocQuestions)
-      ? (evaluation.adHocQuestions as ICustomAnswer[]).map((item) => ({
-          question: String(item?.question ?? '').trim(),
-          answer: String(item?.answer ?? '').trim(),
-          addedBy: item?.addedBy ? String(item.addedBy) : undefined,
-        }))
-      : [],
-    notes: {
-      note1: String(evaluation.notes?.note1 ?? ''),
-      note2: String(evaluation.notes?.note2 ?? ''),
-      note3: String(evaluation.notes?.note3 ?? ''),
-    },
-    score: typeof evaluation.score === 'number' ? evaluation.score : null,
-  };
-}
-
 export function mapExecutiveDetailToHeadDetail(
   raw: Record<string, unknown>
 ): HeadDashboardCandidateDetailApi {
@@ -199,13 +169,33 @@ export function mapExecutiveDetailToHeadDetail(
       ? (raw.customAnswers as ICustomAnswer[])
       : [],
   });
+  const rawRound2 = raw.round2Evaluation as
+    | Partial<IRound2Evaluation>
+    | undefined;
+  const round2Evaluation: IRound2Evaluation = {
+    templateAnswers: Array.isArray(rawRound2?.templateAnswers)
+      ? rawRound2.templateAnswers
+      : [],
+    adHocQuestions: Array.isArray(rawRound2?.adHocQuestions)
+      ? rawRound2.adHocQuestions
+      : [],
+    notes: {
+      note1: String(rawRound2?.notes?.note1 ?? ''),
+      note2: String(rawRound2?.notes?.note2 ?? ''),
+      note3: String(rawRound2?.notes?.note3 ?? ''),
+    },
+    collaborativeNotes: Array.isArray(rawRound2?.collaborativeNotes)
+      ? rawRound2.collaborativeNotes
+      : [],
+    score: typeof rawRound2?.score === 'number' ? rawRound2.score : null,
+  };
 
   return {
     ...listBase,
     cvLink: String(raw.cvLink ?? ''),
     generalAnswers: normalizeGeneralAnswers(raw),
     customAnswers,
-    round2Evaluation: normalizeRound2Evaluation(raw),
+    round2Evaluation,
     personalInformation: {
       dob: String(raw.dob ?? ''),
       majorAndYear: String(raw.majorAndYear ?? ''),

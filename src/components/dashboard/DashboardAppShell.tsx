@@ -116,6 +116,8 @@ export function DashboardAppShell({
     ).matches;
     const dark = savedTheme === 'dark' || (!savedTheme && prefersDark);
 
+    // Browser-only preference is intentionally hydrated after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsDarkMode(dark);
   }, []);
 

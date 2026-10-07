@@ -20,6 +20,7 @@ export const CANDIDATE_CHOICES = [
 ] as const;
 
 export const STATUSES = ['Pending', 'Pass', 'Fail'] as const;
+export const ROUND2_DECISIONS = ['Pass', 'Fail', 'No Show'] as const;
 export const SLOT_STATUSES = ['AVAILABLE', 'BOOKED'] as const;
 
 export const AUDIT_LOG_LEVELS = ['info', 'warning', 'error'] as const;
@@ -32,6 +33,7 @@ export type RoleType = typeof ROLES[number];
 export type DepartmentType = typeof DEPARTMENTS[number];
 export type CandidateChoiceType = typeof CANDIDATE_CHOICES[number];
 export type StatusType = typeof STATUSES[number];
+export type Round2DecisionType = typeof ROUND2_DECISIONS[number];
 export type SlotStatusType = typeof SLOT_STATUSES[number];
 export type AuditLogLevel = typeof AUDIT_LOG_LEVELS[number];
 export type AuditLogCategory = typeof AUDIT_LOG_CATEGORIES[number];
@@ -113,6 +115,16 @@ export interface ICustomAnswer {
     question: string;
     answer: string;
     addedBy?: string; // Used for ad-hoc R2 questions
+    score?: number | null;
+}
+
+export interface ICollaborativeNote {
+    authorId: string;
+    authorEmail: string;
+    authorName: string;
+    role: Extract<RoleType, 'Department Head' | 'Member'>;
+    content: string;
+    updatedAt: Date;
 }
 
 export interface IRound2Evaluation {
@@ -123,6 +135,7 @@ export interface IRound2Evaluation {
         note2: string;
         note3: string;
     };
+    collaborativeNotes: ICollaborativeNote[];
     score?: number | null;
 }
 
@@ -153,6 +166,7 @@ export interface ICandidate {
     // Phase 2: Interview Scheduling & Round 2
     interviewSlotId?: Types.ObjectId | null;
     round2Status: StatusType;
+    round2Decision?: Round2DecisionType | null;
     round2Evaluation: IRound2Evaluation;
     
     // Metadata
