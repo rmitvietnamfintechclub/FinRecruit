@@ -116,6 +116,24 @@ export default function HeadDashboardPage() {
     'lock' | 'unlock' | null
   >(null);
 
+  const fetchRound2LockStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/head-dashboard/round2-status', {
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        return;
+      }
+
+      setRound2Locked(data.isRound2Locked);
+    } catch {
+      // Keep current state if request fails
+    }
+  }, []);
+
   const handleLockRound2 = async () => {
     if (statsDisplay.pending > 0 || isLockingRound2) return;
 
@@ -179,6 +197,10 @@ export default function HeadDashboardPage() {
       setIsLockingRound2(false);
     }
   };
+
+  useEffect(() => {
+    void fetchRound2LockStatus();
+  }, [fetchRound2LockStatus]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 400);
