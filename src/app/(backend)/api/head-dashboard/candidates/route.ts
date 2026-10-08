@@ -3,20 +3,17 @@ import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import {    
     buildDepartmentHeadCandidateMatch,
-    parseDashboardStatus,
     parsePaginationParams,
     sanitizeSearchQuery,
     serializeCandidateListItem,
 } from '@/app/(backend)/libs/departmentHeadDashboard';
-import { STATUSES, type DepartmentType, type CandidateChoiceType, type StatusType } from '@/app/(backend)/types'
+import { ROUND2_STATUSES, type DepartmentType, type Round2StatusType, type StatusType } from '@/app/(backend)/types'
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
 export const runtime = 'nodejs';
-
-const DASHBOARD_STATUS_OPTIONS = ['All', 'Pending', 'Pass', 'Fail'] as const;
 
 type CandidateListAggregationResult = {
     metadata: Array<{ total: number }>;
@@ -37,7 +34,7 @@ type CandidateListAggregationResult = {
         updatedAt: Date;
 
         // Phase 2 Fields
-        round2Status: StatusType;
+        round2Status: Round2StatusType;
         interviewSlotId?: Types.ObjectId | null;
         round2Evaluation?: {
             score?: number | null;
@@ -64,18 +61,22 @@ export const GET = withRBAC(
 
         const searchParams = req.nextUrl.searchParams;
         const search = sanitizeSearchQuery(searchParams.get('search'));
-        const statusParam = searchParams.get('status');
-        const status = parseDashboardStatus(statusParam);
+        const round2StatusParam =
+            searchParams.get('round2Status') ?? searchParams.get('status');
+        const round2Status =
+            round2StatusParam && (ROUND2_STATUSES as readonly string[]).includes(round2StatusParam)
+                ? (round2StatusParam as Round2StatusType)
+                : null;
         const { page, limit, skip } = parsePaginationParams(searchParams);
 
         // Parse quatitative scoring sort toggle
         const sourceByScore = searchParams.get('sortByScore') === 'true';
 
-        if (statusParam && statusParam !== 'All' && !status) {
+        if (round2StatusParam && round2StatusParam !== 'All' && !round2Status) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: `Invalid status filter. Supported values: ${STATUSES.join(', ')}.`,
+                    message: `Invalid Round 2 status filter. Supported values: ${ROUND2_STATUSES.join(', ')}.`,
                 },
                 { status: 400 }
             );
@@ -93,9 +94,21 @@ export const GET = withRBAC(
         const match = buildDepartmentHeadCandidateMatch({
             department: assignedDepartment,
             search,
-            status,
+            status: 'Pass',
             cohort,
         });
+        if (round2Status) {
+            if (round2Status === 'Pending') {
+                match.$and = [{
+                    $or: [
+                        { round2Status: 'Pending' },
+                        { round2Status: { $exists: false } },
+                    ],
+                }];
+            } else {
+                match.round2Status = round2Status;
+            }
+        }
 
         // Dynamic sorting behavior
         const sortStage: Record<string, 1 | -1> = sourceByScore
@@ -134,11 +147,10 @@ export const GET = withRBAC(
                 ...candidate,
                 _id: candidate._id,
                 choice2: candidate.choice2 ?? null,
-                interviewSlotId: null
             })
         ) ?? [];
 
-        const hasNoDepartmentCandidates = total === 0 && !search && !status;
+        const hasNoDepartmentCandidates = total === 0 && !search && !round2Status;
         const hasNoFilteredResults = total === 0 && !hasNoDepartmentCandidates;
 
         return NextResponse.json(
@@ -153,7 +165,8 @@ export const GET = withRBAC(
                 totalPages: total === 0 ? 0 : Math.ceil(total / limit),
                 filters: {
                     search,
-                    status,
+                    status: 'Pass',
+                    round2Status,
                     department: assignedDepartment,
                     sortByScore: sourceByScore,
                 },
@@ -161,7 +174,7 @@ export const GET = withRBAC(
                     ...cohort,
                     isRecruitmentActive: active.isRecruitmentActive,
                 },
-                allowedStatusOptions: [...STATUSES],
+                allowedStatusOptions: [...ROUND2_STATUSES],
                 emptyState:
                     hasNoDepartmentCandidates
                     ? `No candidates have been routed to your department for ${cohort.semester} · ${cohort.generation} yet.`

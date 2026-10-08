@@ -14,6 +14,7 @@ import {
     type ICustomAnswer,
     type StatusType,
     type IRound2Evaluation,
+    type Round2StatusType,
 } from '@/app/(backend)/types';
 import {
     normalizeCustomAnswers,
@@ -51,7 +52,7 @@ export type DepartmentHeadCandidateListItem = {
     routing: CandidateRoutingInfo;
 
     // Phase 2 fields
-    round2Status?: StatusType;
+    round2Status?: Round2StatusType;
     interviewSlotId?: string | null;
 };
 
@@ -110,7 +111,7 @@ type CandidateSummaryLike = {
     updatedAt: Date;
 
     // Phase 2 fields
-    round2Status?: StatusType;
+    round2Status?: Round2StatusType;
     interviewSlotId?: Types.ObjectId | null;
 };
 

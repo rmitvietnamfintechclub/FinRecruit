@@ -114,6 +114,17 @@ Provides master views, aggregate statistics, and system exports.
 | `GET` | `/executive/export` | EXEC | Downloads an Excel (.xlsx) file containing R1 Pass/Fail lists. | 1 | DONE |
 | `GET` | `/executive/export/round-2` | EXEC | Downloads an Excel (.xlsx) file containing finalized R2 Pass/Fail lists. | 2 (Story 4.2) | TODO |
 
+### Department Head Round 2 APIs
+| Method | Endpoint | Access | Description | Process |
+|--------|----------|--------|-------------|---------|
+| `GET` | `/head-dashboard/round2` | HEAD/MEMBER | Returns active-cohort Round 2 counts and department lock state for Round 1 pass candidates. | DONE |
+| `POST` | `/head-dashboard/round2` | HEAD | Locks Round 2 after all eligible candidates are marked Pass, Fail, or No Show. | DONE |
+| `GET` | `/head-dashboard/round2/export` | HEAD | Downloads active-cohort department interview results and scores as Excel. | DONE |
+| `GET` | `/head-dashboard/interview-schedule` | HEAD/MEMBER | Lists booked interview slots for the active cohort and department. | DONE |
+| `GET` | `/head-dashboard/question-template` | HEAD/MEMBER | Reads the current department/cohort question template. | DONE |
+| `PATCH` | `/head-dashboard/question-template` | HEAD | Saves the current department/cohort question template. | DONE |
+| `PATCH` | `/interviews/:candidateId/evaluation` | HEAD/MEMBER | Saves evaluation fields; only HEAD can submit a final Round 2 decision. Round 2 lock is enforced. | DONE |
+
 ## 5. System Config & Logs APIs
 **Base Path**: `/api/executive`
 

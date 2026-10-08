@@ -8,6 +8,7 @@ type TemplateResponse = {
   message?: string;
   questions?: string[];
   cohort?: { generation: string; semester: string };
+  isRound2Locked?: boolean;
 };
 
 export default function QuestionTemplatePage() {
@@ -18,6 +19,7 @@ export default function QuestionTemplatePage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isRound2Locked, setIsRound2Locked] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -32,6 +34,7 @@ export default function QuestionTemplatePage() {
         setQuestions(loaded);
         setSavedQuestions(loaded);
         setCohort(json.cohort);
+        setIsRound2Locked(Boolean(json.isRound2Locked));
       })
       .catch((reason: unknown) => {
         if (active) {
@@ -130,6 +133,7 @@ export default function QuestionTemplatePage() {
                   </span>
                   <input
                     value={question}
+                    disabled={isRound2Locked}
                     onChange={(event) => {
                       const next = [...questions];
                       next[index] = event.target.value;
@@ -141,6 +145,7 @@ export default function QuestionTemplatePage() {
                   />
                   <button
                     type="button"
+                    disabled={isRound2Locked}
                     onClick={() => setQuestions(questions.filter((_, itemIndex) => itemIndex !== index))}
                     className="shrink-0 text-muted-foreground transition-colors hover:text-red-600"
                     aria-label={`Remove question ${index + 1}`}
@@ -151,6 +156,7 @@ export default function QuestionTemplatePage() {
               ))}
               <button
                 type="button"
+                disabled={isRound2Locked}
                 onClick={() => setQuestions([...questions, ''])}
                 className="mt-2 rounded-xl border border-purple-400 px-4 py-2 text-sm font-bold text-purple-700 transition-colors hover:bg-purple-50"
               >
@@ -159,6 +165,7 @@ export default function QuestionTemplatePage() {
               </button>
             </div>
 
+            {isRound2Locked ? <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Round 2 is locked; question templates are read-only.</p> : null}
             {error ? <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
             {message ? <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p> : null}
 
@@ -174,7 +181,7 @@ export default function QuestionTemplatePage() {
               <button
                 type="button"
                 onClick={() => void save()}
-                disabled={saving}
+                disabled={saving || isRound2Locked}
                 className="rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-purple-700 disabled:opacity-60"
               >
                 {saving ? 'Saving…' : 'Save & Apply'}

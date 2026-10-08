@@ -7,6 +7,10 @@ import {
 } from '@/app/(backend)/libs/departments';
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
+import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
+import SystemConfig from '@/app/(backend)/models/SystemConfig';
+import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
+import { ROUND2_STATUSES } from '@/app/(backend)/types';
 
 type Context = { params: Promise<{ candidateId: string }> };
 
@@ -17,7 +21,7 @@ type EvaluationPayload = {
   score?: number | null;
   templateAnswers?: Array<{ question: string; answer: string }>;
   adHocQuestions?: Array<{ question: string; answer: string }>;
-  finalStatus?: 'Pass' | 'Fail';
+  finalStatus?: 'Pass' | 'Fail' | 'No Show';
 };
 
 export const PATCH = withRBAC<Context>(
@@ -31,12 +35,59 @@ export const PATCH = withRBAC<Context>(
         { status: 400 }
       );
     }
-
     let body: EvaluationPayload;
     try {
       body = (await req.json()) as EvaluationPayload;
     } catch {
       return NextResponse.json({ success: false, message: 'Invalid JSON payload.' }, { status: 400 });
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ success: false, message: 'Invalid evaluation payload.' }, { status: 400 });
+    }
+
+    if (
+      body.finalStatus !== undefined &&
+      !(ROUND2_STATUSES as readonly string[]).includes(body.finalStatus)
+    ) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid Round 2 final status.' },
+        { status: 400 }
+      );
+    }
+    for (const note of [body.note1, body.note2, body.note3]) {
+      if (note !== undefined && typeof note !== 'string') {
+        return NextResponse.json(
+          { success: false, message: 'Evaluation notes must be text.' },
+          { status: 400 }
+        );
+      }
+    }
+    if (
+      body.score !== undefined &&
+      body.score !== null &&
+      (!Number.isFinite(body.score) || body.score < 0 || body.score > 10)
+    ) {
+      return NextResponse.json(
+        { success: false, message: 'Score must be between 0 and 10.' },
+        { status: 400 }
+      );
+    }
+    for (const answers of [body.templateAnswers, body.adHocQuestions]) {
+      if (
+        answers !== undefined &&
+        (!Array.isArray(answers) ||
+          answers.some(
+            (answer) =>
+              !answer ||
+              typeof answer.question !== 'string' ||
+              typeof answer.answer !== 'string'
+          ))
+      ) {
+        return NextResponse.json(
+          { success: false, message: 'Questions and answers must be text.' },
+          { status: 400 }
+        );
+      }
     }
 
     if (body.finalStatus && session.user.role !== 'Department Head') {
@@ -55,7 +106,10 @@ export const PATCH = withRBAC<Context>(
       update['round2Evaluation.templateAnswers'] = body.templateAnswers;
     }
     if (body.adHocQuestions !== undefined) {
-      update['round2Evaluation.adHocQuestions'] = body.adHocQuestions;
+      update['round2Evaluation.adHocQuestions'] = body.adHocQuestions.map((answer) => ({
+        ...answer,
+        addedBy: session.user.name?.trim() || session.user.email,
+      }));
     }
     if (body.finalStatus) update.round2Status = body.finalStatus;
 
@@ -64,10 +118,45 @@ export const PATCH = withRBAC<Context>(
     }
 
     await dbConnect();
+    const active = await getActiveConfig();
+    const departmentConfig = await DepartmentConfig.findOne({
+      department,
+      generation: active.currentGeneration,
+      semester: active.currentSemester,
+    })
+      .select('isScoringEnabled')
+      .lean()
+      .exec();
+    if (body.score !== undefined && !departmentConfig?.isScoringEnabled) {
+      return NextResponse.json(
+        { success: false, message: 'Scoring is disabled for this department.' },
+        { status: 403 }
+      );
+    }
+    const systemConfig = await SystemConfig.findOne({ configName: 'global_settings' })
+      .select('departmentStates')
+      .lean()
+      .exec();
+    const round2Locked = Boolean(
+      systemConfig?.departmentStates?.find(
+        (state: { department: string; isRound2Locked?: boolean }) =>
+          state.department === department
+      )?.isRound2Locked
+    );
+    if (round2Locked) {
+      return NextResponse.json(
+        { success: false, message: 'Round 2 is locked for this department.' },
+        { status: 423 }
+      );
+    }
+
     const candidate = await Candidate.findOneAndUpdate(
       {
         _id: candidateId,
         ...departmentHeadCandidateVisibilityFilter(department),
+        generation: active.currentGeneration,
+        semester: active.currentSemester,
+        status: 'Pass',
       },
       { $set: update },
       { new: true, runValidators: true }

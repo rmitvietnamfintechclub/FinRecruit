@@ -1,4 +1,4 @@
-import type { CandidateChoiceType, DepartmentType, StatusType } from '@/app/(backend)/types';
+import type { CandidateChoiceType, DepartmentType, Round2StatusType, StatusType } from '@/app/(backend)/types';
 import type {
   CandidateRoutingInfo,
   DepartmentHeadCandidateDetail,
@@ -19,6 +19,8 @@ export type HeadDashboardListCandidate = {
   choice1: CandidateChoiceType;
   choice2: CandidateChoiceType | null;
   status: StatusType;
+  round2Status?: Round2StatusType;
+  interviewSlotId?: string | null;
   generation: string;
   semester: string;
   appliedAt: string;

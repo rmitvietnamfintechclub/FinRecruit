@@ -1,5 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
-import { ICandidate, CANDIDATE_CHOICES, DEPARTMENTS, STATUSES } from '@/app/(backend)/types';
+import { ICandidate, CANDIDATE_CHOICES, DEPARTMENTS, STATUSES, ROUND2_STATUSES } from '@/app/(backend)/types';
 import { baseSchemaOptions } from './baseSchemaOptions';
 
 const FormAnswerSchema = new Schema(
@@ -36,7 +36,7 @@ const CandidateSchema = new Schema<ICandidate>(
 
         // Round 2
         interviewSlotId: { type: Schema.Types.ObjectId, ref: 'MasterInterviewSlot', default: null },
-        round2Status: { type: String, enum: [...STATUSES], default: 'Pending' },
+        round2Status: { type: String, enum: [...ROUND2_STATUSES], default: 'Pending' },
         round2Evaluation: {
             templateAnswers: { type: [FormAnswerSchema], default: [] },
             adHocQuestions: { type: [FormAnswerSchema], default: [] },

@@ -20,6 +20,7 @@ export const CANDIDATE_CHOICES = [
 ] as const;
 
 export const STATUSES = ['Pending', 'Pass', 'Fail'] as const;
+export const ROUND2_STATUSES = ['Pending', 'Pass', 'Fail', 'No Show'] as const;
 export const SLOT_STATUSES = ['AVAILABLE', 'BOOKED'] as const;
 
 export const AUDIT_LOG_LEVELS = ['info', 'warning', 'error'] as const;
@@ -32,6 +33,7 @@ export type RoleType = typeof ROLES[number];
 export type DepartmentType = typeof DEPARTMENTS[number];
 export type CandidateChoiceType = typeof CANDIDATE_CHOICES[number];
 export type StatusType = typeof STATUSES[number];
+export type Round2StatusType = typeof ROUND2_STATUSES[number];
 export type SlotStatusType = typeof SLOT_STATUSES[number];
 export type AuditLogLevel = typeof AUDIT_LOG_LEVELS[number];
 export type AuditLogCategory = typeof AUDIT_LOG_CATEGORIES[number];
@@ -152,7 +154,7 @@ export interface ICandidate {
     
     // Phase 2: Interview Scheduling & Round 2
     interviewSlotId?: Types.ObjectId | null;
-    round2Status: StatusType;
+    round2Status: Round2StatusType;
     round2Evaluation: IRound2Evaluation;
     
     // Metadata

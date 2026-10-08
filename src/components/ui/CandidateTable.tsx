@@ -49,20 +49,24 @@ export default function CandidateTable({
     setIsModalOpen(true);
   };
 
-  const statusBadgeClass = (status: HeadDashboardListCandidate['status']) =>
+  const statusBadgeClass = (status: string) =>
     `inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider shadow-sm border ${
       status === 'Pass'
         ? 'border-green-200 bg-green-100 text-green-700 dark:border-green-900/50 dark:bg-green-900/30 dark:text-green-400'
         : status === 'Pending'
           ? 'border-yellow-200 bg-yellow-100 text-yellow-700 dark:border-yellow-900/50 dark:bg-yellow-900/30 dark:text-yellow-400'
-          : 'border-red-200 bg-red-100 text-red-700 dark:border-red-900/50 dark:bg-red-900/30 dark:text-red-400'
+          : status === 'No Show'
+            ? 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+            : 'border-red-200 bg-red-100 text-red-700 dark:border-red-900/50 dark:bg-red-900/30 dark:text-red-400'
     }`;
 
-  const statusIconClass = (status: HeadDashboardListCandidate['status']) =>
+  const statusIconClass = (status: string) =>
     status === 'Pass'
       ? 'fa-solid fa-check'
       : status === 'Pending'
         ? 'fa-solid fa-clock'
+        : status === 'No Show'
+          ? 'fa-solid fa-user-slash'
         : 'fa-solid fa-xmark';
 
   const appliedLabel = (candidate: HeadDashboardListCandidate) => {
@@ -166,9 +170,9 @@ export default function CandidateTable({
 
                 {/* Status */}
                 <div>
-                  <span className={statusBadgeClass(candidate.status)}>
-                    <i className={statusIconClass(candidate.status)} />
-                    {candidate.status}
+                  <span className={statusBadgeClass(detailApi === 'executive' ? candidate.status : candidate.round2Status ?? 'Pending')}>
+                    <i className={statusIconClass(detailApi === 'executive' ? candidate.status : candidate.round2Status ?? 'Pending')} />
+                    {detailApi === 'executive' ? candidate.status : candidate.round2Status ?? 'Pending'}
                   </span>
                 </div>
 
@@ -213,17 +217,9 @@ export default function CandidateTable({
                   {emailLocalPart(candidate.email)}
                 </p>
               </div>
-              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider shadow-sm border
-                ${candidate.status === 'Pass' ? 'border-green-200 bg-green-100 text-green-700 dark:border-green-900/50 dark:bg-green-900/30 dark:text-green-400' : ''}
-                ${candidate.status === 'Pending' ? 'border-yellow-200 bg-yellow-100 text-yellow-700 dark:border-yellow-900/50 dark:bg-yellow-900/30 dark:text-yellow-400' : ''}
-                ${candidate.status === 'Fail' ? 'border-red-200 bg-red-100 text-red-700 dark:border-red-900/50 dark:bg-red-900/30 dark:text-red-400' : ''}
-              `}>
-                <i className={`
-                  ${candidate.status === 'Pass' ? 'fa-solid fa-check' : ''}
-                  ${candidate.status === 'Pending' ? 'fa-solid fa-clock' : ''}
-                  ${candidate.status === 'Fail' ? 'fa-solid fa-xmark' : ''}
-                `}></i>
-                {candidate.status}
+              <span className={statusBadgeClass(detailApi === 'executive' ? candidate.status : candidate.round2Status ?? 'Pending')}>
+                <i className={statusIconClass(detailApi === 'executive' ? candidate.status : candidate.round2Status ?? 'Pending')} />
+                {detailApi === 'executive' ? candidate.status : candidate.round2Status ?? 'Pending'}
               </span>
             </div>
 

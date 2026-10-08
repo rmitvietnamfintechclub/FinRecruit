@@ -128,8 +128,16 @@ export async function activateCohort(input: { generation: string; semester: stri
     }
 
     const cfg = await getOrCreateGlobalConfig();
+    const cohortChanged =
+        cfg.currentGeneration !== generation || cfg.currentSemester !== semester;
     cfg.currentGeneration = generation;
     cfg.currentSemester = semester;
+    if (cohortChanged) {
+        cfg.departmentStates.forEach((state) => {
+            state.isRound1Locked = false;
+            state.isRound2Locked = false;
+        });
+    }
     if (input.isRecruitmentActive !== undefined) {
         cfg.isRecruitmentActive = input.isRecruitmentActive;
     }

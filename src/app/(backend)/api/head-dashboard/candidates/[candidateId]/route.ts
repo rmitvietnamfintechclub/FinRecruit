@@ -9,6 +9,7 @@ import {
 import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
+import SystemConfig from '@/app/(backend)/models/SystemConfig';
 
 export const runtime = 'nodejs';
 
@@ -104,6 +105,16 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
             .select('interviewQuestions isScoringEnabled')
             .lean()
             .exec();
+        const systemConfig = await SystemConfig.findOne({ configName: 'global_settings' })
+            .select('departmentStates')
+            .lean()
+            .exec();
+        const isRound2Locked = Boolean(
+            systemConfig?.departmentStates?.find(
+                (state: { department: string; isRound2Locked?: boolean }) =>
+                    state.department === assignedDepartment
+            )?.isRound2Locked
+        );
 
         return NextResponse.json(
             {
@@ -121,9 +132,11 @@ export const GET = withRBAC<CandidateDetailRouteContext>(
                         canUpdateStatus: true,
                         canEditSubmittedData: false,
                         canDeleteCandidate: false,
+                        canFinalizeRound2: session.user.role === 'Department Head',
                     },
                     interviewQuestions: config?.interviewQuestions ?? [],
                     isScoringEnabled: config?.isScoringEnabled ?? false,
+                    isRound2Locked,
                 },
             },
             { status: 200 }

@@ -58,6 +58,13 @@ type ListApiResponse = {
   };
 };
 
+type Round2SummaryResponse = {
+  success: boolean;
+  message?: string;
+  summary?: { total: number; pending: number; passed: number; failed: number; noShow: number };
+  isLocked?: boolean;
+};
+
 export default function HeadDashboardPage() {
   const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,12 +78,17 @@ export default function HeadDashboardPage() {
   const [listEmptyHint, setListEmptyHint] = useState<string | null>(null);
   const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
   const [assignedDepartment, setAssignedDepartment] = useState<string | null>(null);
+  const [round2Locked, setRound2Locked] = useState(false);
+  const [lockingRound2, setLockingRound2] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [round2Notice, setRound2Notice] = useState<string | null>(null);
 
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
     passed: 0,
     failed: 0,
+    noShow: 0,
   });
 
   const [confirmAction, setConfirmAction] = useState<{
@@ -103,31 +115,75 @@ export default function HeadDashboardPage() {
   }, [searchQuery]);
 
   const refreshStats = useCallback(async () => {
-    const base = '/api/head-dashboard/candidates';
     try {
-      const [rAll, rP, rPa, rF] = await Promise.all([
-        fetch(`${base}?limit=1`, { credentials: 'include' }),
-        fetch(`${base}?status=Pending&limit=1`, { credentials: 'include' }),
-        fetch(`${base}?status=Pass&limit=1`, { credentials: 'include' }),
-        fetch(`${base}?status=Fail&limit=1`, { credentials: 'include' }),
-      ]);
-      const [jAll, jP, jPa, jF] = (await Promise.all([
-        rAll.json(),
-        rP.json(),
-        rPa.json(),
-        rF.json(),
-      ])) as ListApiResponse[];
-      if (!rAll.ok || !jAll.success) return;
+      const response = await fetch('/api/head-dashboard/round2', { credentials: 'include' });
+      const json = (await response.json()) as Round2SummaryResponse;
+      if (!response.ok || !json.success || !json.summary) {
+        throw new Error(json.message ?? 'Unable to load Round 2 summary.');
+      }
+      setRound2Locked(Boolean(json.isLocked));
       setStats({
-        total: jAll.meta?.total ?? 0,
-        pending: rP.ok && jP.success ? (jP.meta?.total ?? 0) : 0,
-        passed: rPa.ok && jPa.success ? (jPa.meta?.total ?? 0) : 0,
-        failed: rF.ok && jF.success ? (jF.meta?.total ?? 0) : 0,
+        total: json.summary.total,
+        pending: json.summary.pending,
+        passed: json.summary.passed,
+        failed: json.summary.failed,
+        noShow: json.summary.noShow,
       });
-    } catch {
-      /* keep previous stats */
+    } catch (reason) {
+      setPatchNotice(
+        reason instanceof Error ? reason.message : 'Unable to load Round 2 summary.'
+      );
     }
   }, []);
+
+  const exportRound2 = async () => {
+    setExporting(true);
+    setPatchNotice(null);
+    try {
+      const response = await fetch('/api/head-dashboard/round2/export', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const json = (await response.json()) as { message?: string };
+        throw new Error(json.message ?? `Export failed (${response.status}).`);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'Round2_Evaluation.xlsx';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (reason) {
+      setPatchNotice(reason instanceof Error ? reason.message : 'Unable to export Round 2 results.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const lockRound2 = async () => {
+    setLockingRound2(true);
+    setPatchNotice(null);
+    try {
+      const response = await fetch('/api/head-dashboard/round2', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const json = (await response.json()) as { success: boolean; message?: string };
+      if (!response.ok || !json.success) {
+        throw new Error(json.message ?? 'Unable to lock Round 2.');
+      }
+      setRound2Locked(true);
+      setRound2Notice('Round 2 is locked for your department.');
+      await refreshStats();
+    } catch (reason) {
+      setPatchNotice(reason instanceof Error ? reason.message : 'Unable to lock Round 2.');
+    } finally {
+      setLockingRound2(false);
+    }
+  };
 
   const loadList = useCallback(
     async (
@@ -147,7 +203,7 @@ export default function HeadDashboardPage() {
         params.set('page', String(pageNum));
         const q = debouncedSearch.trim();
         if (q) params.set('search', q);
-        if (statusFilter !== 'All') params.set('status', statusFilter);
+        if (statusFilter !== 'All') params.set('round2Status', statusFilter);
 
         const res = await fetch(`/api/head-dashboard/candidates?${params}`, {
           credentials: 'include',
@@ -292,7 +348,7 @@ export default function HeadDashboardPage() {
     }
   };
 
-  const filterOptions = ['All', 'Pending', 'Pass', 'Fail'];
+  const filterOptions = ['All', 'Pending', 'Pass', 'Fail', 'No Show'];
 
   const statsDisplay = useMemo(
     () => ({
@@ -300,6 +356,7 @@ export default function HeadDashboardPage() {
       pending: stats.pending,
       passed: stats.passed,
       failed: stats.failed,
+      noShow: stats.noShow,
     }),
     [stats]
   );
@@ -366,7 +423,7 @@ export default function HeadDashboardPage() {
       >
         {[
           { label: 'Candidate Evaluation', href: '/HeadDashboard' },
-          { label: 'Interview Schedule', href: '#interview-schedule' },
+          { label: 'Interview Schedule', href: '/HeadDashboard/interview-schedule' },
           { label: 'Question Template', href: '/HeadDashboard/question-template' },
         ].map(
           (item, index) => (
@@ -463,24 +520,29 @@ export default function HeadDashboardPage() {
             </p>
             <h2 className="mt-1 text-xl font-black tracking-tight">
               {statsDisplay.pending === 0
-                ? `Complete — ${statsDisplay.passed + statsDisplay.failed} evaluated`
-                : `In progress — ${statsDisplay.passed + statsDisplay.failed} of ${statsDisplay.total} evaluated`}
+                ? `Complete — ${statsDisplay.total} evaluated`
+                : `In progress — ${statsDisplay.total - statsDisplay.pending} of ${statsDisplay.total} evaluated`}
             </h2>
             <div className="mt-2 h-1.5 w-56 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-purple-600 transition-all"
                 style={{
-                  width: `${statsDisplay.total ? ((statsDisplay.passed + statsDisplay.failed) / statsDisplay.total) * 100 : 0}%`,
+                    width: `${statsDisplay.total ? ((statsDisplay.total - statsDisplay.pending) / statsDisplay.total) * 100 : 0}%`,
                 }}
               />
             </div>
           </div>
           <button
             type="button"
-            disabled={statsDisplay.pending > 0}
+            onClick={() => void lockRound2()}
+            disabled={statsDisplay.pending > 0 || round2Locked || lockingRound2}
             className="rounded-lg bg-muted px-4 py-2 text-xs font-bold text-muted-foreground disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Confirm &amp; Lock Round 2
+            {lockingRound2
+              ? 'Locking…'
+              : round2Locked
+                ? 'Round 2 Locked'
+                : 'Confirm & Lock Round 2'}
           </button>
         </div>
         {statsDisplay.pending > 0 ? (
@@ -491,6 +553,15 @@ export default function HeadDashboardPage() {
           </p>
         ) : null}
       </section>
+
+      {round2Notice ? (
+        <AppNotice
+          variant="success"
+          onDismiss={() => setRound2Notice(null)}
+        >
+          {round2Notice}
+        </AppNotice>
+      ) : null}
 
       <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="bg-muted/40 -mx-1 flex w-full max-w-full items-center gap-1.5 overflow-x-auto rounded-xl p-1.5 sm:mx-0 sm:w-fit sm:gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -513,10 +584,12 @@ export default function HeadDashboardPage() {
         <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:items-center lg:w-auto">
           <button
             type="button"
+            onClick={() => void exportRound2()}
+            disabled={exporting}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted"
           >
             <i className="fa-solid fa-file-excel text-emerald-600" />
-            Export Excel
+            {exporting ? 'Exporting…' : 'Export Excel'}
             <i className="fa-solid fa-chevron-down text-xs text-muted-foreground" />
           </button>
           <div className="relative w-full sm:w-72">
