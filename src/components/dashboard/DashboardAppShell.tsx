@@ -9,7 +9,14 @@ export type DashboardBadgeVariant = 'yellow' | 'purple';
 
 const BADGE_STYLES: Record<
   DashboardBadgeVariant,
-  { border: string; bg: string; text: string; darkBorder: string; darkBg: string; darkText: string }
+  {
+    border: string;
+    bg: string;
+    text: string;
+    darkBorder: string;
+    darkBg: string;
+    darkText: string;
+  }
 > = {
   yellow: {
     border: 'border-yellow-200',
@@ -46,6 +53,7 @@ export type DashboardAppShellProps = {
    * the colored initial circle when missing or when the image fails to load. */
   userAvatar?: string | null;
   showLogout?: boolean;
+  headerNav?: React.ReactNode;
 };
 
 function UserAvatar({
@@ -99,22 +107,24 @@ export function DashboardAppShell({
   userSubtitle,
   userAvatar,
   showLogout = true,
+  headerNav,
 }: DashboardAppShellProps) {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
     const prefersDark = window.matchMedia(
       '(prefers-color-scheme: dark)'
     ).matches;
-    return savedTheme === 'dark' || (!savedTheme && prefersDark);
-  });
+    const dark = savedTheme === 'dark' || (!savedTheme && prefersDark);
+
+    // Browser-only preference is intentionally hydrated after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsDarkMode(dark);
+  }, []);
 
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
 
   const toggleDarkMode = () => {
@@ -195,6 +205,7 @@ export function DashboardAppShell({
           </div>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            {headerNav}
             <div className="hidden items-center gap-4 md:flex">
               {badgeEl}
               <div className="h-8 w-px bg-border" />
