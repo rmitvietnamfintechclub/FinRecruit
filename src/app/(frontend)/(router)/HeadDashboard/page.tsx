@@ -1,7 +1,15 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import CandidateTable, { type CandidateViewMode } from '@/components/ui/CandidateTable';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import CandidateTable, {
+  type CandidateViewMode,
+} from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import {
   patchCandidateStatus,
@@ -21,9 +29,13 @@ import {
   useDepartmentStates,
   useLockRound1,
 } from '@/hooks/use-round-transition';
-import { RoundModeTabs, type RoundMode } from '@/components/head-dashboard/RoundModeTabs';
+import {
+  RoundModeTabs,
+  type RoundMode,
+} from '@/components/head-dashboard/RoundModeTabs';
 import { RoundTransitionBar } from '@/components/head-dashboard/RoundTransitionBar';
 import type { LockRound1Result } from '@/types/roundTransition';
+import Link from 'next/link';
 
 const PAGE_SIZE = 9;
 
@@ -70,7 +82,9 @@ type ListApiResponse = {
 };
 
 export default function HeadDashboardPage() {
-  const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>([]);
+  const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>(
+    []
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -81,10 +95,14 @@ export default function HeadDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [listEmptyHint, setListEmptyHint] = useState<string | null>(null);
   const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
-  const [assignedDepartment, setAssignedDepartment] = useState<string | null>(null);
+  const [assignedDepartment, setAssignedDepartment] = useState<string | null>(
+    null
+  );
 
   const [mode, setMode] = useState<RoundMode>('round1');
-  const [round2Candidates, setRound2Candidates] = useState<HeadDashboardListCandidate[]>([]);
+  const [round2Candidates, setRound2Candidates] = useState<
+    HeadDashboardListCandidate[]
+  >([]);
   const [round2Loading, setRound2Loading] = useState(false);
   const [round2Error, setRound2Error] = useState<string | null>(null);
   const departmentStates = useDepartmentStates();
@@ -97,7 +115,8 @@ export default function HeadDashboardPage() {
       : null;
 
   const isRound1Locked = headDepartment
-    ? (findDepartmentState(departmentStates, headDepartment)?.isRound1Locked ?? false)
+    ? (findDepartmentState(departmentStates, headDepartment)?.isRound1Locked ??
+      false)
     : false;
 
   const [stats, setStats] = useState({
@@ -124,6 +143,150 @@ export default function HeadDashboardPage() {
   } | null>(null);
   const [newCandidateNotice, setNewCandidateNotice] = useState(false);
   const prevListTotalRef = useRef<number | null>(null);
+  const [isLockingRound2, setIsLockingRound2] = useState(false);
+  const [round2Locked, setRound2Locked] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+
+  const [round2ConfirmAction, setRound2ConfirmAction] = useState<
+    'lock' | 'unlock' | null
+  >(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const fetchRound2LockStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/head-dashboard/round2-status', {
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        return;
+      }
+
+      setRound2Locked(data.isRound2Locked);
+    } catch {
+      // Keep current state if request fails
+    }
+  }, []);
+
+  const handleLockRound2 = async () => {
+    if (statsDisplay.pending > 0 || isLockingRound2) return;
+
+    try {
+      setIsLockingRound2(true);
+      setLockError(null);
+
+      const res = await fetch('/api/head-dashboard/lock-round-2', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to lock Round 2.');
+      }
+
+      setRound2Locked(true);
+      setRound2ConfirmAction(null);
+    } catch (error) {
+      setLockError(
+        error instanceof Error ? error.message : 'Failed to lock Round 2.'
+      );
+    } finally {
+      setIsLockingRound2(false);
+    }
+  };
+
+  const handleUnlockRound2 = async () => {
+    if (isLockingRound2) return;
+
+    try {
+      setIsLockingRound2(true);
+      setLockError(null);
+
+      const res = await fetch('/api/head-dashboard/lock-round-2', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to unlock Round 2.');
+      }
+
+      setRound2Locked(false);
+      setRound2ConfirmAction(null);
+    } catch (error) {
+      setLockError(
+        error instanceof Error ? error.message : 'Failed to unlock Round 2.'
+      );
+    } finally {
+      setIsLockingRound2(false);
+    }
+  };
+
+  const handleExportExcel = async (round: 1 | 2, status: 'Pass' | 'Fail') => {
+    if (exporting) return;
+
+    try {
+      setExporting(true);
+      setExportOpen(false);
+
+      const endpoint =
+        round === 1
+          ? `/api/head-dashboard/export/round-1?status=${status}`
+          : `/api/head-dashboard/export/round-2?status=${status}`;
+
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+
+        throw new Error(data?.message || 'Failed to export Excel file.');
+      }
+
+      const blob = await res.blob();
+
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+
+      link.download =
+        round === 1
+          ? `Round_1_${status}_List_Export.xlsx`
+          : `Round_2_Final_${status}_Export.xlsx`;
+
+      document.body.appendChild(link);
+      link.click();
+
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Failed to export Excel file.'
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchRound2LockStatus();
+  }, [fetchRound2LockStatus]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -215,7 +378,7 @@ export default function HeadDashboardPage() {
 
         setListEmptyHint(
           rows.length === 0 && !options?.isPoll
-            ? json.meta?.emptyState ?? null
+            ? (json.meta?.emptyState ?? null)
             : null
         );
         if (json.meta?.activeCohort) {
@@ -226,7 +389,9 @@ export default function HeadDashboardPage() {
         }
       } catch (e) {
         if (!options?.isPoll) {
-          setError(e instanceof Error ? e.message : 'Failed to load candidates.');
+          setError(
+            e instanceof Error ? e.message : 'Failed to load candidates.'
+          );
           if (!append) setCandidates([]);
         }
       } finally {
@@ -256,7 +421,11 @@ export default function HeadDashboardPage() {
     setRound2Loading(true);
     setRound2Error(null);
     try {
-      const params = new URLSearchParams({ status: 'Pass', page: '1', limit: '100' });
+      const params = new URLSearchParams({
+        status: 'Pass',
+        page: '1',
+        limit: '100',
+      });
       const res = await fetch(`/api/head-dashboard/candidates?${params}`, {
         credentials: 'include',
       });
@@ -270,7 +439,9 @@ export default function HeadDashboardPage() {
       setRound2Error(null);
     } catch (e) {
       setRound2Candidates([]);
-      setRound2Error(e instanceof Error ? e.message : 'Failed to load the Round 2 pool.');
+      setRound2Error(
+        e instanceof Error ? e.message : 'Failed to load the Round 2 pool.'
+      );
     } finally {
       setRound2Loading(false);
     }
@@ -299,7 +470,10 @@ export default function HeadDashboardPage() {
     enabled: !loading && !loadingMore && !patching,
   });
 
-  const handleUpdateStatusRequest = (id: string, newStatus: DashboardStatus) => {
+  const handleUpdateStatusRequest = (
+    id: string,
+    newStatus: DashboardStatus
+  ) => {
     const candidate = candidates.find((c) => c.id === id);
     if (candidate) {
       setConfirmAction({ id, name: candidate.fullName, newStatus });
@@ -405,6 +579,12 @@ export default function HeadDashboardPage() {
         </AppNotice>
       ) : null}
 
+      {lockError ? (
+        <AppNotice variant="error" onDismiss={() => setLockError(null)}>
+          {lockError}
+        </AppNotice>
+      ) : null}
+
       {patchNotice ? (
         <AppNotice variant="error" onDismiss={() => setPatchNotice(null)}>
           {patchNotice}
@@ -423,6 +603,7 @@ export default function HeadDashboardPage() {
 
       <CohortBanner
         cohort={activeCohort}
+        variant="head"
         scopeLabel={
           assignedDepartment
             ? `Department Head view · ${assignedDepartment}`
@@ -432,7 +613,11 @@ export default function HeadDashboardPage() {
 
       {headDepartment ? (
         <div className="flex flex-col gap-4">
-          <RoundModeTabs mode={mode} isLocked={isRound1Locked} onChange={setMode} />
+          <RoundModeTabs
+            mode={mode}
+            isLocked={isRound1Locked}
+            onChange={setMode}
+          />
           <RoundTransitionBar
             department={headDepartment}
             evaluated={Math.max(stats.total - stats.pending, 0)}
@@ -444,6 +629,28 @@ export default function HeadDashboardPage() {
           />
         </div>
       ) : null}
+
+      <nav
+        className="bg-card border-border grid grid-cols-2 overflow-hidden rounded-xl border shadow-sm"
+        aria-label="Department head dashboard sections"
+      >
+        {[
+          { label: 'Candidate Evaluation', href: '/HeadDashboard' },
+          { label: 'Interview Schedule', href: '#interview-schedule' },
+        ].map((item, index) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className={`flex items-center justify-center border-b-2 px-2 py-3 text-center text-xs font-bold transition-colors sm:px-4 sm:text-sm ${
+              index === 0
+                ? 'border-purple-600 text-purple-600'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
         <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
@@ -515,73 +722,251 @@ export default function HeadDashboardPage() {
         </div>
       </div>
 
+      {mode === 'round2' ? (
+        <>
+          <section className="bg-card border-border rounded-2xl border p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-muted-foreground text-[10px] font-black uppercase tracking-[0.18em]">
+                  Round 2 evaluation
+                </p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">
+                  {round2Locked
+                    ? `Locked — ${statsDisplay.passed + statsDisplay.failed} evaluated`
+                    : statsDisplay.pending === 0
+                      ? `Complete — ${statsDisplay.passed + statsDisplay.failed} evaluated`
+                      : `In progress — ${statsDisplay.passed + statsDisplay.failed} of ${statsDisplay.total} evaluated`}
+                </h2>
+                <div className="mt-2 h-1.5 w-56 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-purple-600 transition-all"
+                    style={{
+                      width: `${statsDisplay.total ? ((statsDisplay.passed + statsDisplay.failed) / statsDisplay.total) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setRound2ConfirmAction(round2Locked ? 'unlock' : 'lock')
+                }
+                disabled={
+                  isLockingRound2 || (!round2Locked && statsDisplay.pending > 0)
+                }
+                className="rounded-lg bg-muted px-4 py-2 text-xs font-bold text-muted-foreground disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isLockingRound2 ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin mr-2" />
+                    {round2Locked ? 'Unlocking...' : 'Locking...'}
+                  </>
+                ) : round2Locked ? (
+                  <>
+                    <i className="fa-solid fa-lock-open mr-2" />
+                    Unlock Round 2
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-lock mr-2" />
+                    Confirm & Lock Round 2
+                  </>
+                )}
+              </button>
+            </div>
+            {statsDisplay.pending > 0 ? (
+              <p className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-800 dark:border-yellow-900/50 dark:bg-yellow-950/30 dark:text-yellow-300">
+                <i className="fa-solid fa-triangle-exclamation mr-2" />
+                You still have {statsDisplay.pending} pending candidate
+                {statsDisplay.pending === 1 ? '' : 's'}.
+              </p>
+            ) : null}
+          </section>
+
+          <ConfirmDialog
+            open={round2ConfirmAction !== null}
+            title={
+              round2ConfirmAction === 'unlock'
+                ? 'Unlock Round 2?'
+                : 'Lock Round 2?'
+            }
+            variant={
+              round2ConfirmAction === 'unlock' ? 'default' : 'destructive'
+            }
+            description={
+              round2ConfirmAction === 'unlock'
+                ? 'Are you sure you want to unlock Round 2? This will allow Round 2 evaluations to be modified again.'
+                : 'Are you sure you want to lock Round 2? All Round 2 evaluations will be finalized. You can unlock it later if needed.'
+            }
+            confirmLabel={
+              round2ConfirmAction === 'unlock'
+                ? 'Unlock Round 2'
+                : 'Lock Round 2'
+            }
+            onConfirm={() =>
+              void (round2ConfirmAction === 'unlock'
+                ? handleUnlockRound2()
+                : handleLockRound2())
+            }
+            onCancel={() => setRound2ConfirmAction(null)}
+            loading={isLockingRound2}
+          />
+        </>
+      ) : null}
+
       {mode === 'round1' ? (
         <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-        <div className="bg-muted/40 -mx-1 flex w-full max-w-full items-center gap-1.5 overflow-x-auto rounded-xl p-1.5 sm:mx-0 sm:w-fit sm:gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {filterOptions.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setStatusFilter(option)}
-              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 sm:px-6 sm:py-2.5 sm:text-sm ${
-                statusFilter === option
-                  ? 'scale-105 bg-blue-600 text-white shadow-md'
-                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-              }`}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
+          <div className="bg-muted/40 -mx-1 flex w-full max-w-full items-center gap-1.5 overflow-x-auto rounded-xl p-1.5 sm:mx-0 sm:w-fit sm:gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {filterOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setStatusFilter(option)}
+                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 sm:px-6 sm:py-2.5 sm:text-sm ${
+                  statusFilter === option
+                    ? 'scale-105 bg-blue-600 text-white shadow-md'
+                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
 
-        <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:items-center lg:w-auto">
-          <div className="relative w-full sm:w-72">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-              <i className="fa-solid fa-magnifying-glass text-muted-foreground" />
+          <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:items-center lg:w-auto">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setExportOpen((prev) => !prev)}
+                disabled={exporting}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {exporting ? (
+                  <i className="fa-solid fa-spinner fa-spin text-emerald-600" />
+                ) : (
+                  <i className="fa-solid fa-file-excel text-emerald-600" />
+                )}
+
+                {exporting ? 'Exporting...' : 'Export Excel'}
+
+                {!exporting && (
+                  <i
+                    className={`fa-solid fa-chevron-down ml-1 text-xs text-muted-foreground transition-transform ${
+                      exportOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                )}
+              </button>
+
+              {exportOpen && (
+                <div className="bg-card border-border absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border p-1.5 shadow-lg">
+                  <div className="px-3 py-2">
+                    <p className="text-muted-foreground text-[10px] font-black uppercase tracking-wider">
+                      Export Excel
+                    </p>
+                  </div>
+
+                  {/* Round 1 */}
+                  <div className="px-1 pb-1">
+                    <p className="text-muted-foreground px-2 py-1 text-xs font-bold">
+                      Round 1
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleExportExcel(1, 'Pass')}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
+                    >
+                      <i className="fa-solid fa-check text-green-600" />
+                      Passed candidates
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleExportExcel(1, 'Fail')}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
+                    >
+                      <i className="fa-solid fa-xmark text-red-600" />
+                      Failed candidates
+                    </button>
+                  </div>
+
+                  <div className="border-border border-t" />
+
+                  {/* Round 2 */}
+                  <div className="px-1 pt-1">
+                    <p className="text-muted-foreground px-2 py-1 text-xs font-bold">
+                      Round 2
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleExportExcel(2, 'Pass')}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
+                    >
+                      <i className="fa-solid fa-check text-green-600" />
+                      Passed candidates
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleExportExcel(2, 'Fail')}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
+                    >
+                      <i className="fa-solid fa-xmark text-red-600" />
+                      Failed candidates
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <input
-              type="text"
-              placeholder="Search by name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-600/50 w-full rounded-xl border py-3 pl-11 pr-4 text-sm shadow-sm transition-all focus:border-blue-600 focus:ring-2 focus:outline-none"
-            />
-          </div>
+            <div className="relative w-full sm:w-72">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                <i className="fa-solid fa-magnifying-glass text-muted-foreground" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-600/50 w-full rounded-xl border py-3 pl-11 pr-4 text-sm shadow-sm transition-all focus:border-blue-600 focus:ring-2 focus:outline-none"
+              />
+            </div>
 
-          <div
-            className="bg-muted/40 flex w-fit shrink-0 items-center gap-1 rounded-xl p-1.5"
-            role="group"
-            aria-label="Candidate layout"
-          >
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              aria-pressed={viewMode === 'grid'}
-              title="Card view"
-              className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
-                viewMode === 'grid'
-                  ? 'scale-105 bg-blue-600 text-white shadow-md'
-                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-              }`}
+            <div
+              className="bg-muted/40 flex w-fit shrink-0 items-center gap-1 rounded-xl p-1.5"
+              role="group"
+              aria-label="Candidate layout"
             >
-              <i className="fa-solid fa-grip" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('list')}
-              aria-pressed={viewMode === 'list'}
-              title="List view"
-              className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
-                viewMode === 'list'
-                  ? 'scale-105 bg-blue-600 text-white shadow-md'
-                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-              }`}
-            >
-              <i className="fa-solid fa-list" />
-            </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                aria-pressed={viewMode === 'grid'}
+                title="Card view"
+                className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                  viewMode === 'grid'
+                    ? 'scale-105 bg-blue-600 text-white shadow-md'
+                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                }`}
+              >
+                <i className="fa-solid fa-grip" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                aria-pressed={viewMode === 'list'}
+                title="List view"
+                className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                  viewMode === 'list'
+                    ? 'scale-105 bg-blue-600 text-white shadow-md'
+                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                }`}
+              >
+                <i className="fa-solid fa-list" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       ) : null}
 
       <div className="mt-4">
@@ -604,27 +989,34 @@ export default function HeadDashboardPage() {
 
         <CandidateTable
           candidates={mode === 'round2' ? round2Candidates : candidates}
-          onUpdateStatus={mode === 'round2' ? () => undefined : handleUpdateStatusRequest}
+          onUpdateStatus={
+            mode === 'round2' ? () => undefined : handleUpdateStatusRequest
+          }
           viewMode={viewMode}
           readOnly={mode === 'round2' || isRound1Locked}
         />
 
         {(mode === 'round2' ? round2Candidates : candidates).length === 0 &&
           (mode === 'round2' ? !round2Loading && !round2Error : !loading) && (
-          <div className="bg-card border-border mt-4 flex flex-col items-center justify-center rounded-2xl border py-20 text-center shadow-sm">
-            <div className="bg-muted/50 mb-5 flex h-20 w-20 items-center justify-center rounded-full">
-              <i className={`fa-solid ${mode === 'round2' ? 'fa-people-group' : 'fa-folder-open'} text-muted-foreground text-3xl`} />
+            <div className="bg-card border-border mt-4 flex flex-col items-center justify-center rounded-2xl border py-20 text-center shadow-sm">
+              <div className="bg-muted/50 mb-5 flex h-20 w-20 items-center justify-center rounded-full">
+                <i
+                  className={`fa-solid ${mode === 'round2' ? 'fa-people-group' : 'fa-folder-open'} text-muted-foreground text-3xl`}
+                />
+              </div>
+              <p className="text-foreground text-xl font-black">
+                {mode === 'round2'
+                  ? 'No candidates in the Round 2 pool yet'
+                  : 'No candidates found'}
+              </p>
+              <p className="text-muted-foreground mt-2 text-sm font-medium">
+                {mode === 'round2'
+                  ? 'Passed Round 1 candidates will appear here.'
+                  : (listEmptyHint ??
+                    'Try adjusting your search or filter settings.')}
+              </p>
             </div>
-            <p className="text-foreground text-xl font-black">
-              {mode === 'round2' ? 'No candidates in the Round 2 pool yet' : 'No candidates found'}
-            </p>
-            <p className="text-muted-foreground mt-2 text-sm font-medium">
-              {mode === 'round2'
-                ? 'Passed Round 1 candidates will appear here.'
-                : (listEmptyHint ?? 'Try adjusting your search or filter settings.')}
-            </p>
-          </div>
-        )}
+          )}
 
         {mode === 'round1' && hasMore && candidates.length > 0 && (
           <div className="mt-8 flex justify-center">

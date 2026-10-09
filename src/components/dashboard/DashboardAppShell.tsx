@@ -9,7 +9,14 @@ export type DashboardBadgeVariant = 'yellow' | 'purple';
 
 const BADGE_STYLES: Record<
   DashboardBadgeVariant,
-  { border: string; bg: string; text: string; darkBorder: string; darkBg: string; darkText: string }
+  {
+    border: string;
+    bg: string;
+    text: string;
+    darkBorder: string;
+    darkBg: string;
+    darkText: string;
+  }
 > = {
   yellow: {
     border: 'border-yellow-200',
@@ -87,6 +94,7 @@ export type DashboardAppShellProps = {
    * the colored initial circle when missing or when the image fails to load. */
   userAvatar?: string | null;
   showLogout?: boolean;
+  headerNav?: React.ReactNode;
 };
 
 function UserAvatar({
@@ -140,6 +148,7 @@ export function DashboardAppShell({
   userSubtitle,
   userAvatar,
   showLogout = true,
+  headerNav,
 }: DashboardAppShellProps) {
   const isDarkMode = useSyncExternalStore(
     subscribeTheme,
@@ -217,6 +226,7 @@ export function DashboardAppShell({
           </div>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            {headerNav}
             <div className="hidden items-center gap-4 md:flex">
               {badgeEl}
               <div className="h-8 w-px bg-border" />
