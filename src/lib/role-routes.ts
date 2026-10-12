@@ -1,14 +1,22 @@
 /** Edge-safe: does not import mongoose. */
-export type AppRole = 'Guest' | 'Department Head' | 'Executive Board';
+export type AppRole =
+  | 'Guest'
+  | 'Member'
+  | 'Department Head'
+  | 'Executive Board';
 
-export function getHomePathForRole(
-  role: AppRole | undefined | null
-): string {
+export function getHomePathForRole(role: AppRole | undefined | null): string {
   if (role === 'Guest') {
     return '/waiting-room';
   }
+  if (role === 'Member') {
+    return '/MemberDashboard';
+  }
   if (role === 'Department Head') {
     return '/HeadDashboard';
+  }
+  if (role === 'Member') {
+    return '/MemberDashboard';
   }
   if (role === 'Executive Board') {
     return '/MasterViewDashboard';

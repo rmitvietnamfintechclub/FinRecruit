@@ -11,6 +11,8 @@ export function useDashboardTheme() {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const dark = savedTheme === 'dark' || (!savedTheme && prefersDark);
     document.documentElement.classList.toggle('dark', dark);
+    // Readiness depends on applying this browser-only class after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setReady(true);
   }, []);
 

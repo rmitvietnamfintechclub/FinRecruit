@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { AppNotice } from '@/components/feedback/AppNotice';
+import { DepartmentTransitionStrip } from '@/components/dashboard/DepartmentTransitionStrip';
 
 type HeadAccount = {
   id: string;
@@ -292,6 +293,8 @@ export function ExecutiveHomeClient() {
           </div>
         </CardContent>
       </Card>
+
+      <DepartmentTransitionStrip />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link

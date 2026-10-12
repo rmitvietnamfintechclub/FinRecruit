@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
 import { signOut } from 'next-auth/react';
 import { LogoutButton } from '@/components/LogoutButton';
@@ -9,7 +9,14 @@ export type DashboardBadgeVariant = 'yellow' | 'purple';
 
 const BADGE_STYLES: Record<
   DashboardBadgeVariant,
-  { border: string; bg: string; text: string; darkBorder: string; darkBg: string; darkText: string }
+  {
+    border: string;
+    bg: string;
+    text: string;
+    darkBorder: string;
+    darkBg: string;
+    darkText: string;
+  }
 > = {
   yellow: {
     border: 'border-yellow-200',
@@ -34,6 +41,47 @@ const AVATAR_STYLES: Record<DashboardBadgeVariant, string> = {
   purple: 'bg-purple-600',
 };
 
+/**
+ * Theme is read through an external store so the server render and the first
+ * client render agree (both `false`); the real preference is applied on
+ * subscribe, after hydration. Avoids a hydration mismatch on the toggle icon.
+ */
+const themeListeners = new Set<() => void>();
+let themeDark = false;
+let themeInitialized = false;
+
+function ensureThemeInitialized(): void {
+  if (themeInitialized || typeof window === 'undefined') return;
+  themeInitialized = true;
+  const savedTheme = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  themeDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
+  document.documentElement.classList.toggle('dark', themeDark);
+}
+
+function subscribeTheme(listener: () => void): () => void {
+  ensureThemeInitialized();
+  themeListeners.add(listener);
+  return () => {
+    themeListeners.delete(listener);
+  };
+}
+
+function getThemeSnapshot(): boolean {
+  return themeDark;
+}
+
+function getServerThemeSnapshot(): boolean {
+  return false;
+}
+
+function setTheme(next: boolean): void {
+  themeDark = next;
+  document.documentElement.classList.toggle('dark', next);
+  localStorage.setItem('theme', next ? 'dark' : 'light');
+  for (const listener of themeListeners) listener();
+}
+
 export type DashboardAppShellProps = {
   children: React.ReactNode;
   title: string;
@@ -46,6 +94,7 @@ export type DashboardAppShellProps = {
    * the colored initial circle when missing or when the image fails to load. */
   userAvatar?: string | null;
   showLogout?: boolean;
+  headerNav?: React.ReactNode;
 };
 
 function UserAvatar({
@@ -99,34 +148,16 @@ export function DashboardAppShell({
   userSubtitle,
   userAvatar,
   showLogout = true,
+  headerNav,
 }: DashboardAppShellProps) {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia(
-      '(prefers-color-scheme: dark)'
-    ).matches;
-    return savedTheme === 'dark' || (!savedTheme && prefersDark);
-  });
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
+  const isDarkMode = useSyncExternalStore(
+    subscribeTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot
+  );
 
   const toggleDarkMode = () => {
-    if (isDarkMode) {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-      setIsDarkMode(false);
-    } else {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-      setIsDarkMode(true);
-    }
+    setTheme(!isDarkMode);
   };
 
   const b = BADGE_STYLES[badgeVariant];
@@ -195,6 +226,7 @@ export function DashboardAppShell({
           </div>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            {headerNav}
             <div className="hidden items-center gap-4 md:flex">
               {badgeEl}
               <div className="h-8 w-px bg-border" />

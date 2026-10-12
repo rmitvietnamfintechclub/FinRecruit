@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import Providers from '@/app/(frontend)/providers';
-import '../../../global.css';
+import Providers from './providers';
+import '../../../global.css'; 
 
 type RootLayoutProps = {
   children: ReactNode;
