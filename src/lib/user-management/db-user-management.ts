@@ -56,8 +56,7 @@ function leanDocToRow(
   fallback: { semester: string; generation: string }
 ): ManagementUserRow {
   const id = doc._id.toString();
-  const generation =
-    doc.generation?.trim() || fallback.generation;
+  const generation = doc.generation?.trim() || fallback.generation;
   const semester = doc.semester?.trim() || fallback.semester;
 
   return {
@@ -105,10 +104,11 @@ export async function getUserManagementPayloadFromDb(): Promise<UserManagementPa
 
   const rows = docs.map((d) => leanDocToRow(d, configDefaults));
 
-  // Cohort-independent: every Head + EB across all generations / semesters.
   const filtered = rows.filter(
     (u) =>
-      u.role === 'Department Head' || u.role === 'Executive Board'
+      u.role === 'Department Head' ||
+      u.role === 'Executive Board' ||
+      u.role === 'Member' 
   );
 
   const sortByNewest = (a: ManagementUserRow, b: ManagementUserRow) =>
@@ -133,15 +133,13 @@ export async function getUserManagementPayloadFromDb(): Promise<UserManagementPa
     .exec();
 
   const soleActiveExecutiveId =
-    activeEbDocs.length === 1
-      ? activeEbDocs[0]!._id.toString()
-      : null;
+    activeEbDocs.length === 1 ? activeEbDocs[0]!._id.toString() : null;
 
   return {
     success: true,
     waitingGuests,
     inactiveAccounts,
-    users: filtered.map(serializeRow),
+    users: filtered.map(serializeRow), 
     soleActiveExecutiveId,
   };
 }
@@ -159,15 +157,13 @@ async function wouldDeactivateSoleExecutive(
     return false;
   }
 
-  const wasEbActive =
-    current.role === 'Executive Board' && current.isActive;
+  const wasEbActive = current.role === 'Executive Board' && current.isActive;
 
   if (!wasEbActive) {
     return false;
   }
 
-  const removesEb =
-    next.role !== 'Executive Board' || next.isActive === false;
+  const removesEb = next.role !== 'Executive Board' || next.isActive === false;
 
   if (!removesEb) {
     return false;
@@ -361,9 +357,10 @@ export async function patchUserInDb(
   //   - otherwise we still emit a noop-info entry (rare in practice)
   const isSelfChange = auditActor?.userId === input.userId;
   const losesAdminRole =
-    isSelfChange && prevRole === 'Executive Board' && nextRole !== 'Executive Board';
-  const selfDeactivate =
-    isSelfChange && prevIsActive && !nextIsActive;
+    isSelfChange &&
+    prevRole === 'Executive Board' &&
+    nextRole !== 'Executive Board';
+  const selfDeactivate = isSelfChange && prevIsActive && !nextIsActive;
 
   const statusFlipped = prevIsActive !== nextIsActive;
   const deptChanged = prevDept !== nextDept;
@@ -376,9 +373,7 @@ export async function patchUserInDb(
   if (losesAdminRole || selfDeactivate) {
     logLevel = 'warning';
     logCategory = 'security';
-    logAction = losesAdminRole
-      ? 'user.self_demoted'
-      : 'user.self_deactivated';
+    logAction = losesAdminRole ? 'user.self_demoted' : 'user.self_deactivated';
     logMessage = losesAdminRole
       ? `Admin ${current.email} demoted their own account from Executive Board to ${nextRole}.`
       : `Admin ${current.email} deactivated their own account.`;

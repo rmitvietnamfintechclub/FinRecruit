@@ -1,21 +1,20 @@
 /** UI copy for candidates in second-choice review (failed 1st choice, not passed it). */
-
-export const SECOND_CHOICE_BADGE_LABEL = '2nd choice review';
+export const SECOND_CHOICE_BADGE_LABEL = '2nd Choice';
 
 export function secondChoiceTooltip(choice1: string): string {
-  return `Did not pass ${choice1}. Now under second-choice review in your department.`;
+  return `Forwarded from ${choice1}. Now under review for their 2nd choice.`;
 }
 
-export const SECOND_CHOICE_BANNER_TITLE = 'Second-choice review';
+export const SECOND_CHOICE_BANNER_TITLE = '2nd Choice Application';
 
 export function secondChoiceBannerMessage(choice1: string): string {
-  return `This candidate did not pass ${choice1}. They are now under review for their second department choice.`;
+  return `This candidate was not selected for ${choice1} (1st choice). They are now being evaluated for your department.`;
 }
 
 export function rerouteConfirmMessage(targetDepartment: string): string {
-  return `Mark as Fail at the first-choice department and send this candidate to ${targetDepartment} for second-choice review?`;
+  return `Reject for your department and automatically forward this candidate to ${targetDepartment} for 2nd choice review?`;
 }
 
 export function rerouteSuccessMessage(targetDepartment: string): string {
-  return `Candidate did not pass their first choice. Sent to ${targetDepartment} for second-choice review (status: Pending).`;
+  return `Candidate successfully forwarded to ${targetDepartment} for 2nd choice review.`;
 }

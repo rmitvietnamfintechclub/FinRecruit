@@ -1,22 +1,40 @@
 'use client';
 
-import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 export type RoundMode = 'round1' | 'round2';
 
 type RoundModeTabsProps = {
   mode: RoundMode;
   isLocked: boolean;
+  isLoading?: boolean;
   onChange: (mode: RoundMode) => void;
 };
 
-export function RoundModeTabs({ mode, isLocked, onChange }: RoundModeTabsProps) {
+export function RoundModeTabs({
+  mode,
+  isLocked,
+  isLoading,
+  onChange,
+}: RoundModeTabsProps) {
+  if (isLoading) {
+    return (
+      <div
+        className="flex w-full animate-pulse rounded-full border border-gray-200 bg-white p-1.5 shadow-sm"
+        aria-hidden="true"
+      >
+        <div className="h-10 flex-1 rounded-full bg-gray-200/60" />
+        <div className="h-10 flex-1 rounded-full bg-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div
       role="tablist"
       aria-label="Recruitment round"
-      className="bg-muted/40 flex w-fit items-center gap-1 rounded-xl p-1.5"
+      className="flex w-full rounded-full border border-gray-200 bg-white p-1.5 shadow-sm"
     >
       <button
         type="button"
@@ -24,32 +42,48 @@ export function RoundModeTabs({ mode, isLocked, onChange }: RoundModeTabsProps) 
         aria-selected={mode === 'round1'}
         onClick={() => onChange('round1')}
         className={cn(
-          'rounded-lg px-4 py-2 text-sm font-bold transition-colors',
+          'flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all duration-300',
           mode === 'round1'
-            ? 'bg-blue-600 text-white shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'
+            ? 'bg-[#0D1742] text-[#DCB968] shadow-md' // Brand Colors cho trạng thái Active
+            : 'text-gray-500 hover:bg-gray-100 hover:text-[#0D1742]'
         )}
       >
-        Round 1
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={mode === 'round2'}
-        disabled={!isLocked}
-        onClick={() => onChange('round2')}
-        className={cn(
-          'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition-colors',
-          mode === 'round2'
-            ? 'bg-blue-600 text-white shadow-sm'
-            : 'text-muted-foreground hover:text-foreground',
-          !isLocked && 'cursor-not-allowed opacity-50'
+        {isLocked && (
+          <i className="fa-solid fa-lock text-[11px] opacity-80" aria-hidden />
         )}
-        title={!isLocked ? 'Lock Round 1 to unlock Round 2' : undefined}
-      >
-        {!isLocked && <Lock className="h-3.5 w-3.5" aria-hidden />}
-        Round 2
+        Application Form (Round 1)
       </button>
+      <Tooltip
+        content={
+          !isLocked
+            ? 'Finalize Round 1 evaluations to unlock the interview pool.'
+            : ''
+        }
+      >
+        <span className={cn('flex flex-1', !isLocked && 'cursor-not-allowed')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'round2'}
+            disabled={!isLocked}
+            onClick={() => onChange('round2')}
+            className={cn(
+              'flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all duration-300 disabled:pointer-events-none',
+              mode === 'round2'
+                ? 'bg-[#0D1742] text-[#DCB968] shadow-md'
+                : 'text-gray-500',
+              !isLocked
+                ? 'opacity-50 hover:bg-transparent'
+                : 'hover:bg-gray-100 hover:text-[#0D1742]'
+            )}
+          >
+            {!isLocked && (
+              <i className="fa-solid fa-lock text-[11px]" aria-hidden />
+            )}
+            Interview (Round 2)
+          </button>
+        </span>
+      </Tooltip>
     </div>
   );
 }

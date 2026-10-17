@@ -3,15 +3,14 @@ import { Manrope } from 'next/font/google'; // 1. Import Manrope
 import '../../global.css'; 
 
 export const metadata: Metadata = {
-    title: 'Fin-Recruit Dashboard',
-    description: 'Smart dashboard for department heads',
+    title: 'Fin-Recruit',
+    description: 'RMIT Vietnam FinTech Club\'s integrated platform designed to completely digitize the club’s end-to-end recruitment lifecycle.',
 };
 
-// 2. Configure the font
 const manrope = Manrope({
     subsets: ['latin'],
     display: 'swap',
-    variable: '--font-sans', // This directly connects to your Tailwind config!
+    variable: '--font-sans',
 });
 
 export default function RootLayout({
@@ -20,7 +19,6 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        // 3. Apply the font variable to the HTML tag
         <html lang="en" className={manrope.variable}>
             <body className="font-sans antialiased bg-background text-foreground">
                 {children}

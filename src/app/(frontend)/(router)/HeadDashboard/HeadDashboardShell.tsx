@@ -12,18 +12,8 @@ type HeadDashboardShellProps = {
   userName: string;
   userInitial: string;
   userAvatar?: string | null;
-  title?: string;
   userSubtitle?: string;
-  showNavigation?: boolean;
-  navigationItems?: ReadonlyArray<readonly [href: string, label: string]>;
 };
-
-const HEAD_NAVIGATION_ITEMS = [
-  ['/HeadDashboard', 'Application Form (Round 1)'],
-  ['/HeadDashboard/interviews', 'Interview (Round 2)'],
-  ['/HeadDashboard/interview-settings', 'Question Template'],
-  ['/HeadDashboard/ranking', 'Ranking'],
-] as const;
 
 export function HeadDashboardShell({
   children,
@@ -31,54 +21,93 @@ export function HeadDashboardShell({
   userName,
   userInitial,
   userAvatar,
-  title = 'Department Head Dashboard',
-  userSubtitle = 'Department Head',
-  showNavigation = true,
-  navigationItems = HEAD_NAVIGATION_ITEMS,
+  userSubtitle = 'Head of',
 }: HeadDashboardShellProps) {
   const pathname = usePathname();
+  const isMembers = pathname.includes('/member-management');
+
+  const dynamicTitle = isMembers
+    ? 'Member Management'
+    : 'Recruitment Evaluation';
+
+  const headerNav = (
+    <div className="hidden rounded-full border border-gray-200 bg-white p-1 shadow-sm sm:flex">
+      <Link
+        href="/HeadDashboard"
+        className={cn(
+          'flex items-center rounded-full px-8 py-2 text-sm font-bold transition-all',
+          !isMembers
+            ? 'border border-[#DCB968] bg-white text-[#0D1742] shadow-sm ring-1 ring-[#DCB968]'
+            : 'border border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+        )}
+      >
+        Recruitment
+      </Link>
+      <Link
+        href="/HeadDashboard/member-management"
+        className={cn(
+          'flex items-center rounded-full px-8 py-2 text-sm font-bold transition-all',
+          isMembers
+            ? 'border border-[#DCB968] bg-white text-[#0D1742] shadow-sm ring-1 ring-[#DCB968]'
+            : 'border border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+        )}
+      >
+        Members
+      </Link>
+    </div>
+  );
 
   return (
     <DashboardAppShell
-      title={title}
-      badgeLabel={departmentLabel}
-      badgeVariant="yellow"
+      title={dynamicTitle} 
       userName={userName}
       userInitial={userInitial}
       userAvatar={userAvatar}
-      userSubtitle={userSubtitle}
+      userSubtitle={`${userSubtitle} ${departmentLabel}`}
+      headerNav={headerNav}
     >
-      {showNavigation && (
-        <nav
-          className="mb-6 flex max-w-full gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-sm"
-          aria-label="Recruitment rounds"
-        >
-          {navigationItems.map(([href, label]) => {
-            const active =
-              href === '/HeadDashboard'
-                ? pathname === href
-                : href === '/HeadDashboard/interviews'
-                  ? pathname.startsWith(href) ||
-                    pathname.startsWith('/InterviewCockpit')
-                  : pathname === href || pathname.startsWith(`${href}/`);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'shrink-0 rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-                  active
-                    ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
-              >
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-      )}
       {children}
     </DashboardAppShell>
+  );
+}
+
+const HEAD_NAVIGATION_ITEMS = [
+  ['/HeadDashboard', 'Candidate Evaluation'],
+  ['/HeadDashboard/interviews', 'Interview Schedule'],
+  ['/HeadDashboard/interview-settings', 'Question Template'],
+] as const;
+
+export function HeadRound2SubNav() {
+  const pathname = usePathname();
+
+  return (
+    <div className="mb-6 border-b border-gray-200">
+      <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+        {HEAD_NAVIGATION_ITEMS.map(([href, label]) => {
+          const active =
+            href === '/HeadDashboard'
+              ? pathname === href
+              : href === '/HeadDashboard/interviews'
+                ? pathname.startsWith(href) ||
+                  pathname.startsWith('/InterviewCockpit')
+                : pathname === href || pathname.startsWith(`${href}/`);
+
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'whitespace-nowrap border-b-2 px-1 py-4 text-sm font-bold transition-colors focus-visible:outline-none',
+                active
+                  ? 'border-[#DCB968] text-[#0D1742]'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              )}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }

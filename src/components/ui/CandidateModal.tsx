@@ -29,17 +29,31 @@ interface CandidateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateStatus: (id: string, newStatus: 'Pass' | 'Fail' | 'Pending') => void;
-  /** Default: head-dashboard detail API */
   detailApi?: 'head' | 'executive';
-  /** Hide status actions (Executive has no PATCH status API yet) */
   readOnly?: boolean;
 }
 
-function AnswerCard({ row }: { row: ICustomAnswer }) {
+// Đã tối ưu màu sắc Card: Tinh tế và ăn nhập hơn với Brand
+function AnswerCard({ row, index }: { row: ICustomAnswer; index: number }) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/30 px-4 py-3">
-      <p className="text-xs font-semibold text-muted-foreground">{row.question}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{row.answer}</p>
+    <div className="mb-5 rounded-2xl border border-gray-100/80 bg-white p-4 shadow-[0_2px_12px_rgba(13,23,66,0.03)] transition-all sm:p-5 hover:border-[#0D1742]/10 hover:shadow-md">
+      <div className="flex items-start gap-3 sm:gap-4">
+        {/* Đổi màu icon Q sang tone Gold/Navy */}
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#DCB968]/15 text-xs font-black text-[#0D1742]">
+          Q{index + 1}
+        </div>
+        <div className="mt-1 flex-1">
+          <p className="text-sm font-bold leading-relaxed text-[#0D1742]">
+            {row.question}
+          </p>
+          {/* Đổi màu nền answer sang xám ngả xanh siêu nhạt */}
+          <div className="mt-2.5 whitespace-pre-wrap rounded-xl bg-[#F8F9FC] p-3.5 text-[14px] leading-relaxed text-[#334155]">
+            {row.answer || (
+              <span className="italic text-gray-400">No answer provided</span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -52,9 +66,19 @@ export const CandidateModal: FC<CandidateModalProps> = ({
   detailApi = 'head',
   readOnly = false,
 }) => {
-  const [detail, setDetail] = useState<HeadDashboardCandidateDetailApi | null>(null);
+  const [detail, setDetail] = useState<HeadDashboardCandidateDetailApi | null>(
+    null
+  );
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = 'unset';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   const fetchDetail = useCallback(
     async (id: string) => {
@@ -86,7 +110,9 @@ export const CandidateModal: FC<CandidateModalProps> = ({
         }
         setDetail(json.candidate ?? null);
       } catch (e) {
-        setDetailError(e instanceof Error ? e.message : 'Failed to load profile.');
+        setDetailError(
+          e instanceof Error ? e.message : 'Failed to load profile.'
+        );
         setDetail(null);
       } finally {
         setLoadingDetail(false);
@@ -127,7 +153,7 @@ export const CandidateModal: FC<CandidateModalProps> = ({
         email: candidate.email,
         phone: candidate.phone,
         dob: '—',
-        majorLine: candidate.choice1,
+        majorLine: '—',
         fbLink: '',
         cvLink: '',
         status: candidate.status,
@@ -143,276 +169,321 @@ export const CandidateModal: FC<CandidateModalProps> = ({
   const showDepartmentSection = deptCustomAnswers.length > 0;
 
   const routingSource = detail ?? candidate;
-  const isSecondChoiceStage =
-    routingSource.routing.currentStage === 'choice2';
+  const isSecondChoiceStage = routingSource.routing.currentStage === 'choice2';
   const choice1Label = detail?.choice1 ?? candidate.choice1;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 transition-opacity duration-300">
-      <div className="flex h-[90vh] w-full max-w-4xl scale-100 transform flex-col overflow-hidden rounded-3xl border border-border bg-card font-sans shadow-2xl transition-transform duration-300">
-        <div className="flex shrink-0 flex-col gap-3 border-b border-border bg-card p-4 sm:flex-row sm:items-start sm:justify-between sm:p-6">
-          <h1 className="min-w-0 text-xl font-black tracking-tight text-blue-950 sm:text-2xl lg:text-3xl dark:text-blue-400">
-            Application Form —{' '}
-            <span className="font-bold text-foreground">{display.fullName}</span>
-          </h1>
-          <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black tracking-wider uppercase shadow-sm ${
-                display.status === 'Pass'
-                  ? 'border-green-200 bg-green-100 text-green-700'
-                  : ''
-              }
-                ${
-                  display.status === 'Pending'
-                    ? 'border-yellow-200 bg-yellow-100 text-yellow-700'
-                    : ''
-                }
-                ${
-                  display.status === 'Fail'
-                    ? 'border-red-200 bg-red-100 text-red-700'
-                    : ''
-                }`}
-            >
-              <i
-                className={`
-                  ${display.status === 'Pass' ? 'fa-solid fa-check' : ''}
-                  ${display.status === 'Pending' ? 'fa-solid fa-clock' : ''}
-                  ${display.status === 'Fail' ? 'fa-solid fa-xmark' : ''}
-                `}
-              />
-              {display.status}
-            </span>
+  const statusBadge =
+    {
+      Pass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      Pending: 'border-[#F7D27F] bg-[#FFEFCA] text-[#A28436]',
+      Fail: 'border-[#B82649]/30 bg-[#B82649]/10 text-[#B82649]',
+    }[display.status] || 'border-gray-200 bg-gray-50 text-gray-700';
 
+  const statusIcon =
+    {
+      Pass: 'fa-check',
+      Pending: 'fa-clock',
+      Fail: 'fa-xmark',
+    }[display.status] || 'fa-circle-dot';
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-center bg-gray-900/60 p-2 sm:p-4 backdrop-blur-sm">
+      <div
+        className="flex h-full w-full max-w-7xl animate-in slide-in-from-right-8 duration-300 flex-col overflow-hidden rounded-[24px] sm:rounded-[32px] bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* HEADER */}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-white px-5 py-4 sm:px-8 z-10">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-black tracking-tight text-[#0D1742] sm:text-2xl">
+              {display.fullName}
+            </h1>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider shadow-sm ${statusBadge}`}
+            >
+              <i className={`fa-solid ${statusIcon}`} />
+              <span className="hidden sm:inline">{display.status}</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            {!readOnly && (
+              <div className="hidden items-center gap-2 sm:flex">
+                <button
+                  type="button"
+                  onClick={() => onUpdateStatus(candidate.id, 'Pass')}
+                  className="flex h-9 items-center gap-1.5 rounded-xl bg-emerald-50 px-4 text-xs font-bold text-emerald-600 shadow-sm transition-colors hover:bg-emerald-500 hover:text-white"
+                >
+                  <i className="fa-solid fa-check" /> Pass
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateStatus(candidate.id, 'Pending')}
+                  className="flex h-9 items-center gap-1.5 rounded-xl bg-[#FFEFCA] px-4 text-xs font-bold text-[#A28436] shadow-sm transition-colors hover:bg-[#F7D27F] hover:text-[#0D1742]"
+                >
+                  <i className="fa-solid fa-clock" /> Pending
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateStatus(candidate.id, 'Fail')}
+                  className="flex h-9 items-center gap-1.5 rounded-xl bg-[#B82649]/10 px-4 text-xs font-bold text-[#B82649] shadow-sm transition-colors hover:bg-[#B82649] hover:text-white"
+                >
+                  <i className="fa-solid fa-xmark" /> Fail
+                </button>
+              </div>
+            )}
+            <div className="hidden h-7 w-px bg-gray-200 sm:block"></div>
             <button
               type="button"
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground rounded-full p-2 transition-colors hover:bg-muted"
+              className="flex size-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-[#0D1742]"
             >
-              <i className="fa-solid fa-xmark text-2xl" />
+              <i className="fa-solid fa-xmark text-lg" />
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-card p-4 sm:p-6 lg:p-8">
-          {loadingDetail && (
-            <p className="text-muted-foreground text-sm">Loading full profile…</p>
-          )}
-          {detailError && (
-            <p className="text-sm text-red-600">{detailError}</p>
-          )}
-          {isSecondChoiceStage && (
-            <div
-              className="mx-auto mb-8 max-w-3xl rounded-xl border border-violet-200 bg-violet-50/90 px-4 py-3 text-sm text-violet-950 dark:border-violet-900/50 dark:bg-violet-950/50 dark:text-violet-200"
-              role="status"
-            >
-              <i className="fa-solid fa-shuffle mr-2 text-violet-700 dark:text-violet-400" aria-hidden />
-              <span className="font-bold">{SECOND_CHOICE_BANNER_TITLE}</span>
-              <span className="text-violet-900 dark:text-violet-100">
-                {' '}
-                — {secondChoiceBannerMessage(choice1Label)}
-              </span>
-            </div>
-          )}
-          <div className="mx-auto max-w-3xl space-y-10">
-            <section>
-              <h2 className="mb-6 flex items-center gap-3 text-xl font-bold tracking-tight text-blue-950 dark:text-blue-400">
-                I. Personal Information
-              </h2>
-
-              <div className="grid grid-cols-1 gap-y-6 gap-x-12 md:grid-cols-2">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600/80 shadow-sm">
-                    <i className="fa-regular fa-envelope" />
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-0.5 text-xs font-black tracking-wider uppercase">
-                      Your sID Email <span className="text-red-500">*</span>
-                    </p>
-                    <p className="text-foreground truncate text-sm font-bold">
-                      {display.email}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600/80 shadow-sm">
-                    <i className="fa-regular fa-user" />
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-0.5 text-xs font-black tracking-wider uppercase">
-                      Your Name <span className="text-red-500">*</span>
-                    </p>
-                    <p className="text-foreground truncate text-sm font-bold">
-                      {display.fullName}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600/80 shadow-sm">
-                    <i className="fa-solid fa-birthday-cake" />
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-0.5 text-xs font-black tracking-wider uppercase">
-                      Date of Birth <span className="text-red-500">*</span>
-                    </p>
-                    <p className="text-foreground truncate text-sm font-bold">
-                      {display.dob || 'N/A'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600/80 shadow-sm">
-                    <i className="fa-solid fa-phone" />
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-0.5 text-xs font-black tracking-wider uppercase">
-                      Phone <span className="text-red-500">*</span>
-                    </p>
-                    <p className="text-foreground truncate text-sm font-bold">
-                      {display.phone}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="col-span-1 flex items-start gap-4 md:col-span-2">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600/80 shadow-sm">
-                    <i className="fa-solid fa-graduation-cap" />
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-0.5 text-xs font-black tracking-wider uppercase">
-                      Major & year <span className="text-red-500">*</span>
-                    </p>
-                    <p className="text-foreground truncate text-sm font-bold">
-                      {display.majorLine} • {display.generation} • {display.semester}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600/80 shadow-sm">
-                    <i className="fa-brands fa-facebook" />
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-0.5 text-xs font-black tracking-wider uppercase">
-                      Facebook <span className="text-red-500">*</span>
-                    </p>
-                    <a
-                      href={display.fbLink || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-sm font-bold text-blue-600 hover:underline"
-                    >
-                      View Facebook
-                      <i className="fa-solid fa-up-right-from-square text-[10px]" />
-                    </a>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600/80 shadow-sm">
-                    <i className="fa-regular fa-file-alt" />
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-0.5 text-xs font-black tracking-wider uppercase">
-                      CV / Portfolio <span className="text-red-500">*</span>
-                    </p>
-                    <a
-                      href={display.cvLink || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-sm font-bold text-blue-600 hover:underline"
-                    >
-                      View CV
-                      <i className="fa-solid fa-up-right-from-square text-[10px]" />
-                    </a>
-                  </div>
+        {/* MAIN CONTENT AREA */}
+        <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row">
+          {/* CỘT TRÁI: Applicant Info */}
+          <div className="w-full shrink-0 border-b border-gray-100 bg-white px-5 py-6 sm:px-8 lg:w-85 lg:border-b-0 lg:border-r">
+            {isSecondChoiceStage && (
+              <div className="mb-6 flex items-start gap-3 rounded-2xl border border-[#E0D8FF] bg-[#F0EDFF] p-3.5 shadow-sm">
+                <i className="fa-solid fa-share mt-0.5 text-[#2C305F]" />
+                <div>
+                  <h4 className="text-[10px] font-black uppercase tracking-wider text-[#2C305F]">
+                    {SECOND_CHOICE_BANNER_TITLE}
+                  </h4>
+                  <p className="mt-1 text-xs font-medium leading-relaxed text-[#5E5E92]">
+                    {secondChoiceBannerMessage(choice1Label)}
+                  </p>
                 </div>
               </div>
-            </section>
-
-            <section className="border-t border-border pt-8">
-              <h2 className="mb-6 flex items-center gap-3 text-xl font-bold tracking-tight text-blue-950 dark:text-blue-400">
-                II. General questions
-              </h2>
-              {generalAnswers.length > 0 ? (
-                <div className="space-y-4">
-                  {generalAnswers.map((row, i) => (
-                    <AnswerCard key={`${row.question}-${i}`} row={row} />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  {loadingDetail
-                    ? 'Loading general answers…'
-                    : 'No general answers submitted.'}
-                </p>
-              )}
-            </section>
-
-            {showDepartmentSection && (
-              <section className="border-t border-border pt-8">
-                <h2 className="mb-6 text-xl font-bold tracking-tight text-blue-950 dark:text-blue-400">
-                  III. Department questions
-                </h2>
-                <div className="space-y-4">
-                  {deptCustomAnswers.map((row, i) => (
-                    <AnswerCard key={`${row.question}-${i}`} row={row} />
-                  ))}
-                </div>
-              </section>
             )}
 
-            {detail && (
-              <section className="text-muted-foreground rounded-xl border border-dashed border-border px-4 py-3 text-xs">
-                <p>
-                  <span className="font-semibold text-foreground">
-                    {isSecondChoiceStage
-                      ? 'First choice (did not pass):'
-                      : 'First choice:'}
-                  </span>{' '}
-                  {detail.choice1}
+            <div className="space-y-8">
+              {/* Profile Block */}
+              <div>
+                <h3 className="mb-4 text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">
+                  Applicant Details
+                </h3>
+                <ul className="space-y-4">
+                  <li className="flex items-start gap-3">
+                    <div className="mt-0.5 text-gray-400">
+                      <i className="fa-solid fa-envelope w-4 text-center" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-gray-500">
+                        Student Email
+                      </p>
+                      <p
+                        className="truncate text-[14px] font-semibold text-[#0D1742]"
+                        title={display.email}
+                      >
+                        {display.email}
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="mt-0.5 text-gray-400">
+                      <i className="fa-solid fa-phone w-4 text-center" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-500">
+                        Phone Number
+                      </p>
+                      <p className="text-[14px] font-semibold text-[#0D1742]">
+                        {display.phone || '—'}
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="mt-0.5 text-gray-400">
+                      <i className="fa-solid fa-cake-candles w-4 text-center" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-500">
+                        Date of Birth
+                      </p>
+                      <p className="text-[14px] font-semibold text-[#0D1742]">
+                        {display.dob || '—'}
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="mt-0.5 text-gray-400">
+                      <i className="fa-solid fa-graduation-cap w-4 text-center" />
+                    </div>
+                    <div className="flex-1 pb-2">
+                      <p className="text-xs font-bold text-gray-500">
+                        Major & Year
+                      </p>
+                      <p className="mt-0.5 text-[14px] font-semibold leading-snug text-[#0D1742]">
+                        {display.majorLine || '—'}
+                      </p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Links Block */}
+              <div>
+                <h3 className="mb-4 text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">
+                  External Links
+                </h3>
+                <div className="flex flex-col gap-2.5">
+                  <a
+                    href={display.cvLink || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 rounded-xl border border-gray-200 p-3 transition-colors hover:border-[#0D1742]/30 hover:bg-[#F8F9FC]"
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#EAEFFF] text-blue-600">
+                      <i className="fa-solid fa-file-pdf" />
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="truncate text-[14px] font-bold text-[#0D1742]">
+                        View Portfolio / CV
+                      </p>
+                      <p className="truncate text-[11px] font-medium text-gray-500">
+                        Click to open document
+                      </p>
+                    </div>
+                  </a>
+
+                  <a
+                    href={display.fbLink || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 rounded-xl border border-gray-200 p-3 transition-colors hover:border-[#0D1742]/30 hover:bg-[#F8F9FC]"
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#EAF3FF] text-[#1877F2]">
+                      <i className="fa-brands fa-facebook-f" />
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="truncate text-[14px] font-bold text-[#0D1742]">
+                        Facebook Profile
+                      </p>
+                      <p className="truncate text-[11px] font-medium text-gray-500">
+                        Verify social identity
+                      </p>
+                    </div>
+                  </a>
+                </div>
+              </div>
+
+              {/* Routing Info */}
+              {detail && (
+                <div className="rounded-xl bg-[#F8F9FC] p-4 border border-gray-100">
+                  <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">
+                    Routing Status
+                  </h3>
+                  <div className="space-y-2.5 text-xs">
+                    <div className="flex justify-between items-end border-b border-gray-200 pb-2">
+                      <span className="font-bold text-gray-500">
+                        1st Choice:
+                      </span>
+                      <span className="font-bold text-[#0D1742] text-right">
+                        {detail.choice1}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-end border-b border-gray-200 pb-2">
+                      <span className="font-bold text-gray-500">
+                        2nd Choice:
+                      </span>
+                      <span className="font-bold text-[#0D1742] text-right">
+                        {detail.choice2 ?? '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-end pt-0.5">
+                      <span className="font-bold text-gray-500">
+                        Assigned To:
+                      </span>
+                      <span className="font-black text-[#0D1742] text-right">
+                        {detail.department}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CỘT PHẢI: Q&A Responses (Màu nền ngả xanh) */}
+          <div className="flex-1 bg-[#F5F7FA] px-5 py-6 sm:px-8 lg:px-12 lg:py-8">
+            {loadingDetail ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <i className="fa-solid fa-spinner fa-spin text-3xl text-[#DCB968]" />
+                <p className="mt-4 text-sm font-bold text-[#0D1742]">
+                  Retrieving application data...
                 </p>
-                <p className="mt-1">
-                  <span className="font-semibold text-foreground">
-                    {isSecondChoiceStage
-                      ? 'Second choice (under review):'
-                      : 'Second choice:'}
-                  </span>{' '}
-                  {detail.choice2 ?? '—'}
-                </p>
-                <p className="mt-1">
-                  <span className="font-semibold text-foreground">
-                    Currently assigned to:
-                  </span>{' '}
-                  {detail.department}
-                </p>
-              </section>
+              </div>
+            ) : detailError ? (
+              <div className="rounded-2xl border border-[#B82649]/20 bg-[#B82649]/5 p-6 text-center text-[#B82649]">
+                <i className="fa-solid fa-triangle-exclamation text-2xl" />
+                <p className="mt-2 font-semibold">{detailError}</p>
+              </div>
+            ) : (
+              <div className="mx-auto max-w-3xl space-y-10 pb-8">
+                {/* General Section */}
+                <section>
+                  <h2 className="mb-5 flex items-center gap-2.5 text-lg font-black uppercase tracking-wider text-[#0D1742]">
+                    <i className="fa-solid fa-globe text-[#DCB968]" />
+                    General Questions
+                  </h2>
+                  {generalAnswers.length > 0 ? (
+                    <div>
+                      {generalAnswers.map((row, i) => (
+                        <AnswerCard key={`gen-${i}`} row={row} index={i} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm font-medium text-gray-500 italic">
+                      No general answers submitted.
+                    </p>
+                  )}
+                </section>
+
+                {/* Department Section */}
+                {showDepartmentSection && (
+                  <section>
+                    <h2 className="mb-5 flex items-center gap-2.5 text-lg font-black uppercase tracking-wider text-[#0D1742]">
+                      <i className="fa-solid fa-briefcase text-[#DCB968]" />
+                      Department Questions
+                    </h2>
+                    <div>
+                      {deptCustomAnswers.map((row, i) => (
+                        <AnswerCard key={`dept-${i}`} row={row} index={i} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
             )}
           </div>
         </div>
 
+        {/* MOBILE ACTION BAR */}
         {!readOnly && (
-          <div className="z-10 flex shrink-0 flex-col gap-3 border-t border-border bg-card p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] sm:flex-row sm:items-center sm:justify-center sm:gap-4 sm:p-6">
+          <div className="flex shrink-0 items-center justify-between border-t border-gray-200 bg-white p-3.5 sm:hidden gap-2">
             <button
               type="button"
               onClick={() => onUpdateStatus(candidate.id, 'Fail')}
-              className="w-full rounded-xl border-2 border-red-200 bg-red-50 px-6 py-3 text-sm font-black text-red-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-red-500 hover:bg-red-500 hover:text-white hover:shadow-md sm:w-36 lg:w-40"
+              className="flex flex-1 items-center justify-center rounded-xl bg-[#B82649]/10 py-2.5 text-sm font-bold text-[#B82649] transition-colors active:bg-[#B82649] active:text-white"
             >
               Fail
             </button>
             <button
               type="button"
               onClick={() => onUpdateStatus(candidate.id, 'Pending')}
-              className="w-full rounded-xl border-2 border-yellow-200 bg-yellow-50 px-6 py-3 text-sm font-black text-yellow-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-yellow-500 hover:bg-yellow-500 hover:text-white hover:shadow-md sm:w-36 lg:w-40"
+              className="flex flex-1 items-center justify-center rounded-xl bg-[#FFEFCA] py-2.5 text-sm font-bold text-[#A28436] transition-colors active:bg-[#F7D27F] active:text-[#0D1742]"
             >
               Pending
             </button>
             <button
               type="button"
               onClick={() => onUpdateStatus(candidate.id, 'Pass')}
-              className="w-full rounded-xl border-2 border-green-200 bg-green-50 px-6 py-3 text-sm font-black text-green-700 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-green-500 hover:bg-green-500 hover:text-white hover:shadow-md sm:w-36 lg:w-40"
+              className="flex flex-1 items-center justify-center rounded-xl bg-emerald-50 py-2.5 text-sm font-bold text-emerald-600 transition-colors active:bg-emerald-500 active:text-white"
             >
               Pass
             </button>

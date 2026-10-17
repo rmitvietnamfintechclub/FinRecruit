@@ -1,12 +1,6 @@
 'use client';
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CandidateTable, {
   type CandidateViewMode,
 } from '@/components/ui/CandidateTable';
@@ -18,7 +12,6 @@ import {
 } from '@/app/(frontend)/(router)/HeadDashboard/patchCandidateStatus';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { CohortBanner } from '@/components/feedback/CohortBanner';
-import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
 import type { DepartmentType } from '@/app/(backend)/types';
 import {
@@ -35,9 +28,11 @@ import {
 } from '@/components/head-dashboard/RoundModeTabs';
 import { RoundTransitionBar } from '@/components/head-dashboard/RoundTransitionBar';
 import type { LockRound1Result } from '@/types/roundTransition';
-import Link from 'next/link';
+import { HeadRound2SubNav } from './HeadDashboardShell';
+import { HeadDashboardDialogs } from '@/components/head-dashboard/HeadDashboardDialogs';
+import { Tooltip, TooltipProvider } from '@/components/ui/Tooltip';
 
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 12;
 
 const AnimatedNumber = ({ value }: { value: number }) => {
   return (
@@ -74,7 +69,6 @@ type ListApiResponse = {
     emptyState?: string | null;
     activeCohort?: ActiveCohort;
     filters?: {
-      search?: string;
       status?: string | null;
       department?: string;
     };
@@ -85,8 +79,6 @@ export default function HeadDashboardPage() {
   const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>(
     []
   );
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -107,6 +99,13 @@ export default function HeadDashboardPage() {
   const [round2Error, setRound2Error] = useState<string | null>(null);
   const departmentStates = useDepartmentStates();
   const { lock, pending: locking } = useLockRound1();
+
+  const observerTarget = useRef<HTMLDivElement>(null);
+
+  const pageRef = useRef(1);
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
 
   const headDepartment: DepartmentType | null =
     assignedDepartment &&
@@ -158,40 +157,24 @@ export default function HeadDashboardPage() {
       const res = await fetch('/api/head-dashboard/round2-status', {
         credentials: 'include',
       });
-
       const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        return;
-      }
-
+      if (!res.ok || !data.success) return;
       setRound2Locked(data.isRound2Locked);
-    } catch {
-      // Keep current state if request fails
-    }
+    } catch {}
   }, []);
 
   const handleLockRound2 = async () => {
     if (statsDisplay.pending > 0 || isLockingRound2) return;
-
     try {
       setIsLockingRound2(true);
       setLockError(null);
-
       const res = await fetch('/api/head-dashboard/lock-round-2', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to lock Round 2.');
-      }
-
+      if (!res.ok) throw new Error(data.message || 'Failed to lock Round 2.');
       setRound2Locked(true);
       setRound2ConfirmAction(null);
     } catch (error) {
@@ -205,25 +188,16 @@ export default function HeadDashboardPage() {
 
   const handleUnlockRound2 = async () => {
     if (isLockingRound2) return;
-
     try {
       setIsLockingRound2(true);
       setLockError(null);
-
       const res = await fetch('/api/head-dashboard/lock-round-2', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to unlock Round 2.');
-      }
-
+      if (!res.ok) throw new Error(data.message || 'Failed to unlock Round 2.');
       setRound2Locked(false);
       setRound2ConfirmAction(null);
     } catch (error) {
@@ -236,43 +210,36 @@ export default function HeadDashboardPage() {
   };
 
   const handleExportExcel = async (round: 1 | 2, status: 'Pass' | 'Fail') => {
-    if (exporting) return;
-
+    if (exporting || !headDepartment) return;
     try {
       setExporting(true);
       setExportOpen(false);
 
       const endpoint =
         round === 1
-          ? `/api/head-dashboard/export/round-1?status=${status}`
-          : `/api/head-dashboard/export/round-2?status=${status}`;
+          ? `/api/head-dashboard/export/round-1?status=${status}&department=${encodeURIComponent(headDepartment)}`
+          : `/api/head-dashboard/export/round-2?status=${status}&department=${encodeURIComponent(headDepartment)}`;
 
       const res = await fetch(endpoint, {
         method: 'GET',
         credentials: 'include',
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-
         throw new Error(data?.message || 'Failed to export Excel file.');
       }
-
       const blob = await res.blob();
-
       const url = window.URL.createObjectURL(blob);
-
       const link = document.createElement('a');
       link.href = url;
 
       link.download =
         round === 1
-          ? `Round_1_${status}_List_Export.xlsx`
-          : `Round_2_Final_${status}_Export.xlsx`;
+          ? `${headDepartment}_Round_1_${status}_List.xlsx`
+          : `${headDepartment}_Round_2_Final_${status}_List.xlsx`;
 
       document.body.appendChild(link);
       link.click();
-
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
@@ -287,11 +254,6 @@ export default function HeadDashboardPage() {
   useEffect(() => {
     void fetchRound2LockStatus();
   }, [fetchRound2LockStatus]);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 400);
-    return () => window.clearTimeout(t);
-  }, [searchQuery]);
 
   const refreshStats = useCallback(async () => {
     const base = '/api/head-dashboard/candidates';
@@ -315,9 +277,7 @@ export default function HeadDashboardPage() {
         passed: rPa.ok && jPa.success ? (jPa.meta?.total ?? 0) : 0,
         failed: rF.ok && jF.success ? (jF.meta?.total ?? 0) : 0,
       });
-    } catch {
-      /* keep previous stats */
-    }
+    } catch {}
   }, []);
 
   const loadList = useCallback(
@@ -326,18 +286,20 @@ export default function HeadDashboardPage() {
       append: boolean,
       options?: { isPoll?: boolean }
     ) => {
-      if (pageNum === 1 && !append && !options?.isPoll) {
-        setLoading(true);
-      } else if (pageNum > 1) {
-        setLoadingMore(true);
-      }
+      if (pageNum === 1 && !append && !options?.isPoll) setLoading(true);
+      else if (pageNum > 1) setLoadingMore(true);
       setError(null);
+
       try {
         const params = new URLSearchParams();
-        params.set('limit', String(PAGE_SIZE));
-        params.set('page', String(pageNum));
-        const q = debouncedSearch.trim();
-        if (q) params.set('search', q);
+
+        const fetchLimit = options?.isPoll
+          ? pageRef.current * PAGE_SIZE
+          : PAGE_SIZE;
+        const fetchPage = options?.isPoll ? 1 : pageNum;
+
+        params.set('limit', String(fetchLimit));
+        params.set('page', String(fetchPage));
         if (statusFilter !== 'All') params.set('status', statusFilter);
 
         const res = await fetch(`/api/head-dashboard/candidates?${params}`, {
@@ -354,12 +316,12 @@ export default function HeadDashboardPage() {
           }
           return;
         }
+
         const rows = json.candidates ?? [];
         const total = json.meta?.total ?? 0;
 
-        if (pageNum === 1 && !append) {
+        if (options?.isPoll) {
           if (
-            options?.isPoll &&
             prevListTotalRef.current !== null &&
             total > prevListTotalRef.current
           ) {
@@ -367,26 +329,30 @@ export default function HeadDashboardPage() {
           }
           prevListTotalRef.current = total;
           setCandidates(rows);
+          setListEmptyHint(
+            rows.length === 0 ? (json.meta?.emptyState ?? null) : null
+          );
+        } else if (pageNum === 1 && !append) {
+          prevListTotalRef.current = total;
+          setCandidates(rows);
           setPage(1);
           setHasMore((json.meta?.totalPages ?? 0) > 1);
+          setListEmptyHint(
+            rows.length === 0 ? (json.meta?.emptyState ?? null) : null
+          );
         } else if (append && pageNum > 1) {
-          setCandidates((prev) => [...prev, ...rows]);
-          const totalPages = json.meta?.totalPages ?? 0;
-          setHasMore(pageNum < totalPages);
+          setCandidates((prev) => {
+            const existingIds = new Set(prev.map((c) => c.id));
+            const newRows = rows.filter((r) => !existingIds.has(r.id));
+            return [...prev, ...newRows];
+          });
+          setHasMore(pageNum < (json.meta?.totalPages ?? 0));
           setPage(pageNum);
         }
 
-        setListEmptyHint(
-          rows.length === 0 && !options?.isPoll
-            ? (json.meta?.emptyState ?? null)
-            : null
-        );
-        if (json.meta?.activeCohort) {
-          setActiveCohort(json.meta.activeCohort);
-        }
-        if (json.meta?.filters?.department) {
+        if (json.meta?.activeCohort) setActiveCohort(json.meta.activeCohort);
+        if (json.meta?.filters?.department)
           setAssignedDepartment(json.meta.filters.department);
-        }
       } catch (e) {
         if (!options?.isPoll) {
           setError(
@@ -401,7 +367,7 @@ export default function HeadDashboardPage() {
         }
       }
     },
-    [debouncedSearch, statusFilter]
+    [statusFilter]
   );
 
   useEffect(() => {
@@ -416,6 +382,29 @@ export default function HeadDashboardPage() {
     void loadList(1, false, { isPoll: true });
     void refreshStats();
   }, [loadList, refreshStats]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          hasMore &&
+          !loadingMore &&
+          !loading &&
+          mode === 'round1'
+        ) {
+          void loadList(page + 1, true);
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, page, loadList, mode]);
 
   const loadRound2 = useCallback(async () => {
     setRound2Loading(true);
@@ -448,13 +437,10 @@ export default function HeadDashboardPage() {
   }, []);
 
   const handleLockRound1 = useCallback(async (): Promise<LockRound1Result> => {
-    if (!headDepartment) {
+    if (!headDepartment)
       return { success: false, message: 'No department assignment found.' };
-    }
     const result = await lock(headDepartment);
-    if (result.success) {
-      await Promise.all([loadList(1, false), refreshStats()]);
-    }
+    if (result.success) await Promise.all([loadList(1, false), refreshStats()]);
     return result;
   }, [headDepartment, lock, loadList, refreshStats]);
 
@@ -475,9 +461,8 @@ export default function HeadDashboardPage() {
     newStatus: DashboardStatus
   ) => {
     const candidate = candidates.find((c) => c.id === id);
-    if (candidate) {
+    if (candidate)
       setConfirmAction({ id, name: candidate.fullName, newStatus });
-    }
   };
 
   const executeStatusChange = async () => {
@@ -500,9 +485,7 @@ export default function HeadDashboardPage() {
           setConfirmAction(null);
           return;
         }
-        if (result.message) {
-          setPatchNotice(result.message);
-        }
+        if (result.message) setPatchNotice(result.message);
         return;
       }
       setConfirmAction(null);
@@ -523,9 +506,7 @@ export default function HeadDashboardPage() {
         confirmReroute: true,
       });
       if (!result.ok) {
-        if (result.message) {
-          setPatchNotice(result.message);
-        }
+        if (result.message) setPatchNotice(result.message);
         return;
       }
       setRerouteConfirm(null);
@@ -538,7 +519,6 @@ export default function HeadDashboardPage() {
   };
 
   const filterOptions = ['All', 'Pending', 'Pass', 'Fail'];
-
   const statsDisplay = useMemo(
     () => ({
       total: stats.total,
@@ -549,283 +529,161 @@ export default function HeadDashboardPage() {
     [stats]
   );
 
-  if (loading && candidates.length === 0 && !error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-        <i className="fa-solid fa-spinner fa-spin text-3xl text-blue-600" />
-        <p className="mt-4 text-sm font-semibold">Loading candidates…</p>
-      </div>
-    );
-  }
+  const isExportDisabled =
+    exporting || (mode === 'round1' ? !isRound1Locked : !round2Locked);
+  const exportDisabledReason =
+    mode === 'round1' && !isRound1Locked
+      ? 'Confirm & Lock Round 1 to export results'
+      : mode === 'round2' && !round2Locked
+        ? 'Confirm & Lock Round 2 to export results'
+        : undefined;
 
   return (
-    <div className="relative space-y-8">
-      {error ? (
-        <AppNotice
-          variant="error"
-          title="Could not load data"
-          onDismiss={() => setError(null)}
-          action={
-            <button
-              type="button"
-              onClick={() => void loadList(1, false)}
-              className="rounded-lg bg-red-100 px-3 py-1.5 text-sm font-semibold text-red-900 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-100 dark:hover:bg-red-900/70"
-            >
-              Retry
-            </button>
-          }
-        >
-          {error}
-        </AppNotice>
-      ) : null}
+    <TooltipProvider delayDuration={300}>
+      <div className="relative space-y-6">
+        {error && (
+          <AppNotice
+            variant="error"
+            title="Could not load data"
+            onDismiss={() => setError(null)}
+            action={
+              <button
+                type="button"
+                onClick={() => void loadList(1, false)}
+                className="rounded-lg bg-[#B82649]/10 px-3 py-1.5 text-sm font-semibold text-[#B82649] hover:bg-[#B82649]/20"
+              >
+                Retry
+              </button>
+            }
+          >
+            {error}
+          </AppNotice>
+        )}
 
-      {lockError ? (
-        <AppNotice variant="error" onDismiss={() => setLockError(null)}>
-          {lockError}
-        </AppNotice>
-      ) : null}
+        {lockError && (
+          <AppNotice variant="error" onDismiss={() => setLockError(null)}>
+            {lockError}
+          </AppNotice>
+        )}
+        {patchNotice && (
+          <AppNotice variant="error" onDismiss={() => setPatchNotice(null)}>
+            {patchNotice}
+          </AppNotice>
+        )}
+        {newCandidateNotice && (
+          <AppNotice
+            variant="info"
+            title="New application received"
+            onDismiss={() => setNewCandidateNotice(false)}
+          >
+            A new candidate has been added to your list.
+          </AppNotice>
+        )}
 
-      {patchNotice ? (
-        <AppNotice variant="error" onDismiss={() => setPatchNotice(null)}>
-          {patchNotice}
-        </AppNotice>
-      ) : null}
-
-      {newCandidateNotice ? (
-        <AppNotice
-          variant="info"
-          title="New application received"
-          onDismiss={() => setNewCandidateNotice(false)}
-        >
-          A new candidate has been added to your list.
-        </AppNotice>
-      ) : null}
-
-      <CohortBanner
-        cohort={activeCohort}
-        variant="head"
-        scopeLabel={
-          assignedDepartment
-            ? `Department Head view · ${assignedDepartment}`
-            : undefined
-        }
-      />
-
-      {headDepartment ? (
-        <div className="flex flex-col gap-4">
+        {/* 1. Round Toggle */}
+        {headDepartment || loading ? (
           <RoundModeTabs
             mode={mode}
             isLocked={isRound1Locked}
+            isLoading={!headDepartment && loading}
             onChange={setMode}
           />
-          <RoundTransitionBar
-            department={headDepartment}
-            evaluated={Math.max(stats.total - stats.pending, 0)}
-            total={stats.total}
-            pending={stats.pending}
-            isLocked={isRound1Locked}
-            locking={locking}
-            onLock={handleLockRound1}
-          />
-        </div>
-      ) : null}
+        ) : null}
 
-      <nav
-        className="bg-card border-border grid grid-cols-2 overflow-hidden rounded-xl border shadow-sm"
-        aria-label="Department head dashboard sections"
-      >
-        {[
-          { label: 'Candidate Evaluation', href: '/HeadDashboard' },
-          { label: 'Interview Schedule', href: '#interview-schedule' },
-        ].map((item, index) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={`flex items-center justify-center border-b-2 px-2 py-3 text-center text-xs font-bold transition-colors sm:px-4 sm:text-sm ${
-              index === 0
-                ? 'border-purple-600 text-purple-600'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+        {/* 2. Cohort Banner */}
+        <CohortBanner
+          cohort={activeCohort}
+          variant="head"
+          scopeLabel={assignedDepartment ? `${assignedDepartment}` : undefined}
+          mode={mode}
+          isRound1Locked={isRound1Locked}
+          isRound2Locked={round2Locked}
+        />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
-        <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl text-blue-600 sm:h-14 sm:w-14 sm:text-2xl">
-            <i className="fa-solid fa-users" />
-          </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600/80">
-              Total
-            </p>
-            <p className="mt-1.5 text-2xl font-black leading-none text-blue-600 sm:mt-2 sm:text-3xl">
-              <AnimatedNumber value={statsDisplay.total} />
-            </p>
-            <p className="mt-1.5 text-sm font-semibold text-blue-600/80">
-              Applicants
-            </p>
-          </div>
-        </div>
+        {/* 3. Sub Nav (Chỉ hiển thị khi đang ở Round 2) */}
+        {mode === 'round2' && <HeadRound2SubNav />}
 
-        <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-yellow-100 text-xl text-yellow-600 sm:h-14 sm:w-14 sm:text-2xl">
-            <i className="fa-solid fa-clock" />
-          </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-yellow-600/80">
-              Pending
-            </p>
-            <p className="mt-1.5 text-2xl font-black leading-none text-yellow-600 sm:mt-2 sm:text-3xl">
-              <AnimatedNumber value={statsDisplay.pending} />
-            </p>
-            <p className="mt-1.5 text-sm font-semibold text-yellow-600/80">
-              In Review
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-xl text-green-600 sm:h-14 sm:w-14 sm:text-2xl">
-            <i className="fa-solid fa-check" />
-          </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-green-600/80">
-              Passed
-            </p>
-            <p className="mt-1.5 text-2xl font-black leading-none text-green-600 sm:mt-2 sm:text-3xl">
-              <AnimatedNumber value={statsDisplay.passed} />
-            </p>
-            <p className="mt-1.5 text-sm font-semibold text-green-600/80">
-              Qualified
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-card border-border flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-1 sm:gap-5 sm:p-6">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-100 text-xl text-red-600 sm:h-14 sm:w-14 sm:text-2xl">
-            <i className="fa-solid fa-xmark" />
-          </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-red-600/80">
-              Failed
-            </p>
-            <p className="mt-1.5 text-2xl font-black leading-none text-red-600 sm:mt-2 sm:text-3xl">
-              <AnimatedNumber value={statsDisplay.failed} />
-            </p>
-            <p className="mt-1.5 text-sm font-semibold text-red-600/80">
-              Rejected
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {mode === 'round2' ? (
-        <>
-          <section className="bg-card border-border rounded-2xl border p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-muted-foreground text-[10px] font-black uppercase tracking-[0.18em]">
-                  Round 2 evaluation
-                </p>
-                <h2 className="mt-1 text-xl font-black tracking-tight">
-                  {round2Locked
-                    ? `Locked — ${statsDisplay.passed + statsDisplay.failed} evaluated`
-                    : statsDisplay.pending === 0
-                      ? `Complete — ${statsDisplay.passed + statsDisplay.failed} evaluated`
-                      : `In progress — ${statsDisplay.passed + statsDisplay.failed} of ${statsDisplay.total} evaluated`}
-                </h2>
-                <div className="mt-2 h-1.5 w-56 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-purple-600 transition-all"
-                    style={{
-                      width: `${statsDisplay.total ? ((statsDisplay.passed + statsDisplay.failed) / statsDisplay.total) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setRound2ConfirmAction(round2Locked ? 'unlock' : 'lock')
-                }
-                disabled={
-                  isLockingRound2 || (!round2Locked && statsDisplay.pending > 0)
-                }
-                className="rounded-lg bg-muted px-4 py-2 text-xs font-bold text-muted-foreground disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isLockingRound2 ? (
-                  <>
-                    <i className="fa-solid fa-spinner fa-spin mr-2" />
-                    {round2Locked ? 'Unlocking...' : 'Locking...'}
-                  </>
-                ) : round2Locked ? (
-                  <>
-                    <i className="fa-solid fa-lock-open mr-2" />
-                    Unlock Round 2
-                  </>
-                ) : (
-                  <>
-                    <i className="fa-solid fa-lock mr-2" />
-                    Confirm & Lock Round 2
-                  </>
-                )}
-              </button>
+        {/* 4. Stats Grid */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#F0EDFF] text-[#2C305F]">
+              <i className="fa-solid fa-user-group text-2xl" />
             </div>
-            {statsDisplay.pending > 0 ? (
-              <p className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-800 dark:border-yellow-900/50 dark:bg-yellow-950/30 dark:text-yellow-300">
-                <i className="fa-solid fa-triangle-exclamation mr-2" />
-                You still have {statsDisplay.pending} pending candidate
-                {statsDisplay.pending === 1 ? '' : 's'}.
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#2C305F]">
+                Total
               </p>
-            ) : null}
-          </section>
+              <p className="text-3xl font-black text-[#0D1742]">
+                <AnimatedNumber value={statsDisplay.total} />
+              </p>
+              <p className="text-xs font-semibold text-[#5E5E92]">Applicants</p>
+            </div>
+          </div>
 
-          <ConfirmDialog
-            open={round2ConfirmAction !== null}
-            title={
-              round2ConfirmAction === 'unlock'
-                ? 'Unlock Round 2?'
-                : 'Lock Round 2?'
-            }
-            variant={
-              round2ConfirmAction === 'unlock' ? 'default' : 'destructive'
-            }
-            description={
-              round2ConfirmAction === 'unlock'
-                ? 'Are you sure you want to unlock Round 2? This will allow Round 2 evaluations to be modified again.'
-                : 'Are you sure you want to lock Round 2? All Round 2 evaluations will be finalized. You can unlock it later if needed.'
-            }
-            confirmLabel={
-              round2ConfirmAction === 'unlock'
-                ? 'Unlock Round 2'
-                : 'Lock Round 2'
-            }
-            onConfirm={() =>
-              void (round2ConfirmAction === 'unlock'
-                ? handleUnlockRound2()
-                : handleLockRound2())
-            }
-            onCancel={() => setRound2ConfirmAction(null)}
-            loading={isLockingRound2}
-          />
-        </>
-      ) : null}
+          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFEFCA] text-[#A28436]">
+              <i className="fa-regular fa-clock text-2xl" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#A28436]">
+                Pending
+              </p>
+              <p className="text-3xl font-black text-[#A28436]">
+                <AnimatedNumber value={statsDisplay.pending} />
+              </p>
+              <p className="text-xs font-semibold text-[#A28436]/70">
+                In Review
+              </p>
+            </div>
+          </div>
 
-      {mode === 'round1' ? (
-        <div className="bg-card border-border flex flex-col gap-4 rounded-xl border p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-          <div className="bg-muted/40 -mx-1 flex w-full max-w-full items-center gap-1.5 overflow-x-auto rounded-xl p-1.5 sm:mx-0 sm:w-fit sm:gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+              <i className="fa-solid fa-check text-2xl" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                Passed
+              </p>
+              <p className="text-3xl font-black text-emerald-600">
+                <AnimatedNumber value={statsDisplay.passed} />
+              </p>
+              <p className="text-xs font-semibold text-emerald-600/70">
+                Qualified
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#B82649]/10 text-[#B82649]">
+              <i className="fa-solid fa-xmark text-2xl" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#B82649]">
+                Failed
+              </p>
+              <p className="text-3xl font-black text-[#B82649]">
+                <AnimatedNumber value={statsDisplay.failed} />
+              </p>
+              <p className="text-xs font-semibold text-[#B82649]/70">
+                Rejected
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Filter / Action Bar */}
+        <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex w-full overflow-x-auto rounded-xl bg-gray-100 p-1 sm:w-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {filterOptions.map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => setStatusFilter(option)}
-                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 sm:px-6 sm:py-2.5 sm:text-sm ${
+                className={`shrink-0 rounded-lg px-6 py-2 text-sm font-bold transition-all ${
                   statusFilter === option
-                    ? 'scale-105 bg-blue-600 text-white shadow-md'
-                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                    ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
+                    : 'text-gray-500 hover:text-[#0D1742]'
                 }`}
               >
                 {option}
@@ -833,275 +691,276 @@ export default function HeadDashboardPage() {
             ))}
           </div>
 
-          <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:items-center lg:w-auto">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setExportOpen((prev) => !prev)}
-                disabled={exporting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Tooltip content={exportDisabledReason || 'Export list to Excel'}>
+              <span
+                className={
+                  isExportDisabled
+                    ? 'inline-block cursor-not-allowed'
+                    : 'inline-block'
+                }
               >
-                {exporting ? (
-                  <i className="fa-solid fa-spinner fa-spin text-emerald-600" />
-                ) : (
-                  <i className="fa-solid fa-file-excel text-emerald-600" />
-                )}
+                <button
+                  type="button"
+                  onClick={() => setExportOpen((prev) => !prev)}
+                  disabled={isExportDisabled}
+                  className="relative flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-900 shadow-sm transition-colors hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-60"
+                >
+                  {exporting ? (
+                    <i className="fa-solid fa-spinner fa-spin text-emerald-600" />
+                  ) : (
+                    <i className="fa-solid fa-file-excel text-emerald-600" />
+                  )}
+                  {exporting ? 'Exporting...' : 'Export Excel'}
 
-                {exporting ? 'Exporting...' : 'Export Excel'}
+                  {!exporting && (
+                    <i
+                      className={`fa-solid ${
+                        isExportDisabled ? 'fa-lock' : 'fa-chevron-down'
+                      } ml-1 text-xs text-gray-400 transition-transform ${
+                        exportOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  )}
 
-                {!exporting && (
-                  <i
-                    className={`fa-solid fa-chevron-down ml-1 text-xs text-muted-foreground transition-transform ${
-                      exportOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                )}
-              </button>
+                  {exportOpen && !isExportDisabled && (
+                    <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
+                      <div className="mb-1 border-b border-gray-100 px-3 py-2">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+                          Export Round {mode === 'round1' ? '1' : '2'}
+                        </p>
+                      </div>
+                      <div className="px-1 pb-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleExportExcel(
+                              mode === 'round1' ? 1 : 2,
+                              'Pass'
+                            )
+                          }
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-gray-50"
+                        >
+                          <i className="fa-solid fa-check text-emerald-600" />{' '}
+                          Passed candidates
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleExportExcel(
+                              mode === 'round1' ? 1 : 2,
+                              'Fail'
+                            )
+                          }
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-gray-50"
+                        >
+                          <i className="fa-solid fa-xmark text-[#B82649]" />{' '}
+                          Failed candidates
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              </span>
+            </Tooltip>
 
-              {exportOpen && (
-                <div className="bg-card border-border absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border p-1.5 shadow-lg">
-                  <div className="px-3 py-2">
-                    <p className="text-muted-foreground text-[10px] font-black uppercase tracking-wider">
-                      Export Excel
-                    </p>
-                  </div>
-
-                  {/* Round 1 */}
-                  <div className="px-1 pb-1">
-                    <p className="text-muted-foreground px-2 py-1 text-xs font-bold">
-                      Round 1
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={() => void handleExportExcel(1, 'Pass')}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
-                    >
-                      <i className="fa-solid fa-check text-green-600" />
-                      Passed candidates
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => void handleExportExcel(1, 'Fail')}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
-                    >
-                      <i className="fa-solid fa-xmark text-red-600" />
-                      Failed candidates
-                    </button>
-                  </div>
-
-                  <div className="border-border border-t" />
-
-                  {/* Round 2 */}
-                  <div className="px-1 pt-1">
-                    <p className="text-muted-foreground px-2 py-1 text-xs font-bold">
-                      Round 2
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={() => void handleExportExcel(2, 'Pass')}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
-                    >
-                      <i className="fa-solid fa-check text-green-600" />
-                      Passed candidates
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => void handleExportExcel(2, 'Fail')}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted"
-                    >
-                      <i className="fa-solid fa-xmark text-red-600" />
-                      Failed candidates
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="relative w-full sm:w-72">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-                <i className="fa-solid fa-magnifying-glass text-muted-foreground" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search by name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-600/50 w-full rounded-xl border py-3 pl-11 pr-4 text-sm shadow-sm transition-all focus:border-blue-600 focus:ring-2 focus:outline-none"
-              />
-            </div>
-
-            <div
-              className="bg-muted/40 flex w-fit shrink-0 items-center gap-1 rounded-xl p-1.5"
-              role="group"
-              aria-label="Candidate layout"
-            >
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                aria-pressed={viewMode === 'grid'}
-                title="Card view"
-                className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
-                  viewMode === 'grid'
-                    ? 'scale-105 bg-blue-600 text-white shadow-md'
-                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-                }`}
-              >
-                <i className="fa-solid fa-grip" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                aria-pressed={viewMode === 'list'}
-                title="List view"
-                className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
-                  viewMode === 'list'
-                    ? 'scale-105 bg-blue-600 text-white shadow-md'
-                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-                }`}
-              >
-                <i className="fa-solid fa-list" />
-              </button>
+            <div className="flex rounded-xl bg-gray-100 p-1">
+              <Tooltip content="Grid View">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`flex size-9 items-center justify-center rounded-lg transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
+                      : 'text-gray-500 hover:text-[#0D1742]'
+                  }`}
+                >
+                  <i className="fa-solid fa-grip" />
+                </button>
+              </Tooltip>
+              <Tooltip content="List View">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`flex size-9 items-center justify-center rounded-lg transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
+                      : 'text-gray-500 hover:text-[#0D1742]'
+                  }`}
+                >
+                  <i className="fa-solid fa-list" />
+                </button>
+              </Tooltip>
             </div>
           </div>
         </div>
-      ) : null}
 
-      <div className="mt-4">
-        {mode === 'round2' && round2Loading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <i className="fa-solid fa-spinner fa-spin text-2xl text-blue-600" />
-            <p className="mt-3 text-sm font-semibold">Loading Round 2 pool…</p>
-          </div>
-        ) : null}
-
-        {mode === 'round2' && round2Error ? (
-          <AppNotice
-            variant="error"
-            title="Could not load the Round 2 pool"
-            onDismiss={() => setRound2Error(null)}
-          >
-            {round2Error}
-          </AppNotice>
-        ) : null}
-
-        <CandidateTable
-          candidates={mode === 'round2' ? round2Candidates : candidates}
-          onUpdateStatus={
-            mode === 'round2' ? () => undefined : handleUpdateStatusRequest
-          }
-          viewMode={viewMode}
-          readOnly={mode === 'round2' || isRound1Locked}
-        />
-
-        {(mode === 'round2' ? round2Candidates : candidates).length === 0 &&
-          (mode === 'round2' ? !round2Loading && !round2Error : !loading) && (
-            <div className="bg-card border-border mt-4 flex flex-col items-center justify-center rounded-2xl border py-20 text-center shadow-sm">
-              <div className="bg-muted/50 mb-5 flex h-20 w-20 items-center justify-center rounded-full">
-                <i
-                  className={`fa-solid ${mode === 'round2' ? 'fa-people-group' : 'fa-folder-open'} text-muted-foreground text-3xl`}
-                />
-              </div>
-              <p className="text-foreground text-xl font-black">
-                {mode === 'round2'
-                  ? 'No candidates in the Round 2 pool yet'
-                  : 'No candidates found'}
-              </p>
-              <p className="text-muted-foreground mt-2 text-sm font-medium">
-                {mode === 'round2'
-                  ? 'Passed Round 1 candidates will appear here.'
-                  : (listEmptyHint ??
-                    'Try adjusting your search or filter settings.')}
-              </p>
+        {/* 6. Khu vực Bảng Danh Sách */}
+        <div className="relative mt-4">
+          {mode === 'round1' && headDepartment ? (
+            <div className="mb-6">
+              <RoundTransitionBar
+                department={headDepartment}
+                evaluated={Math.max(stats.total - stats.pending, 0)}
+                total={stats.total}
+                pending={stats.pending}
+                isLocked={isRound1Locked}
+                locking={locking}
+                onLock={handleLockRound1}
+              />
             </div>
-          )}
+          ) : null}
 
-        {mode === 'round1' && hasMore && candidates.length > 0 && (
-          <div className="mt-8 flex justify-center">
-            <button
-              type="button"
-              disabled={loadingMore}
-              onClick={() => void loadList(page + 1, true)}
-              className="bg-card border-border text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 inline-flex items-center gap-2 rounded-xl border px-8 py-3 text-sm font-bold shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md disabled:opacity-60"
-            >
-              {loadingMore ? (
-                <i className="fa-solid fa-spinner fa-spin" />
-              ) : (
-                <i className="fa-solid fa-angle-down" />
-              )}
-              Load more
-            </button>
-          </div>
-        )}
-      </div>
-
-      <ConfirmDialog
-        open={confirmAction !== null}
-        title="Confirm status change"
-        description={
-          confirmAction ? (
-            <>
-              Change status for{' '}
-              <span className="text-foreground font-semibold">
-                {confirmAction.name}
-              </span>{' '}
-              to{' '}
-              <span
-                className={
-                  confirmAction.newStatus === 'Pass'
-                    ? 'font-semibold text-green-600 dark:text-green-400'
-                    : confirmAction.newStatus === 'Pending'
-                      ? 'font-semibold text-yellow-600 dark:text-yellow-400'
-                      : 'font-semibold text-red-600 dark:text-red-400'
-                }
-              >
-                {confirmAction.newStatus}
-              </span>
-              ?
-            </>
-          ) : (
-            ''
-          )
-        }
-        confirmLabel="Confirm"
-        onConfirm={() => void executeStatusChange()}
-        onCancel={() => setConfirmAction(null)}
-        loading={patching}
-      />
-
-      <ConfirmDialog
-        open={rerouteConfirm !== null}
-        title="Send for second-choice review?"
-        variant="destructive"
-        description={
-          rerouteConfirm ? (
-            <>
-              <p>{rerouteConfirm.message}</p>
-              {rerouteConfirm.preview ? (
-                <p className="mt-2">
-                  Second-choice department:{' '}
-                  <span className="text-foreground font-semibold">
-                    {rerouteConfirm.preview.targetDepartment}
-                  </span>
-                  . New status:{' '}
-                  <span className="text-foreground font-semibold">
-                    {rerouteConfirm.preview.resultingStatus}
-                  </span>
-                  .
+          {mode === 'round2' ? (
+            <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+                    Round 2 evaluation
+                  </p>
+                  <h2 className="mt-1 text-xl font-black tracking-tight text-gray-900">
+                    {round2Locked
+                      ? `Locked — ${statsDisplay.passed + statsDisplay.failed} evaluated`
+                      : statsDisplay.pending === 0
+                        ? `Complete — ${statsDisplay.passed + statsDisplay.failed} evaluated`
+                        : `In progress — ${statsDisplay.passed + statsDisplay.failed} of ${statsDisplay.total} evaluated`}
+                  </h2>
+                  <div className="mt-2 h-1.5 w-56 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className="h-full rounded-full bg-[#0D1742] transition-all"
+                      style={{
+                        width: `${statsDisplay.total ? ((statsDisplay.passed + statsDisplay.failed) / statsDisplay.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setRound2ConfirmAction(round2Locked ? 'unlock' : 'lock')
+                  }
+                  disabled={
+                    isLockingRound2 ||
+                    (!round2Locked && statsDisplay.pending > 0)
+                  }
+                  className="rounded-lg bg-gray-100 px-4 py-2 text-xs font-bold text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isLockingRound2 ? (
+                    <>
+                      <i className="fa-solid fa-spinner fa-spin mr-2 text-[#DCB968]" />
+                      {round2Locked ? 'Unlocking...' : 'Locking...'}
+                    </>
+                  ) : round2Locked ? (
+                    <>
+                      <i className="fa-solid fa-lock-open mr-2" />
+                      Unlock Round 2
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-lock mr-2" />
+                      Confirm & Lock Round 2
+                    </>
+                  )}
+                </button>
+              </div>
+              {statsDisplay.pending > 0 ? (
+                <p className="mt-4 rounded-lg border border-[#F7D27F] bg-[#FFEFCA] px-3 py-2 text-xs font-semibold text-[#A28436]">
+                  <i className="fa-solid fa-triangle-exclamation mr-2" />
+                  You still have {statsDisplay.pending} pending candidate
+                  {statsDisplay.pending === 1 ? '' : 's'}.
                 </p>
               ) : null}
-            </>
+            </section>
+          ) : null}
+
+          {/* --- DUY NHẤT 1 TRẠNG THÁI LOADING BẰNG SPINNER CHO CẢ TRANG --- */}
+          {(loading && mode === 'round1' && !error) ||
+          (round2Loading && mode === 'round2' && !round2Error) ? (
+            <div className="flex min-h-100 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white text-center shadow-sm py-20">
+              <i className="fa-solid fa-spinner fa-spin text-3xl text-[#DCB968]" />
+              <p className="mt-4 text-sm font-bold text-[#0D1742]">
+                Loading candidates…
+              </p>
+            </div>
           ) : (
-            ''
-          )
-        }
-        confirmLabel="Send for 2nd review"
-        onConfirm={() => void executeReroute()}
-        onCancel={() => setRerouteConfirm(null)}
-        loading={patching}
-      />
-    </div>
+            <div className="transition-opacity duration-300 opacity-100">
+              {(mode === 'round2' ? round2Candidates : candidates).length >
+              0 ? (
+                <>
+                  <CandidateTable
+                    candidates={
+                      mode === 'round2' ? round2Candidates : candidates
+                    }
+                    onUpdateStatus={
+                      mode === 'round2'
+                        ? () => undefined
+                        : handleUpdateStatusRequest
+                    }
+                    viewMode={viewMode}
+                    readOnly={mode === 'round2' || isRound1Locked}
+                  />
+
+                  {/* --- INFINITE SCROLL TARGET --- */}
+                  {mode === 'round1' && hasMore && (
+                    <div
+                      ref={observerTarget}
+                      className="mt-6 flex justify-center py-6"
+                    >
+                      {loadingMore ? (
+                        <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-5 py-2.5 shadow-sm">
+                          <i className="fa-solid fa-spinner fa-spin text-[#DCB968]" />
+                          <span className="text-xs font-bold text-[#0D1742]">
+                            Loading more candidates...
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="h-4 w-full" aria-hidden="true" />
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white py-20 text-center shadow-sm">
+                  <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-gray-50">
+                    <i
+                      className={`fa-solid ${
+                        mode === 'round2' ? 'fa-people-group' : 'fa-folder-open'
+                      } text-3xl text-gray-400`}
+                    />
+                  </div>
+                  <p className="text-xl font-black text-[#0D1742]">
+                    {mode === 'round2'
+                      ? 'No candidates in the Round 2 pool yet'
+                      : 'No candidates found'}
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-gray-500">
+                    {mode === 'round2'
+                      ? 'Passed Round 1 candidates will appear here.'
+                      : (listEmptyHint ??
+                        'Try adjusting your search or filter settings.')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <HeadDashboardDialogs
+          confirmAction={confirmAction}
+          onCloseStatus={() => setConfirmAction(null)}
+          onConfirmStatus={() => void executeStatusChange()}
+          isPatching={patching}
+          rerouteConfirm={rerouteConfirm}
+          onCloseReroute={() => setRerouteConfirm(null)}
+          onConfirmReroute={() => void executeReroute()}
+          round2ConfirmAction={round2ConfirmAction}
+          onCloseRound2={() => setRound2ConfirmAction(null)}
+          onConfirmRound2={() =>
+            void (round2ConfirmAction === 'unlock'
+              ? handleUnlockRound2()
+              : handleLockRound2())
+          }
+          isLockingRound2={isLockingRound2}
+        />
+      </div>
+    </TooltipProvider>
   );
 }

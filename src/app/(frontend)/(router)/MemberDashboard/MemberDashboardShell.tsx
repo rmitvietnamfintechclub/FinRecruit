@@ -20,13 +20,11 @@ export function MemberDashboardShell({
 }: MemberDashboardShellProps) {
   return (
     <DashboardAppShell
-      title="Round 2 Interview Dashboard"
-      badgeLabel={departmentLabel}
-      badgeVariant="yellow"
+      title="Recruitment Evaluation"
       userName={userName}
       userInitial={userInitial}
       userAvatar={userAvatar}
-      userSubtitle="Member"
+      userSubtitle={`Member • ${departmentLabel.replace(' Department', '')}`}
     >
       {children}
     </DashboardAppShell>

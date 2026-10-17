@@ -63,7 +63,7 @@ export function WaitingRoomClient({
         <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
           Hello,{' '}
           <span className="font-bold text-foreground">{displayName}</span>. The
-          Executive Board is currently verifying your membership. This page will{' '}
+          EBMB is currently verifying your membership. This page will{' '}
           <span className="font-semibold text-[#DCB968]">
             automatically refresh
           </span>{' '}

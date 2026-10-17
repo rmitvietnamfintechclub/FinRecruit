@@ -23,10 +23,13 @@ function isDepartmentType(value: unknown): value is DepartmentType {
   return typeof value === 'string';
 }
 
-export const GET = withActiveRBAC('Executive Board', async () => {
-  const payload = await getUserManagementPayloadFromDb();
-  return NextResponse.json(payload);
-});
+export const GET = withActiveRBAC(
+  ['Executive Board', 'Department Head'],
+  async () => {
+    const payload = await getUserManagementPayloadFromDb();
+    return NextResponse.json(payload);
+  }
+);
 
 type PatchBody = {
   userId?: string;
@@ -42,7 +45,7 @@ function getClientIp(req: NextRequest): string | undefined {
 }
 
 export const PATCH = withActiveRBAC(
-  ['Executive Board'],
+  ['Executive Board', 'Department Head'],
   async (req: NextRequest, { session }) => {
     let body: PatchBody;
     try {
@@ -79,6 +82,31 @@ export const PATCH = withActiveRBAC(
         { success: false, message: 'Invalid department.' },
         { status: 400 }
       );
+    }
+
+    // Ngăn chặn Deparment Head hack payload để phong chức Executive Board hoặc sửa ban khác
+    if (session.user.role === 'Department Head') {
+      if (role === 'Executive Board') {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Department Heads cannot promote to Executive Board.',
+          },
+          { status: 403 }
+        );
+      }
+      if (
+        department !== 'Unassigned' &&
+        department !== session.user.department
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'You can only assign members to your own department.',
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const result = await patchUserInDb({

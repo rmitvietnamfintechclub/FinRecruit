@@ -1,99 +1,17 @@
 'use client';
 
-import React, { useState, useSyncExternalStore } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { signOut } from 'next-auth/react';
-import { LogoutButton } from '@/components/LogoutButton';
-
-export type DashboardBadgeVariant = 'yellow' | 'purple';
-
-const BADGE_STYLES: Record<
-  DashboardBadgeVariant,
-  {
-    border: string;
-    bg: string;
-    text: string;
-    darkBorder: string;
-    darkBg: string;
-    darkText: string;
-  }
-> = {
-  yellow: {
-    border: 'border-yellow-200',
-    bg: 'bg-yellow-100',
-    text: 'text-yellow-700',
-    darkBorder: 'dark:border-yellow-900/50',
-    darkBg: 'dark:bg-yellow-900/30',
-    darkText: 'dark:text-yellow-500',
-  },
-  purple: {
-    border: 'border-purple-200',
-    bg: 'bg-purple-100',
-    text: 'text-purple-700',
-    darkBorder: 'dark:border-purple-900/50',
-    darkBg: 'dark:bg-purple-900/30',
-    darkText: 'dark:text-purple-400',
-  },
-};
-
-const AVATAR_STYLES: Record<DashboardBadgeVariant, string> = {
-  yellow: 'bg-blue-600',
-  purple: 'bg-purple-600',
-};
-
-/**
- * Theme is read through an external store so the server render and the first
- * client render agree (both `false`); the real preference is applied on
- * subscribe, after hydration. Avoids a hydration mismatch on the toggle icon.
- */
-const themeListeners = new Set<() => void>();
-let themeDark = false;
-let themeInitialized = false;
-
-function ensureThemeInitialized(): void {
-  if (themeInitialized || typeof window === 'undefined') return;
-  themeInitialized = true;
-  const savedTheme = localStorage.getItem('theme');
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  themeDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
-  document.documentElement.classList.toggle('dark', themeDark);
-}
-
-function subscribeTheme(listener: () => void): () => void {
-  ensureThemeInitialized();
-  themeListeners.add(listener);
-  return () => {
-    themeListeners.delete(listener);
-  };
-}
-
-function getThemeSnapshot(): boolean {
-  return themeDark;
-}
-
-function getServerThemeSnapshot(): boolean {
-  return false;
-}
-
-function setTheme(next: boolean): void {
-  themeDark = next;
-  document.documentElement.classList.toggle('dark', next);
-  localStorage.setItem('theme', next ? 'dark' : 'light');
-  for (const listener of themeListeners) listener();
-}
 
 export type DashboardAppShellProps = {
   children: React.ReactNode;
   title: string;
-  badgeLabel: string;
-  badgeVariant: DashboardBadgeVariant;
   userName: string;
   userInitial: string;
   userSubtitle: string;
-  /** Avatar URL from the session (e.g. Google OAuth picture). Falls back to
-   * the colored initial circle when missing or when the image fails to load. */
   userAvatar?: string | null;
-  showLogout?: boolean;
+  /** Inject thanh điều hướng riêng của từng Role vào giữa Navbar */
   headerNav?: React.ReactNode;
 };
 
@@ -101,38 +19,29 @@ function UserAvatar({
   userName,
   userInitial,
   userAvatar,
-  badgeVariant,
-  size = 'md',
 }: {
   userName: string;
   userInitial: string;
   userAvatar?: string | null;
-  badgeVariant: DashboardBadgeVariant;
-  size?: 'sm' | 'md';
 }) {
   const [avatarBroken, setAvatarBroken] = useState(false);
   const showImage = Boolean(userAvatar) && !avatarBroken;
-  const dim = size === 'sm' ? 'h-9 w-9 text-sm' : 'h-10 w-10';
 
   if (showImage) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- dynamic OAuth URL
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={userAvatar ?? ''}
         alt={userName}
         referrerPolicy="no-referrer"
         onError={() => setAvatarBroken(true)}
-        className={`${dim} shrink-0 cursor-pointer rounded-full border border-border object-cover shadow-md transition-opacity hover:opacity-90`}
-        title={userName}
+        className="size-10 shrink-0 rounded-full border border-gray-200 object-cover shadow-sm"
       />
     );
   }
 
   return (
-    <div
-      className={`flex ${dim} shrink-0 cursor-pointer items-center justify-center rounded-full font-bold text-white shadow-md transition-opacity hover:opacity-90 ${AVATAR_STYLES[badgeVariant]}`}
-      title={userName}
-    >
+    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#0D1742] text-sm font-bold text-[#DCB968] shadow-sm">
       {userInitial}
     </div>
   );
@@ -141,148 +50,114 @@ function UserAvatar({
 export function DashboardAppShell({
   children,
   title,
-  badgeLabel,
-  badgeVariant,
   userName,
   userInitial,
   userSubtitle,
   userAvatar,
-  showLogout = true,
   headerNav,
 }: DashboardAppShellProps) {
-  const isDarkMode = useSyncExternalStore(
-    subscribeTheme,
-    getThemeSnapshot,
-    getServerThemeSnapshot
-  );
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const toggleDarkMode = () => {
-    setTheme(!isDarkMode);
-  };
-
-  const b = BADGE_STYLES[badgeVariant];
-
-  const badgeEl = (
-    <div
-      className={`max-w-[min(100%,220px)] truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm sm:max-w-none sm:px-4 sm:text-sm ${b.border} ${b.bg} ${b.text} ${b.darkBorder} ${b.darkBg} ${b.darkText}`}
-      title={badgeLabel}
-    >
-      {badgeLabel}
-    </div>
-  );
-
-  const themeBtn = (
-    <i
-      className={`fa-solid ${isDarkMode ? 'fa-sun text-yellow-500' : 'fa-moon'} cursor-pointer text-lg text-muted-foreground transition-all hover:scale-110 hover:text-foreground sm:text-xl`}
-      onClick={toggleDarkMode}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') toggleDarkMode();
-      }}
-      role="button"
-      tabIndex={0}
-      title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-    />
-  );
-
-  const logoutEl = showLogout ? (
-    <>
-      <LogoutButton
-        label="Sign out"
-        className="hidden items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
-      />
-      <button
-        type="button"
-        onClick={() => void signOut({ callbackUrl: '/loginPage' })}
-        className="inline-flex size-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground sm:hidden"
-        title="Sign out"
-        aria-label="Sign out"
-      >
-        <i className="fa-solid fa-right-from-bracket text-sm" aria-hidden />
-      </button>
-    </>
-  ) : null;
+  // Tự động đóng Dropdown khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans text-foreground transition-colors duration-300">
+    <div className="flex min-h-screen flex-col bg-[#F9FAFB] font-sans text-gray-900">
       <link
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
       />
 
-      <header className="z-10 shrink-0 border-b border-border bg-card px-4 py-3 shadow-sm transition-colors duration-300 sm:px-6 sm:py-0 sm:h-16 lg:px-8">
-        {/* Primary row: brand + quick actions */}
-        <div className="flex items-center justify-between gap-3 sm:h-16">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
+      <header className="z-40 shrink-0 border-b border-gray-200 bg-white px-4 py-3 shadow-sm sm:h-16 sm:px-6 lg:px-8">
+        <div className="flex h-full items-center justify-between gap-4">
+          {/* LEFT: Logo & App Title */}
+          <div className="flex items-center gap-2">
             <Image
               src="/ftc_logo.png"
               alt="FinTech Club Logo"
-              width={48}
-              height={48}
-              className="size-9 shrink-0 rounded-md shadow-sm sm:size-12"
+              width={32}
+              height={32}
+              className="size-12 object-contain"
             />
-            <h1 className="truncate text-base font-black tracking-tight text-blue-900 dark:text-blue-400 sm:text-xl">
+            <h1 className="hidden text-xl font-black tracking-tight text-[#0D1742] sm:block">
               {title}
             </h1>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+          {/* RIGHT: Navigation, Theme, User Profile */}
+          <div className="flex flex-1 items-center justify-end gap-4 sm:gap-6">
+            {/* Dynamic Nav (Pill or Links) injected here */}
             {headerNav}
-            <div className="hidden items-center gap-4 md:flex">
-              {badgeEl}
-              <div className="h-8 w-px bg-border" />
-              {themeBtn}
-              {logoutEl}
-              <div className="min-w-0 max-w-[160px] text-right lg:max-w-[200px]">
-                <p
-                  className="truncate text-sm font-semibold text-foreground"
-                  title={userName}
-                >
-                  {userName}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {userSubtitle}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2 md:hidden">
-              {themeBtn}
-              {logoutEl}
-              <UserAvatar
-                userName={userName}
-                userInitial={userInitial}
-                userAvatar={userAvatar}
-                badgeVariant={badgeVariant}
-                size="sm"
-              />
-            </div>
+            {/* Vertical Divider */}
+            <div className="hidden h-6 w-px bg-gray-200 sm:block" />
 
-            <div className="hidden md:block">
-              <UserAvatar
-                userName={userName}
-                userInitial={userInitial}
-                userAvatar={userAvatar}
-                badgeVariant={badgeVariant}
-              />
-            </div>
-          </div>
-        </div>
+            {/* User Profile & Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-3 rounded-full text-left outline-none transition-colors hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-[#DCB968]"
+                aria-haspopup="true"
+                aria-expanded={isDropdownOpen}
+              >
+                <div className="hidden flex-col items-end sm:flex">
+                  <p className="text-sm font-bold leading-tight text-gray-900">
+                    {userName}
+                  </p>
+                  <p className="mt-0.5 text-xs font-medium leading-tight text-gray-500">
+                    {userSubtitle}
+                  </p>
+                </div>
+                <UserAvatar
+                  userName={userName}
+                  userInitial={userInitial}
+                  userAvatar={userAvatar}
+                />
+              </button>
 
-        {/* Mobile secondary row: role badge + user name */}
-        <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-2 md:hidden">
-          {badgeEl}
-          <div className="min-w-0 flex-1 text-right">
-            <p className="truncate text-xs font-semibold text-foreground">
-              {userName}
-            </p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {userSubtitle}
-            </p>
+              {/* Dropdown Menu */}
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5 animate-in fade-in slide-in-from-top-2">
+                  <div className="border-b border-gray-100 px-3 py-3 sm:hidden">
+                    <p className="truncate text-sm font-bold text-gray-900">
+                      {userName}
+                    </p>
+                    <p className="truncate text-xs font-medium text-gray-500">
+                      {userSubtitle}
+                    </p>
+                  </div>
+                  <div className="p-1">
+                    <button
+                      onClick={() =>
+                        void signOut({ callbackUrl: '/loginPage' })
+                      }
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      <i className="fa-solid fa-right-from-bracket" />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-muted/30 p-3 transition-colors duration-300 sm:p-6 lg:p-8">
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8">
         <div className="mx-auto w-full max-w-7xl">{children}</div>
       </main>
     </div>

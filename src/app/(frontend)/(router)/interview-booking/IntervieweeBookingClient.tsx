@@ -242,7 +242,7 @@ export function IntervieweeBookingClient() {
       </div>
 
       {showConfirm && selected ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="presentation">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-2xl border-2 border-[#FFA200] bg-white p-6 text-slate-900 shadow-2xl">
             <h3 id="confirm-title" className="text-xl font-extrabold">Confirm Your Booking?</h3>
             <p className="mt-2 text-sm text-slate-600">
@@ -264,7 +264,7 @@ export function IntervieweeBookingClient() {
       ) : null}
 
       {showUnavailable ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <TransactionalCard
             variant="failure"
             title="Slot Unavailable"

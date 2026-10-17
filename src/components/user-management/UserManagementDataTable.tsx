@@ -155,7 +155,7 @@ export function UserManagementDataTable({
           const initial =
             (r.name?.trim()?.[0] ?? r.email?.[0] ?? '?').toUpperCase();
           return (
-            <div className="flex max-w-[240px] items-center gap-2">
+            <div className="flex max-w-60 items-center gap-2">
               {r.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element -- dynamic URLs from OAuth
                 <img

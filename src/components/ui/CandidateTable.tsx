@@ -1,18 +1,15 @@
-"use client";
+'use client';
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import { emailLocalPart } from '@/lib/utils';
-import {
-  formatFullDateTime,
-  formatRelativeTime,
-} from '@/lib/formatRelativeTime';
+import { formatFullDateTime } from '@/lib/formatRelativeTime';
 import {
   SECOND_CHOICE_BADGE_LABEL,
   secondChoiceTooltip,
 } from '@/lib/candidateRoutingCopy';
-import { useRelativeNowTick } from '@/hooks/useRelativeNowTick';
 import CandidateModal from './CandidateModal';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 export type CandidateViewMode = 'grid' | 'list';
 
@@ -33,7 +30,6 @@ export default function CandidateTable({
   detailApi = 'head',
   viewMode = 'grid',
 }: CandidateTableProps) {
-  const now = useRelativeNowTick();
   const [selectedCandidate, setSelectedCandidate] =
     useState<HeadDashboardListCandidate | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,13 +46,14 @@ export default function CandidateTable({
     setIsModalOpen(true);
   };
 
+  // Chuẩn hóa Badge màu theo FinTech Club Palette
   const statusBadgeClass = (status: HeadDashboardListCandidate['status']) =>
     `inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider shadow-sm border ${
       status === 'Pass'
-        ? 'border-green-200 bg-green-100 text-green-700 dark:border-green-900/50 dark:bg-green-900/30 dark:text-green-400'
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
         : status === 'Pending'
-          ? 'border-yellow-200 bg-yellow-100 text-yellow-700 dark:border-yellow-900/50 dark:bg-yellow-900/30 dark:text-yellow-400'
-          : 'border-red-200 bg-red-100 text-red-700 dark:border-red-900/50 dark:bg-red-900/30 dark:text-red-400'
+          ? 'border-[#F7D27F] bg-[#FFEFCA] text-[#A28436]'
+          : 'border-[#B82649]/30 bg-[#B82649]/10 text-[#B82649]'
     }`;
 
   const statusIconClass = (status: HeadDashboardListCandidate['status']) =>
@@ -68,10 +65,7 @@ export default function CandidateTable({
 
   const appliedLabel = (candidate: HeadDashboardListCandidate) => {
     const appliedAt = candidate.createdAt ?? candidate.appliedAt;
-    return {
-      relative: formatRelativeTime(appliedAt, now),
-      full: formatFullDateTime(appliedAt),
-    };
+    return formatFullDateTime(appliedAt);
   };
 
   return (
@@ -96,72 +90,63 @@ export default function CandidateTable({
       `}</style>
 
       {viewMode === 'list' ? (
-        <div className="bg-card border-border overflow-x-auto rounded-2xl border shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
           {/* List Header (md+) */}
-          <div className="text-muted-foreground bg-muted/40 hidden md:grid md:grid-cols-[1.7fr_1.3fr_1fr_0.9fr_minmax(220px,auto)] gap-4 px-5 py-3 text-[10px] font-black uppercase tracking-wider">
+          <div className="hidden grid-cols-[1.7fr_1.3fr_1fr_0.9fr_minmax(220px,auto)] gap-4 bg-gray-50 px-5 py-3 text-[10px] font-black uppercase tracking-wider text-gray-500 md:grid">
             <div>Candidate</div>
             <div>Department</div>
             <div>Applied</div>
             <div>Status</div>
             <div className="text-right">Actions</div>
           </div>
-          <ul className="divide-border divide-y">
+          <ul className="divide-y divide-gray-100">
             {candidates.map((candidate, index) => (
               <li
                 key={candidate.id}
-                className="animate-row-entry group hover:bg-muted/40 grid grid-cols-1 gap-3 px-5 py-4 transition-colors duration-200 md:grid-cols-[1.7fr_1.3fr_1fr_0.9fr_minmax(220px,auto)] md:items-center md:gap-4"
+                className="group grid grid-cols-1 gap-3 px-5 py-4 transition-colors duration-200 animate-row-entry hover:bg-gray-50 md:grid-cols-[1.7fr_1.3fr_1fr_0.9fr_minmax(220px,auto)] md:items-center md:gap-4"
                 style={{ animationDelay: `${index * 40}ms` }}
               >
                 {/* Candidate */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600/80 text-base shadow-sm dark:bg-blue-900/30 dark:text-blue-400">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-base text-blue-600 shadow-sm">
                     <i className="fa-solid fa-user" />
                   </div>
                   <div className="min-w-0">
-                    <p
-                      className="text-foreground truncate text-sm font-black"
-                      title={candidate.fullName}
-                    >
+                    <p className="truncate text-sm font-black text-gray-900">
                       {candidate.fullName}
                     </p>
-                    <p className="text-muted-foreground truncate text-xs font-bold">
+                    <p className="truncate text-xs font-bold text-gray-500">
                       {emailLocalPart(candidate.email)}
                     </p>
                   </div>
                 </div>
 
                 {/* Department */}
-                <div className="min-w-0">
-                  <p className="text-muted-foreground/70 md:hidden text-[10px] font-black uppercase tracking-wider mb-0.5">
+                <div className="flex flex-col items-start min-w-0">
+                  <p className="mb-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400 md:hidden">
                     Department
                   </p>
-                  <p className="text-foreground truncate text-sm font-bold">
+                  <p className="truncate text-sm font-bold text-gray-900">
                     {candidate.department}
                   </p>
-                  <p className="text-muted-foreground truncate text-xs font-medium">
-                    {candidate.generation}
-                    {candidate.routing.currentStage === 'choice2' ? (
-                      <span
-                        className="ml-2 inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-violet-800 dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300"
-                        title={secondChoiceTooltip(candidate.choice1)}
-                      >
-                        <i className="fa-solid fa-shuffle" aria-hidden />
+
+                  {candidate.routing.currentStage === 'choice2' ? (
+                    <Tooltip content={secondChoiceTooltip(candidate.choice1)}>
+                      <span className="mt-1.5 inline-flex cursor-help items-center gap-1 rounded-full border border-[#E0D8FF] bg-[#F0EDFF] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#2C305F] shadow-sm">
+                        <i className="fa-solid fa-share" aria-hidden />
                         {SECOND_CHOICE_BADGE_LABEL}
                       </span>
-                    ) : null}
-                  </p>
+                    </Tooltip>
+                  ) : null}
                 </div>
 
                 {/* Applied date */}
                 <div className="min-w-0">
-                  <p className="text-muted-foreground/70 md:hidden text-[10px] font-black uppercase tracking-wider mb-0.5">
+                  <p className="mb-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400 md:hidden">
                     Applied
                   </p>
-                  <p
-                    className="text-foreground truncate text-sm font-bold"
-                    title={appliedLabel(candidate).full}
-                  >
-                    {appliedLabel(candidate).relative}
+                  <p className="truncate text-sm font-bold text-gray-900">
+                    {appliedLabel(candidate)}
                   </p>
                 </div>
 
@@ -176,29 +161,31 @@ export default function CandidateTable({
                 {/* Actions */}
                 <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
                   {!readOnly && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onUpdateStatus(candidate.id, 'Pass')}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-green-50 text-green-600 shadow-sm transition-colors hover:bg-green-500 hover:text-white dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-600 dark:hover:text-white"
-                        title="Quick Pass"
-                      >
-                        <i className="fa-solid fa-check" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onUpdateStatus(candidate.id, 'Fail')}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 shadow-sm transition-colors hover:bg-red-500 hover:text-white dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white"
-                        title="Quick Fail"
-                      >
-                        <i className="fa-solid fa-xmark" />
-                      </button>
-                    </>
+                    <div className="flex items-center gap-2 mr-2">
+                      <Tooltip content="Quick Pass">
+                        <button
+                          type="button"
+                          onClick={() => onUpdateStatus(candidate.id, 'Pass')}
+                          className="flex size-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 shadow-sm transition-colors hover:bg-emerald-500 hover:text-white"
+                        >
+                          <i className="fa-solid fa-check"></i>
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Quick Fail">
+                        <button
+                          type="button"
+                          onClick={() => onUpdateStatus(candidate.id, 'Fail')}
+                          className="flex size-9 items-center justify-center rounded-full bg-[#B82649]/10 text-[#B82649] shadow-sm transition-colors hover:bg-[#B82649] hover:text-white"
+                        >
+                          <i className="fa-solid fa-xmark"></i>
+                        </button>
+                      </Tooltip>
+                    </div>
                   )}
                   <button
                     type="button"
                     onClick={() => handleViewDetails(candidate)}
-                    className="inline-flex h-9 items-center justify-center rounded-xl bg-blue-50 px-4 text-xs font-bold text-blue-600 shadow-sm transition-colors hover:bg-blue-600 hover:text-white dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white"
+                    className="inline-flex h-9 items-center justify-center rounded-xl bg-[#0D1742] px-4 text-xs font-bold text-[#DCB968] shadow-sm transition-colors hover:bg-[#0D1742]/90"
                   >
                     Review Profile
                   </button>
@@ -208,128 +195,121 @@ export default function CandidateTable({
           </ul>
         </div>
       ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {candidates.map((candidate, index) => (
-          <div 
-            key={candidate.id} 
-            className="animate-card-entry group relative flex flex-col rounded-[24px] border border-border bg-card p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-blue-200 sm:p-6 lg:p-7 dark:hover:border-blue-800"
-            style={{ animationDelay: `${index * 100}ms` }}
-          >
-            {/* Card Header */}
-            <div className="mb-6 flex items-start justify-between">
-              <div>
-                <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-1" title={candidate.fullName}>
-                  {candidate.fullName}
-                </h3>
-                <p className="mt-1 text-sm font-bold text-muted-foreground">
-                  {emailLocalPart(candidate.email)}
-                </p>
-              </div>
-              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider shadow-sm border
-                ${candidate.status === 'Pass' ? 'border-green-200 bg-green-100 text-green-700 dark:border-green-900/50 dark:bg-green-900/30 dark:text-green-400' : ''}
-                ${candidate.status === 'Pending' ? 'border-yellow-200 bg-yellow-100 text-yellow-700 dark:border-yellow-900/50 dark:bg-yellow-900/30 dark:text-yellow-400' : ''}
-                ${candidate.status === 'Fail' ? 'border-red-200 bg-red-100 text-red-700 dark:border-red-900/50 dark:bg-red-900/30 dark:text-red-400' : ''}
-              `}>
-                <i className={`
-                  ${candidate.status === 'Pass' ? 'fa-solid fa-check' : ''}
-                  ${candidate.status === 'Pending' ? 'fa-solid fa-clock' : ''}
-                  ${candidate.status === 'Fail' ? 'fa-solid fa-xmark' : ''}
-                `}></i>
-                {candidate.status}
-              </span>
-            </div>
-
-            {candidate.routing.currentStage === 'choice2' && (
-              <div className="-mt-2 mb-4">
-                <span
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-violet-800 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/40 dark:text-violet-300"
-                  title={secondChoiceTooltip(candidate.choice1)}
-                >
-                  <i className="fa-solid fa-shuffle shrink-0" aria-hidden />
-                  {SECOND_CHOICE_BADGE_LABEL}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {candidates.map((candidate, index) => (
+            <div
+              key={candidate.id}
+              className="group relative flex flex-col rounded-[24px] border border-gray-200 bg-white p-4 shadow-sm transition-all duration-300 animate-card-entry hover:-translate-y-1 hover:border-[#0D1742]/30 hover:shadow-xl sm:p-6 lg:p-7"
+              style={{ animationDelay: `${index * 50}ms` }}
+            >
+              {/* Card Header */}
+              <div className="mb-6 flex items-start justify-between">
+                <div>
+                  <h3 className="line-clamp-1 text-xl font-black tracking-tight text-gray-900">
+                    {candidate.fullName}
+                  </h3>
+                  <p className="mt-1 text-sm font-bold text-gray-500">
+                    {emailLocalPart(candidate.email)}
+                  </p>
+                </div>
+                <span className={statusBadgeClass(candidate.status)}>
+                  <i className={statusIconClass(candidate.status)}></i>
+                  {candidate.status}
                 </span>
               </div>
-            )}
 
-            {/* Card Body */}
-            <div className="mb-8 flex-1 flex flex-col space-y-5">
-              <div className="flex items-center gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600/80 text-lg shadow-sm dark:bg-blue-900/30 dark:text-blue-400">
-                  <i className="fa-solid fa-graduation-cap"></i>
+              {/* Card Body */}
+              <div className="mb-8 flex flex-1 flex-col space-y-5">
+                <div className="flex items-start gap-4">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600 shadow-sm">
+                    <i className="fa-solid fa-graduation-cap"></i>
+                  </div>
+                  <div className="flex flex-1 flex-col items-start overflow-hidden pt-0.5">
+                    <p className="mb-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                      Current Department
+                    </p>
+                    <p className="truncate text-sm font-bold text-gray-900">
+                      {candidate.department}
+                    </p>
+                    {candidate.routing.currentStage === 'choice2' && (
+                      <Tooltip content={secondChoiceTooltip(candidate.choice1)}>
+                        <span className="mt-1.5 inline-flex cursor-help items-center gap-1.5 rounded-full border border-[#E0D8FF] bg-[#F0EDFF] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#2C305F] shadow-sm">
+                          <i
+                            className="fa-solid fa-share shrink-0"
+                            aria-hidden
+                          />
+                          {SECOND_CHOICE_BADGE_LABEL}
+                        </span>
+                      </Tooltip>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 overflow-hidden">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/70 mb-0.5">Current Department</p>
-                  <p className="truncate text-sm font-bold text-foreground">
-                    {candidate.department}{' '}
-                    <span className="font-medium text-muted-foreground">
-                      • {candidate.generation}
-                    </span>
-                  </p>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600 shadow-sm">
+                    <i className="fa-solid fa-cake-candles"></i>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="mb-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                      Date of Birth
+                    </p>
+                    <p className="truncate text-sm font-bold text-gray-900">
+                      {candidate.dob?.trim() ? candidate.dob : '—'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600 shadow-sm">
+                    <i className="fa-regular fa-calendar-check"></i>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="mb-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                      Applied On
+                    </p>
+                    <p className="truncate text-sm font-bold text-gray-900">
+                      {appliedLabel(candidate)}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600/80 text-lg shadow-sm dark:bg-blue-900/30 dark:text-blue-400">
-                  <i className="fa-solid fa-cake-candles"></i>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/70 mb-0.5">Date of Birth</p>
-                  <p className="truncate text-sm font-bold text-foreground">
-                    {candidate.dob?.trim() ? candidate.dob : '—'}
-                  </p>
-                </div>
-              </div>
+              {/* Card Footer */}
+              <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-5">
+                {!readOnly && (
+                  <div className="flex items-center gap-2">
+                    <Tooltip content="Quick Pass">
+                      <button
+                        type="button"
+                        onClick={() => onUpdateStatus(candidate.id, 'Pass')}
+                        className="flex size-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 shadow-sm transition-colors hover:bg-emerald-500 hover:text-white"
+                      >
+                        <i className="fa-solid fa-check"></i>
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Quick Fail">
+                      <button
+                        type="button"
+                        onClick={() => onUpdateStatus(candidate.id, 'Fail')}
+                        className="flex size-10 items-center justify-center rounded-full bg-[#B82649]/10 text-[#B82649] shadow-sm transition-colors hover:bg-[#B82649] hover:text-white"
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </Tooltip>
+                  </div>
+                )}
 
-              <div className="flex items-center gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600/80 text-lg shadow-sm dark:bg-blue-900/30 dark:text-blue-400">
-                  <i className="fa-regular fa-calendar-check"></i>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/70 mb-0.5">Applied On</p>
-                  <p
-                    className="truncate text-sm font-bold text-foreground"
-                    title={appliedLabel(candidate).full}
-                  >
-                    {appliedLabel(candidate).relative}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => handleViewDetails(candidate)}
+                  className={`ml-auto inline-flex h-10 items-center justify-center rounded-xl bg-[#0D1742] px-5 text-sm font-bold text-[#DCB968] shadow-sm transition-colors hover:bg-[#0D1742]/90`}
+                >
+                  Review Profile
+                </button>
               </div>
             </div>
-
-            {/* Card Footer */}
-            <div className="flex items-center justify-between border-t border-border pt-5 mt-auto">
-              {!readOnly && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onUpdateStatus(candidate.id, 'Pass')}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-600 transition-colors hover:bg-green-500 hover:text-white tooltip-trigger shadow-sm dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-600 dark:hover:text-white"
-                    title="Quick Pass"
-                  >
-                    <i className="fa-solid fa-check"></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateStatus(candidate.id, 'Fail')}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-500 hover:text-white tooltip-trigger shadow-sm dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white"
-                    title="Quick Fail"
-                  >
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => handleViewDetails(candidate)}
-                className={`inline-flex h-10 items-center justify-center rounded-xl bg-blue-50 px-5 text-sm font-bold text-blue-600 transition-colors hover:bg-blue-600 hover:text-white shadow-sm dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white ${readOnly ? 'ml-auto' : ''}`}
-              >
-                Review Profile
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
       )}
 
       <CandidateModal

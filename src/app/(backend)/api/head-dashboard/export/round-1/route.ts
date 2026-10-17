@@ -8,7 +8,6 @@ import ExcelJS from 'exceljs';
 
 export const runtime = 'nodejs';
 
-// Validation helper
 type ExportableStatus = 'Pass' | 'Fail';
 
 function isExportableStatus(value: string | null): value is ExportableStatus {
@@ -21,16 +20,30 @@ interface ErrorResponse {
   error?: string;
 }
 
+// Hàm format ngày sinh để chống nhầm lẫn (DD MMM YYYY - VD: 20 Sep 2007)
+function formatDOB(dateString: string | null | undefined): string {
+  if (!dateString) return '—';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString; // Trả về chuỗi gốc nếu không parse được
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
 export const GET = withRBAC(
   'Department Head',
   async (
     req: NextRequest,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     context: { session: ActiveAppSession }
   ): Promise<Response> => {
     try {
-      // Parse query parameters
       const searchParams = req.nextUrl.searchParams;
       const statusParam = searchParams.get('status');
+      const departmentParam = searchParams.get('department');
 
       if (!isExportableStatus(statusParam)) {
         return NextResponse.json(
@@ -39,60 +52,109 @@ export const GET = withRBAC(
         );
       }
 
-      // Connect to database
-      await dbConnect();
+      if (!departmentParam) {
+        return NextResponse.json(
+          { success: false, message: 'Department is required for export.' },
+          { status: 400 }
+        );
+      }
 
-      // Implicit cohort filter: only export candidates from the active cohort.
+      await dbConnect();
       const active = await getActiveConfig();
 
-      // Query database
+      // Query full data dựa trên Schema thực tế
       const candidates = await Candidate.find({
         status: statusParam,
+        department: departmentParam,
         generation: active.currentGeneration,
         semester: active.currentSemester,
       })
-        .select('fullName email department')
-        .sort({ department: 1 })
+        .select(
+          'fullName email dob phone majorAndYear facebookLink cvLink choice1 choice2 department'
+        )
+        .sort({ fullName: 1 })
         .lean()
         .exec();
 
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Round 1 Final Data');
+      const worksheet = workbook.addWorksheet(`${departmentParam} Candidates`);
 
-      // Define the exact three columns required
       worksheet.columns = [
-        { header: 'NAME', key: 'name', width: 25 },
-        { header: 'SID', key: 'sid', width: 35 },
-        { header: 'Department', key: 'department', width: 25 },
+        { header: 'No.', key: 'no', width: 6 },
+        { header: 'Full Name', key: 'name', width: 25 },
+        { header: 'Student Email', key: 'email', width: 30 },
+        { header: 'Date of Birth', key: 'dob', width: 15 },
+        { header: 'Major & Year', key: 'major', width: 50 },
+        { header: 'Phone Number', key: 'phone', width: 15 },
+        { header: 'Facebook Profile', key: 'fb', width: 20 },
+        { header: 'CV Link', key: 'cv', width: 20 },
+        { header: '1st Choice', key: 'choice1', width: 25 },
+        { header: '2nd Choice', key: 'choice2', width: 25 },
+        { header: 'Final Evaluation At', key: 'department', width: 25 },
       ];
 
-      // Make the header row bold for better UX
-      worksheet.getRow(1).font = { bold: true };
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0D1742' },
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-      // Loop through database results and add rows
-      candidates.forEach((candidate) => {
-        worksheet.addRow({
+      // Chèn dữ liệu
+      candidates.forEach((candidate, index) => {
+        const row = worksheet.addRow({
+          no: index + 1,
           name: candidate.fullName,
-          sid: candidate.email, // Map email to SID column
+          email: candidate.email || '—',
+          dob: formatDOB(candidate.dob), // Gọi hàm format tại đây
+          major: candidate.majorAndYear || '—',
+          phone: candidate.phone || '—',
+          fb: candidate.facebookLink || '—',
+          cv: candidate.cvLink || '—',
+          choice1: candidate.choice1 || '—',
+          choice2: candidate.choice2 || '—',
           department: candidate.department,
         });
+
+        row.getCell('no').alignment = { horizontal: 'center' };
+
+        if (candidate.facebookLink) {
+          row.getCell('fb').value = {
+            text: 'View Profile',
+            hyperlink: candidate.facebookLink,
+          };
+          row.getCell('fb').font = {
+            color: { argb: 'FF0563C1' },
+            underline: true,
+          };
+        }
+        if (candidate.cvLink) {
+          row.getCell('cv').value = {
+            text: 'View CV',
+            hyperlink: candidate.cvLink,
+          };
+          row.getCell('cv').font = {
+            color: { argb: 'FF0563C1' },
+            underline: true,
+          };
+        }
       });
 
-      // Write the workbook to a raw memory buffer
       const buffer = await workbook.xlsx.writeBuffer();
-
-      // Set headers telling the browser this is an Excel file meant to be downloaded
       const headers = new Headers();
       headers.append(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       );
+
+      const safeDeptName = departmentParam.replace(/\s+/g, '_');
       headers.append(
         'Content-Disposition',
-        `attachment; filename="Round_1_${statusParam}_List_Export.xlsx"`
+        `attachment; filename="${safeDeptName}_Round_1_${statusParam}_Export.xlsx"`
       );
 
-      // Return the binary buffer directly, not JSON!
       return new NextResponse(buffer, {
         status: 200,
         headers: headers,
