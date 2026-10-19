@@ -26,6 +26,7 @@ export const GET = withActiveRBAC('Executive Board', async () => {
     getDepartmentAliases(dept)
   );
 
+  // 1. LẤY DANH SÁCH DEPARTMENT HEADS
   const headDocs = await User.find({
     role: 'Department Head',
     isActive: true,
@@ -52,16 +53,50 @@ export const GET = withActiveRBAC('Executive Board', async () => {
     {} as Record<(typeof HEAD_DEPARTMENTS)[number], HeadAccount[]>
   );
 
+  // 2. ĐẾM SỐ LƯỢNG GUEST TRONG WAITING ROOM
   const waitingGuestCount = await User.countDocuments({
     role: 'Guest',
     department: 'Unassigned',
     isActive: true,
   });
 
+  // 3. ĐẾM SỐ LƯỢNG ACTIVE MEMBERS THEO TỪNG BAN (Dùng Aggregation cho tối ưu)
+  const membersAggregation = await User.aggregate([
+    {
+      $match: {
+        role: 'Member',
+        isActive: true,
+      },
+    },
+    {
+      $group: {
+        _id: '$department',
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // Gom nhóm kết quả đếm được vào đúng tên ban chuẩn (xử lý luôn cả các alias)
+  const membersCountByDepartment = HEAD_DEPARTMENTS.reduce(
+    (acc, dept) => {
+      const aliases = getDepartmentAliases(dept);
+      // Tìm tất cả các kết quả aggregation có _id (tên ban trong DB) khớp với alias
+      const totalForDept = membersAggregation
+        .filter((item) => aliases.includes(item._id))
+        .reduce((sum, item) => sum + item.count, 0);
+      
+      acc[dept] = totalForDept;
+      return acc;
+    },
+    {} as Record<(typeof HEAD_DEPARTMENTS)[number], number>
+  );
+
+  // 4. TRẢ VỀ PAYLOAD
   return NextResponse.json({
     success: true,
     active,
     headsByDepartment,
     waitingGuestCount,
+    membersCountByDepartment, 
   });
 });

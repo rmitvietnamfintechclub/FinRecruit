@@ -446,7 +446,7 @@ export function SystemConfigClient() {
             ) : (
               <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap gap-4">
-                  <div className="min-w-[120px] rounded-xl bg-background/80 px-5 py-4 ring-1 ring-foreground/10">
+                  <div className="min-w-30 rounded-xl bg-background/80 px-5 py-4 ring-1 ring-foreground/10">
                     <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">
                       Generation
                     </p>
@@ -457,7 +457,7 @@ export function SystemConfigClient() {
                       {active?.currentGeneration || '—'}
                     </p>
                   </div>
-                  <div className="min-w-[120px] rounded-xl bg-background/80 px-5 py-4 ring-1 ring-foreground/10">
+                  <div className="min-w-30 rounded-xl bg-background/80 px-5 py-4 ring-1 ring-foreground/10">
                     <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">
                       Semester
                     </p>

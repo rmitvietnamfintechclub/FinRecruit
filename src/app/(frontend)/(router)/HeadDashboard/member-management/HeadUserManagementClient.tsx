@@ -2,9 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DepartmentType, RoleType } from '@/app/(backend)/types';
-import { type AppNoticeVariant } from '@/components/feedback/AppNotice';
+import {
+  type AppNoticeVariant,
+  AppNotice,
+} from '@/components/feedback/AppNotice';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
+import { signOut } from 'next-auth/react';
 
 type SerializedManagementUser = {
   id: string;
@@ -90,6 +94,9 @@ export function HeadUserManagementClient({
   } | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
 
+  // State quản lý UI khóa màn hình khi Session hết hạn
+  const [signOutPending, setSignOutPending] = useState(false);
+
   const loadData = useCallback(async (isSilentPoll = false) => {
     if (!isSilentPoll) setLoading(true);
     else setIsPolling(true);
@@ -103,10 +110,26 @@ export function HeadUserManagementClient({
       setPayload(json);
     } catch (e) {
       if (!isSilentPoll) {
+        const errorMessage =
+          e instanceof Error ? e.message : 'Unknown error occurred.';
+
+        // --- BẮT LỖI AUTHENTICATION VÀ KHÓA MÀN HÌNH ---
+        if (
+          errorMessage.toLowerCase().includes('authentication required') ||
+          errorMessage.includes('401')
+        ) {
+          setSignOutPending(true);
+          setTimeout(() => {
+            void signOut({ callbackUrl: '/loginPage' });
+          }, 1500);
+          return;
+        }
+        // ---------------------------------------------
+
         setNotice({
           variant: 'error',
           title: 'Error loading data',
-          text: e instanceof Error ? e.message : 'Unknown error occurred.',
+          text: errorMessage,
         });
       }
     } finally {
@@ -120,7 +143,11 @@ export function HeadUserManagementClient({
   }, [loadData]);
 
   useIntervalWhenVisible(() => void loadData(true), {
-    enabled: !loading && pendingUserId === null && confirmState === null,
+    enabled:
+      !loading &&
+      pendingUserId === null &&
+      confirmState === null &&
+      !signOutPending,
   });
 
   const patchUser = async (
@@ -255,31 +282,13 @@ export function HeadUserManagementClient({
   return (
     <div className="relative space-y-10 animate-in fade-in duration-500 mt-4">
       {notice && (
-        <div
-          className={`rounded-xl border p-4 shadow-sm ${
-            notice.variant === 'success'
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-              : 'border-red-200 bg-red-50 text-red-700'
-          }`}
+        <AppNotice
+          variant={notice.variant}
+          title={notice.title}
+          onDismiss={() => setNotice(null)}
         >
-          <div className="flex items-center gap-3">
-            <i
-              className={`fa-solid ${notice.variant === 'success' ? 'fa-check-circle' : 'fa-circle-exclamation'} text-lg`}
-            />
-            <div className="flex-1">
-              {notice.title && (
-                <h4 className="text-sm font-bold">{notice.title}</h4>
-              )}
-              <p className="text-sm font-medium">{notice.text}</p>
-            </div>
-            <button
-              onClick={() => setNotice(null)}
-              className="text-current opacity-70 hover:opacity-100 transition-opacity"
-            >
-              <i className="fa-solid fa-xmark" />
-            </button>
-          </div>
-        </div>
+          {notice.text}
+        </AppNotice>
       )}
 
       {/* SECTION 1: WAITING ROOM */}
@@ -295,7 +304,7 @@ export function HeadUserManagementClient({
                 Waiting Room
               </h2>
               <p className="text-sm font-medium text-gray-500">
-                Guests awaiting assignment
+                Guests awaiting role assignment
               </p>
             </div>
           </div>
@@ -483,6 +492,27 @@ export function HeadUserManagementClient({
           if (confirmState) await confirmState.action();
         }}
       />
+
+      {/* MÀN HÌNH KHÓA KHI HẾT HẠN SESSION */}
+      {signOutPending ? (
+        <div
+          aria-live="assertive"
+          className="fixed inset-0 z-100 flex items-center justify-center bg-white/80 backdrop-blur-sm animate-in fade-in duration-300"
+        >
+          <div className="bg-white max-w-sm rounded-3xl border border-gray-200 p-8 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-300">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <i className="fa-solid fa-lock text-2xl" aria-hidden />
+            </div>
+            <h3 className="text-lg font-black tracking-tight text-gray-900">
+              Session Expired
+            </h3>
+            <p className="mt-2 text-sm font-medium text-gray-500 leading-relaxed">
+              For your security, please sign in again to continue.
+              Redirecting...
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

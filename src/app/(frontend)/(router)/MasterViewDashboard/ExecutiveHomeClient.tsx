@@ -12,7 +12,9 @@ import {
 } from '@/components/ui/card';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { DepartmentTransitionStrip } from '@/components/dashboard/DepartmentTransitionStrip';
+import { signOut } from 'next-auth/react';
 
+// --- TYPES ---
 type HeadAccount = {
   id: string;
   name: string | null;
@@ -30,314 +32,447 @@ type DashboardPayload = {
   headsByDepartment?: Record<string, HeadAccount[]>;
   waitingGuestCount?: number;
   message?: string;
+  membersCountByDepartment?: Record<string, number>;
 };
 
-const DEPT_SHORT: Record<(typeof HEAD_DEPARTMENTS)[number], string> = {
-  'Technology Department': 'Technology',
-  'Business Department': 'Business',
-  'HR Department': 'HR',
-  'Marketing Department': 'Marketing',
+type StatusCount = {
+  total: number;
+  pass: number;
+  fail: number;
+  pending: number;
 };
 
-const DEPT_ACCENT: Record<
+type StatisticsPayload = {
+  success?: boolean;
+  data?: {
+    overall: StatusCount;
+  };
+};
+
+// --- UI CONFIG ---
+const DEPT_UI: Record<
   (typeof HEAD_DEPARTMENTS)[number],
-  { dot: string; ring: string; bg: string }
+  { bg: string; text: string; icon: string }
 > = {
   'Technology Department': {
-    dot: 'bg-blue-500',
-    ring: 'ring-blue-200 dark:ring-blue-900/50',
-    bg: 'from-blue-50/50 to-transparent dark:from-blue-950/20',
+    bg: 'bg-blue-100',
+    text: 'text-blue-700',
+    icon: 'fa-microchip',
   },
   'Business Department': {
-    dot: 'bg-amber-500',
-    ring: 'ring-amber-200 dark:ring-amber-900/50',
-    bg: 'from-amber-50/50 to-transparent dark:from-amber-950/20',
+    bg: 'bg-amber-100',
+    text: 'text-amber-700',
+    icon: 'fa-briefcase',
   },
   'HR Department': {
-    dot: 'bg-pink-500',
-    ring: 'ring-pink-200 dark:ring-pink-900/50',
-    bg: 'from-pink-50/50 to-transparent dark:from-pink-950/20',
+    bg: 'bg-pink-100',
+    text: 'text-pink-700',
+    icon: 'fa-users',
   },
   'Marketing Department': {
-    dot: 'bg-emerald-500',
-    ring: 'ring-emerald-200 dark:ring-emerald-900/50',
-    bg: 'from-emerald-50/50 to-transparent dark:from-emerald-950/20',
+    bg: 'bg-emerald-100',
+    text: 'text-emerald-700',
+    icon: 'fa-bullhorn',
   },
 };
 
-function HeadAvatar({
-  head,
-  className = '',
-}: {
-  head: HeadAccount;
-  className?: string;
-}) {
-  const initial =
-    (head.name?.trim()?.[0] ?? head.email?.[0] ?? '?').toUpperCase();
+// --- COMPONENTS ---
+const Skeleton = ({ className }: { className?: string }) => (
+  <div className={`animate-pulse rounded-md bg-gray-200 ${className}`} />
+);
 
-  if (head.avatar) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- dynamic OAuth URLs
-      <img
-        src={head.avatar}
-        alt={head.name ?? head.email}
-        className={`size-16 shrink-0 rounded-full border border-border object-cover shadow-sm ${className}`}
-      />
-    );
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const AnimatedNumber = ({ value }: { value: number }) => {
+  const [prevValue, setPrevValue] = useState(value);
+  const [direction, setDirection] = useState(1);
+
+  if (value !== prevValue) {
+    setDirection(value > prevValue ? 1 : -1);
+    setPrevValue(value);
   }
 
   return (
-    <div
-      className={`flex size-16 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-xl font-bold text-muted-foreground shadow-sm ${className}`}
-    >
-      {initial}
-    </div>
+    <>
+      <style>{`
+        @keyframes slideInUpFade { 0% { opacity: 0; transform: translateY(15px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes slideInDownFade { 0% { opacity: 0; transform: translateY(-15px); } 100% { opacity: 1; transform: translateY(0); } }
+        .animate-number-up { animation: slideInUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-number-down { animation: slideInDownFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      `}</style>
+      <span
+        key={value}
+        className={`inline-block ${direction === 1 ? 'animate-number-up' : 'animate-number-down'}`}
+      >
+        {value}
+      </span>
+    </>
   );
-}
+};
 
+// --- MAIN PAGE ---
 export function ExecutiveHomeClient() {
-  const [data, setData] = useState<DashboardPayload | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
+  const [stats, setStats] = useState<StatisticsPayload['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // State khóa màn hình khi Session hết hạn
+  const [signOutPending, setSignOutPending] = useState(false);
+
+  const loadAllData = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/executive/dashboard', {
-        credentials: 'include',
-      });
-      const json = (await res.json()) as DashboardPayload;
-      if (!res.ok || !json.success) {
-        setError(json.message ?? `Failed (${res.status})`);
-        setData(null);
+      const [dashRes, statsRes] = await Promise.all([
+        fetch('/api/executive/dashboard', { credentials: 'include' }),
+        fetch('/api/executive/statistics', { credentials: 'include' }),
+      ]);
+
+      const dashJson = (await dashRes.json()) as DashboardPayload;
+      const statsJson = (await statsRes.json()) as StatisticsPayload;
+
+      if (!dashRes.ok || !dashJson.success)
+        throw new Error(
+          dashJson.message ?? `Dashboard failed (${dashRes.status})`
+        );
+      if (!statsRes.ok || !statsJson.success)
+        throw new Error('Statistics failed to load.');
+
+      setDashboard(dashJson);
+      setStats(statsJson.data ?? null);
+    } catch (e) {
+      const errorMessage =
+        e instanceof Error ? e.message : 'Failed to load executive overview.';
+
+      // --- BẮT LỖI AUTHENTICATION ĐỂ BẬT KHÓA MÀN HÌNH ---
+      if (
+        errorMessage.toLowerCase().includes('authentication required') ||
+        errorMessage.includes('401')
+      ) {
+        setSignOutPending(true);
+        setTimeout(() => {
+          void signOut({ callbackUrl: '/loginPage' });
+        }, 1500);
         return;
       }
-      setData(json);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load dashboard.');
-      setData(null);
+      // ---------------------------------------------
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadAllData();
+  }, [loadAllData]);
 
-  const active = data?.active;
+  const active = dashboard?.active;
   const recruitmentOn = Boolean(active?.isRecruitmentActive);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const overallStats = stats?.overall ?? {
+    total: 0,
+    pass: 0,
+    fail: 0,
+    pending: 0,
+  };
+
+  const hasPendingGuests = (dashboard?.waitingGuestCount ?? 0) > 0;
+  const departmentsMissingHeads = HEAD_DEPARTMENTS.filter(
+    (dept) => (dashboard?.headsByDepartment?.[dept]?.length ?? 0) === 0
+  );
+
+  // Biến điều kiện để tự động gập/mở Roster
+  const showNeedsAttention =
+    loading || hasPendingGuests || departmentsMissingHeads.length > 0;
 
   return (
-    <div className="space-y-8">
-      {error ? (
+    <div className="space-y-6 mt-4 animate-in fade-in duration-500 pb-12">
+      {error && (
         <AppNotice variant="error" onDismiss={() => setError(null)}>
           {error}
         </AppNotice>
-      ) : null}
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Active cohort</CardTitle>
-            <CardDescription>
-              Generation and semester used for recruitment and new role grants.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {loading ? (
-              <p className="text-muted-foreground text-sm">Loading…</p>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-4">
-                  <div className="bg-muted/50 min-w-[140px] flex-1 rounded-xl px-4 py-3">
-                    <p className="text-muted-foreground text-xs font-bold uppercase">
-                      Generation
-                    </p>
-                    <p className="mt-1 text-xl font-black">
-                      {active?.currentGeneration ?? '—'}
-                    </p>
-                  </div>
-                  <div className="bg-muted/50 min-w-[140px] flex-1 rounded-xl px-4 py-3">
-                    <p className="text-muted-foreground text-xs font-bold uppercase">
-                      Semester
-                    </p>
-                    <p className="mt-1 text-xl font-black">
-                      {active?.currentSemester ?? '—'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`inline-flex h-3 w-3 rounded-full ${recruitmentOn ? 'bg-green-500' : 'bg-red-500'}`}
-                    aria-hidden
-                  />
-                  <span className="text-sm font-semibold">
-                    Recruitment:{' '}
+      {/* 1. HERO SECTION: ACTIVE COHORT */}
+      <section className="relative overflow-hidden rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="absolute -right-20 -top-20 z-0 h-64 w-64 rounded-full bg-linear-to-br from-[#DCB968]/20 to-transparent opacity-50 blur-3xl"></div>
+
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#A28436]">
+              Current Campaign
+            </p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-gray-900 sm:text-3xl">
+              Active Cohort
+            </h1>
+            <p className="mt-1 text-sm font-medium text-gray-500">
+              Generation and semester currently open for recruitment.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-gray-50 p-4 border border-gray-100">
+            <div className="min-w-30">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                Generation
+              </p>
+              {loading ? (
+                <Skeleton className="mt-1 h-7 w-20" />
+              ) : (
+                <p className="mt-0.5 text-xl font-black text-[#0D1742]">
+                  {active?.currentGeneration ?? '—'}
+                </p>
+              )}
+            </div>
+            <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
+            <div className="min-w-30">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                Semester
+              </p>
+              {loading ? (
+                <Skeleton className="mt-1 h-7 w-20" />
+              ) : (
+                <p className="mt-0.5 text-xl font-black text-[#0D1742]">
+                  {active?.currentSemester ?? '—'}
+                </p>
+              )}
+            </div>
+            <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
+            <div className="min-w-35">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                Form Status
+              </p>
+              <div className="mt-1.5 flex items-center gap-2">
+                {loading ? (
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                ) : (
+                  <>
+                    <span className="relative flex size-2.5">
+                      <span
+                        className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${recruitmentOn ? 'bg-green-400' : 'bg-red-400'}`}
+                      />
+                      <span
+                        className={`relative inline-flex size-2.5 rounded-full ${recruitmentOn ? 'bg-green-500' : 'bg-red-500'}`}
+                      />
+                    </span>
                     <span
-                      className={
-                        recruitmentOn
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }
+                      className={`text-sm font-black uppercase tracking-wide ${recruitmentOn ? 'text-green-600' : 'text-red-600'}`}
                     >
                       {recruitmentOn ? 'Open' : 'Closed'}
                     </span>
-                  </span>
-                </div>
-              </>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* 3. DEPARTMENT ROSTER (RÕ TÊN HEAD + SỐ MEMBER) */}
+        <Card
+          className={`rounded-[24px] shadow-sm transition-all duration-500 ${showNeedsAttention ? 'lg:col-span-2' : 'lg:col-span-3'}`}
+        >
+          <CardHeader className="border-b border-gray-100 pb-4">
+            <CardTitle className="text-lg font-black text-gray-900">
+              Department Roster
+            </CardTitle>
+            <CardDescription className="text-sm font-medium">
+              Leadership and member capacity per department.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <ul className="divide-y divide-gray-100">
+                {[1, 2, 3, 4].map((i) => (
+                  <li
+                    key={i}
+                    className="flex justify-between items-start gap-4 p-5"
+                  >
+                    <div className="flex items-start gap-4">
+                      <Skeleton className="size-10 rounded-lg mt-1" />
+                      <div className="space-y-2 mt-1.5">
+                        <Skeleton className="h-4 w-32" />
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="size-5 rounded-full" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                      </div>
+                    </div>
+                    <Skeleton className="h-6 w-20 rounded-md mt-1" />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {HEAD_DEPARTMENTS.map((dept) => {
+                  const heads = dashboard?.headsByDepartment?.[dept] ?? [];
+                  const membersCount =
+                    dashboard?.membersCountByDepartment?.[dept] ?? 0;
+                  const ui = DEPT_UI[dept];
+
+                  return (
+                    <li
+                      key={dept}
+                      className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-5 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start gap-4 min-w-0">
+                        <div
+                          className={`flex size-10 shrink-0 items-center justify-center rounded-lg mt-1 ${ui.bg} ${ui.text}`}
+                        >
+                          <i className={`fa-solid ${ui.icon}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-gray-900">
+                            {dept}
+                          </p>
+                          <div className="mt-2 space-y-1.5">
+                            {heads.length === 0 ? (
+                              <p className="text-xs font-bold text-[#B82649]">
+                                <i className="fa-solid fa-triangle-exclamation mr-1" />{' '}
+                                No active head assigned
+                              </p>
+                            ) : (
+                              heads.map((h) => (
+                                <div
+                                  key={h.id}
+                                  className="flex items-center gap-2"
+                                >
+                                  <div className="size-5 rounded-full bg-gray-200 overflow-hidden shrink-0">
+                                    {h.avatar ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={h.avatar}
+                                        alt="avatar"
+                                        className="size-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex size-full items-center justify-center bg-[#0D1742]/10 text-[8px] font-bold text-[#0D1742]">
+                                        {(
+                                          h.name?.trim()?.[0] ??
+                                          h.email?.[0] ??
+                                          '?'
+                                        ).toUpperCase()}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className="text-xs font-semibold text-gray-700 truncate">
+                                    {h.name?.trim() || h.email.split('@')[0]}
+                                  </p>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pl-14 sm:pl-0 sm:pt-1">
+                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
+                          {membersCount} Members
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Pending approval</CardTitle>
-            <CardDescription>Guests in the waiting room</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-4xl font-black text-purple-600 dark:text-purple-400">
-              {loading ? '—' : (data?.waitingGuestCount ?? 0)}
-            </p>
-            <Link
-              href="/MasterViewDashboard/user-management"
-              className="mt-3 inline-block text-sm font-bold text-blue-600 hover:underline dark:text-blue-400"
-            >
-              Open user management →
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Heads by department</CardTitle>
-          <CardDescription>
-            Active Department Head accounts per department.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {HEAD_DEPARTMENTS.map((dept) => {
-              const accent = DEPT_ACCENT[dept];
-              const heads = data?.headsByDepartment?.[dept] ?? [];
-              return (
-                <div
-                  key={dept}
-                  className={`border-border relative overflow-hidden rounded-2xl border bg-linear-to-br ${accent.bg} p-5`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex h-2 w-2 rounded-full ${accent.dot}`}
-                      aria-hidden
-                    />
-                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-wider">
-                      {DEPT_SHORT[dept]}
-                    </p>
-                    <span className="ml-auto text-xs font-semibold text-muted-foreground">
-                      {loading ? '—' : `${heads.length} head${heads.length === 1 ? '' : 's'}`}
-                    </span>
+        {/* 4. ACTION CENTER (CHỈ HIỆN KHI CẦN THIẾT) */}
+        {showNeedsAttention && (
+          <div className="space-y-6">
+            <Card className="rounded-[24px] shadow-sm bg-[#0D1742] text-white border-transparent">
+              <CardHeader className="pb-2 border-b border-white/10">
+                <CardTitle className="text-sm font-bold text-[#DCB968] uppercase tracking-wider flex items-center gap-2">
+                  <i className="fa-solid fa-bolt" /> Needs Attention
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-0 p-0">
+                {loading ? (
+                  <div className="py-8 px-5 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <div className="space-y-2">
+                        <Skeleton className="h-8 w-12 bg-white/20" />
+                        <Skeleton className="h-3 w-24 bg-white/20" />
+                      </div>
+                      <Skeleton className="size-8 rounded-full bg-white/20" />
+                    </div>
                   </div>
-
-                  {loading ? (
-                    <div className="mt-4 flex items-center gap-3">
-                      <div className="size-16 shrink-0 animate-pulse rounded-full bg-muted" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
-                        <div className="h-2.5 w-1/2 animate-pulse rounded bg-muted" />
-                      </div>
-                    </div>
-                  ) : heads.length === 0 ? (
-                    <div className="mt-4 flex items-center gap-3">
-                      <div
-                        className={`flex size-16 shrink-0 items-center justify-center rounded-full border border-dashed border-border bg-muted/40 text-xl text-muted-foreground`}
+                ) : (
+                  <div className="divide-y divide-white/10">
+                    {hasPendingGuests && (
+                      <Link
+                        href="/MasterViewDashboard/user-management"
+                        className="flex items-center justify-between p-5 hover:bg-white/5 transition-colors group"
                       >
-                        <i className="fa-solid fa-user-slash" aria-hidden />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-muted-foreground">
-                          No active head
-                        </p>
-                        <Link
-                          href="/MasterViewDashboard/user-management"
-                          className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
-                        >
-                          Grant a head →
-                        </Link>
-                      </div>
-                    </div>
-                  ) : (
-                    <ul className="mt-4 space-y-3">
-                      {heads.map((h) => (
-                        <li key={h.id} className="flex items-center gap-3">
-                          <HeadAvatar
-                            head={h}
-                            className={`ring-2 ring-offset-2 ring-offset-card ${accent.ring}`}
-                          />
-                          <div className="min-w-0">
-                            <p className="truncate font-bold text-foreground">
-                              {h.name?.trim() || h.email.split('@')[0]}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {h.email}
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
+                        <div>
+                          <p className="text-2xl font-black text-white">
+                            {dashboard?.waitingGuestCount}
+                          </p>
+                          <p className="text-xs font-medium text-gray-300 mt-0.5">
+                            Pending Guests
+                          </p>
+                        </div>
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#DCB968] text-[#0D1742] group-hover:scale-110 transition-transform">
+                          <i className="fa-solid fa-arrow-right text-xs" />
+                        </div>
+                      </Link>
+                    )}
+                    {departmentsMissingHeads.length > 0 && (
+                      <Link
+                        href="/MasterViewDashboard/user-management"
+                        className="flex items-center justify-between p-5 hover:bg-white/5 transition-colors group"
+                      >
+                        <div>
+                          <p className="text-2xl font-black text-red-400">
+                            {departmentsMissingHeads.length}
+                          </p>
+                          <p className="text-xs font-medium text-gray-300 mt-0.5">
+                            Missing Heads
+                          </p>
+                        </div>
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-400 text-red-950 group-hover:scale-110 transition-transform">
+                          <i className="fa-solid fa-arrow-right text-xs" />
+                        </div>
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
-
-      <DepartmentTransitionStrip />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Link
-          href="/MasterViewDashboard/candidates"
-          className="border-border bg-card hover:border-blue-400 flex flex-col rounded-2xl border p-6 shadow-sm transition-colors"
-        >
-          <i className="fa-solid fa-users mb-3 text-2xl text-blue-600" />
-          <span className="font-black">Candidates</span>
-          <span className="text-muted-foreground mt-1 text-sm">
-            Statistics, table, and Excel export
-          </span>
-        </Link>
-        <Link
-          href="/MasterViewDashboard/user-management"
-          className="border-border bg-card hover:border-purple-400 flex flex-col rounded-2xl border p-6 shadow-sm transition-colors"
-        >
-          <i className="fa-solid fa-user-gear mb-3 text-2xl text-purple-600" />
-          <span className="font-black">User management</span>
-          <span className="text-muted-foreground mt-1 text-sm">
-            Grant Head or Executive roles
-          </span>
-        </Link>
-        <Link
-          href="/MasterViewDashboard/system-config"
-          className="border-border bg-card hover:border-emerald-400 flex flex-col rounded-2xl border p-6 shadow-sm transition-colors"
-        >
-          <i className="fa-solid fa-sliders mb-3 text-2xl text-emerald-600" />
-          <span className="font-black">System Config</span>
-          <span className="text-muted-foreground mt-1 text-sm">
-            Generation, semester, recruitment toggle
-          </span>
-        </Link>
-        <Link
-          href="/MasterViewDashboard/system-logs"
-          className="border-border bg-card hover:border-amber-400 flex flex-col rounded-2xl border p-6 shadow-sm transition-colors"
-        >
-          <i className="fa-solid fa-clipboard-list mb-3 text-2xl text-amber-600" />
-          <span className="font-black">System Logs</span>
-          <span className="text-muted-foreground mt-1 text-sm">
-            Audit trail · role grants, failed intakes, config changes
-          </span>
-        </Link>
+        )}
       </div>
+
+      {/* 5. STAGE GATES / TRANSITION STRIP (FULL WIDTH Ở CUỐI) */}
+      <div className="pt-6">
+        <h2 className="mb-4 text-sm font-black uppercase tracking-[0.15em] text-gray-400 pl-2">
+          Round Transitions
+        </h2>
+        <DepartmentTransitionStrip />
+      </div>
+
+      {/* MÀN HÌNH KHÓA KHI HẾT HẠN SESSION CHUẨN XÁC VỚI Z-[100] */}
+      {signOutPending ? (
+        <div
+          aria-live="assertive"
+          className="fixed inset-0 z-100 flex items-center justify-center bg-white/80 backdrop-blur-sm animate-in fade-in duration-300"
+        >
+          <div className="bg-white max-w-sm rounded-3xl border border-gray-200 p-8 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-300">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <i className="fa-solid fa-lock text-2xl" aria-hidden />
+            </div>
+            <h3 className="text-lg font-black tracking-tight text-gray-900">
+              Session Expired
+            </h3>
+            <p className="mt-2 text-sm font-medium text-gray-500 leading-relaxed">
+              For your security, please sign in again to continue.
+              Redirecting...
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

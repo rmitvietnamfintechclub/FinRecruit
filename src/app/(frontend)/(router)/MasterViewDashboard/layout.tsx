@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { buildAuthOptions } from '@/app/(backend)/libs/auth';
 import { getHomePathForRole } from '@/lib/role-routes';
 import { ExecutiveDashboardShell } from '@/app/(frontend)/(router)/MasterViewDashboard/ExecutiveDashboardShell';
+import { TooltipProvider } from '@/components/ui/Tooltip';
 
 export default async function MasterViewDashboardLayout({
   children,
@@ -20,21 +21,21 @@ export default async function MasterViewDashboardLayout({
   }
 
   const userName =
-    session.user.name?.trim() ||
-    session.user.email?.split('@')[0] ||
-    '—';
+    session.user.name?.trim() || session.user.email?.split('@')[0] || '—';
   const userInitial =
     (session.user.name && session.user.name.trim()[0]?.toUpperCase()) ||
     session.user.email?.[0]?.toUpperCase() ||
     '?';
 
   return (
-    <ExecutiveDashboardShell
-      userName={userName}
-      userInitial={userInitial}
-      userAvatar={session.user.image ?? null}
-    >
-      {children}
-    </ExecutiveDashboardShell>
+    <TooltipProvider>
+      <ExecutiveDashboardShell
+        userName={userName}
+        userInitial={userInitial}
+        userAvatar={session.user.image ?? null}
+      >
+        {children}
+      </ExecutiveDashboardShell>
+    </TooltipProvider>
   );
 }

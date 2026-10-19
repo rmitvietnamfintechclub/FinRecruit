@@ -333,7 +333,7 @@ export function InterviewSchedulingClient() {
       </Card>
 
       {showSuccess ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="publish-success-title" className="bg-card border-border w-full max-w-lg rounded-2xl border p-6 shadow-2xl">
             <div className="flex flex-col items-center text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/40">

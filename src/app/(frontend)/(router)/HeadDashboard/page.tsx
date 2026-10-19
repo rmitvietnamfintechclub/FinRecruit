@@ -31,6 +31,7 @@ import type { LockRound1Result } from '@/types/roundTransition';
 import { HeadRound2SubNav } from './HeadDashboardShell';
 import { HeadDashboardDialogs } from '@/components/head-dashboard/HeadDashboardDialogs';
 import { Tooltip, TooltipProvider } from '@/components/ui/Tooltip';
+import { signOut } from 'next-auth/react';
 
 const PAGE_SIZE = 12;
 
@@ -99,6 +100,9 @@ export default function HeadDashboardPage() {
   const [round2Error, setRound2Error] = useState<string | null>(null);
   const departmentStates = useDepartmentStates();
   const { lock, pending: locking } = useLockRound1();
+
+  // State khóa màn hình khi Session hết hạn
+  const [signOutPending, setSignOutPending] = useState(false);
 
   const observerTarget = useRef<HTMLDivElement>(null);
 
@@ -355,9 +359,23 @@ export default function HeadDashboardPage() {
           setAssignedDepartment(json.meta.filters.department);
       } catch (e) {
         if (!options?.isPoll) {
-          setError(
-            e instanceof Error ? e.message : 'Failed to load candidates.'
-          );
+          const errorMessage =
+            e instanceof Error ? e.message : 'Failed to load candidates.';
+
+          // --- BẮT LỖI AUTHENTICATION VÀ KHÓA MÀN HÌNH ---
+          if (
+            errorMessage.toLowerCase().includes('authentication required') ||
+            errorMessage.includes('401')
+          ) {
+            setSignOutPending(true);
+            setTimeout(() => {
+              void signOut({ callbackUrl: '/loginPage' });
+            }, 1500);
+            return;
+          }
+          // ----------------------------------------------
+
+          setError(errorMessage);
           if (!append) setCandidates([]);
         }
       } finally {
@@ -427,10 +445,24 @@ export default function HeadDashboardPage() {
       setRound2Candidates(json.candidates ?? []);
       setRound2Error(null);
     } catch (e) {
+      const errorMessage =
+        e instanceof Error ? e.message : 'Failed to load the Round 2 pool.';
+
+      // --- BẮT LỖI AUTHENTICATION ROUND 2 KHÓA MÀN HÌNH ---
+      if (
+        errorMessage.toLowerCase().includes('authentication required') ||
+        errorMessage.includes('401')
+      ) {
+        setSignOutPending(true);
+        setTimeout(() => {
+          void signOut({ callbackUrl: '/loginPage' });
+        }, 1500);
+        return;
+      }
+      // ----------------------------------------------------
+
       setRound2Candidates([]);
-      setRound2Error(
-        e instanceof Error ? e.message : 'Failed to load the Round 2 pool.'
-      );
+      setRound2Error(errorMessage);
     } finally {
       setRound2Loading(false);
     }
@@ -453,7 +485,7 @@ export default function HeadDashboardPage() {
   }, [isRound1Locked, mode, loadRound2]);
 
   useIntervalWhenVisible(pollDashboard, {
-    enabled: !loading && !loadingMore && !patching,
+    enabled: !loading && !loadingMore && !patching && !signOutPending,
   });
 
   const handleUpdateStatusRequest = (
@@ -961,6 +993,27 @@ export default function HeadDashboardPage() {
           isLockingRound2={isLockingRound2}
         />
       </div>
+
+      {/* MÀN HÌNH KHÓA KHI HẾT HẠN SESSION */}
+      {signOutPending ? (
+        <div
+          aria-live="assertive"
+          className="fixed inset-0 z-100 flex items-center justify-center bg-white/80 backdrop-blur-sm animate-in fade-in duration-300"
+        >
+          <div className="bg-white max-w-sm rounded-3xl border border-gray-200 p-8 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-300">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <i className="fa-solid fa-lock text-2xl" aria-hidden />
+            </div>
+            <h3 className="text-lg font-black tracking-tight text-gray-900">
+              Session Expired
+            </h3>
+            <p className="mt-2 text-sm font-medium text-gray-500 leading-relaxed">
+              For your security, please sign in again to continue.
+              Redirecting...
+            </p>
+          </div>
+        </div>
+      ) : null}
     </TooltipProvider>
   );
 }

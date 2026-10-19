@@ -7,49 +7,70 @@ import {
   type ConfirmRequest,
   type PatchPayload,
 } from '@/components/user-management/UserManagementDataTable';
-import { AppNotice, type AppNoticeVariant } from '@/components/feedback/AppNotice';
-import { ConfirmModal } from '@/components/feedback/ConfirmModal';
+import {
+  AppNotice,
+  type AppNoticeVariant,
+} from '@/components/feedback/AppNotice';
+import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { HEAD_DEPARTMENTS } from '@/app/(backend)/libs/departments';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type {
   SerializedManagementUser,
   UserManagementPayload,
 } from '@/lib/user-management/mock-store';
+import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
+import { cn } from '@/lib/utils';
 
 type Props = {
   initialPayload: UserManagementPayload;
-  /** The id of the signed-in admin viewing this page. Used to detect when an
-   * admin demotes / deactivates themselves so we can warn and force re-login. */
   currentUserId: string;
 };
 
 type Notice = { variant: AppNoticeVariant; title?: string; text: string };
 
-type ConfirmState =
-  | (ConfirmRequest & { busy: boolean })
-  | null;
+type ConfirmState = (ConfirmRequest & { busy: boolean }) | null;
+
+const DEPT_UI: Record<string, { icon: string; text: string; bg: string }> = {
+  'Technology Department': {
+    icon: 'fa-microchip',
+    text: 'text-blue-700',
+    bg: 'bg-blue-50',
+  },
+  'Business Department': {
+    icon: 'fa-briefcase',
+    text: 'text-amber-700',
+    bg: 'bg-amber-50',
+  },
+  'HR Department': {
+    icon: 'fa-users',
+    text: 'text-pink-700',
+    bg: 'bg-pink-50',
+  },
+  'Marketing Department': {
+    icon: 'fa-bullhorn',
+    text: 'text-emerald-700',
+    bg: 'bg-emerald-50',
+  },
+};
 
 function matchesQuery(user: SerializedManagementUser, query: string) {
   if (!query) return true;
   const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return (
-    user.email.toLowerCase().includes(q) ||
-    (user.name?.toLowerCase().includes(q) ?? false)
-  );
+  return user.name?.toLowerCase().includes(q) ?? false;
 }
 
-/**
- * Small avatar tile for list rows. Renders the OAuth profile picture when
- * available and falls back to a name/email-derived initial in a colored
- * circle, mirroring the look used inside the data tables.
- */
+// --- COMPONENT AVATAR ---
 function UserAvatar({ user }: { user: SerializedManagementUser }) {
   const [broken, setBroken] = React.useState(false);
   const initial = (
@@ -57,88 +78,116 @@ function UserAvatar({ user }: { user: SerializedManagementUser }) {
     user.email?.[0] ??
     '?'
   ).toUpperCase();
+
   if (user.avatar && !broken) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- dynamic OAuth URLs (Google CDN) not in next.config images domains
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={user.avatar}
         alt=""
         referrerPolicy="no-referrer"
         onError={() => setBroken(true)}
-        className="h-10 w-10 shrink-0 rounded-full border border-border object-cover"
+        className="size-10 shrink-0 rounded-full border border-gray-200 object-cover shadow-sm"
       />
     );
   }
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-sm font-bold text-muted-foreground">
+    <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[#0D1742]/20 bg-[#F0EDFF] text-sm font-black text-[#2C305F] shadow-sm">
       {initial}
     </div>
   );
 }
 
-export function UserManagementClient({
-  initialPayload,
-  currentUserId,
-}: Props) {
+export function UserManagementClient({ initialPayload, currentUserId }: Props) {
   const [payload, setPayload] =
     React.useState<UserManagementPayload>(initialPayload);
   const [waitingQuery, setWaitingQuery] = React.useState<string>('');
   const [inactiveQuery, setInactiveQuery] = React.useState<string>('');
-  const [pendingUserId, setPendingUserId] = React.useState<string | null>(
-    null
-  );
+  const [pendingUserId, setPendingUserId] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<Notice | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [isPolling, setIsPolling] = React.useState(false);
   const [confirmState, setConfirmState] = React.useState<ConfirmState>(null);
-  // Set when the admin's own role/status was just rewritten in a way that
-  // strips Executive Board access. Locks the UI behind a sign-out modal and
-  // redirects to /loginPage shortly after so the next session reflects the new
-  // role.
+
   const [signOutPending, setSignOutPending] = React.useState(false);
 
+  // Phân loại danh sách
   const activeExecutives = React.useMemo(
     () =>
-      payload.users.filter(
-        (u) => u.role === 'Executive Board' && u.isActive
-      ),
-    [payload.users]
-  );
-  const activeHeads = React.useMemo(
-    () =>
-      payload.users.filter(
-        (u) => u.role === 'Department Head' && u.isActive
-      ),
+      payload.users.filter((u) => u.role === 'Executive Board' && u.isActive),
     [payload.users]
   );
 
-  const load = React.useCallback(async () => {
-    setLoading(true);
+  const activeHeads = React.useMemo(
+    () =>
+      payload.users.filter((u) => u.role === 'Department Head' && u.isActive),
+    [payload.users]
+  );
+
+  // Bóc tách Members theo từng phòng ban
+  const membersByDept = React.useMemo(() => {
+    const grouped: Record<string, SerializedManagementUser[]> = {
+      'Technology Department': [],
+      'Business Department': [],
+      'HR Department': [],
+      'Marketing Department': [],
+    };
+    payload.users.forEach((u) => {
+      if (u.role === 'Member' && u.isActive && grouped[u.department]) {
+        grouped[u.department].push(u);
+      }
+    });
+    return grouped;
+  }, [payload.users]);
+
+  const load = React.useCallback(async (isSilentPoll = false) => {
+    if (!isSilentPoll) setLoading(true);
+    else setIsPolling(true);
+
     try {
       const res = await fetch('/api/users', { credentials: 'include' });
-      const json = (await res.json()) as UserManagementPayload & {
-        message?: string;
-      };
+      const json = await res.json();
+
       if (!res.ok || !json.success) {
-        throw new Error(
-          (json as { message?: string }).message ?? `Error ${res.status}`
-        );
+        throw new Error(json.message ?? `Error ${res.status}`);
       }
       setPayload(json);
     } catch (e) {
-      setNotice({
-        variant: 'error',
-        title: 'Failed to load data',
-        text: e instanceof Error ? e.message : 'Unknown error.',
-      });
+      if (!isSilentPoll) {
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error.';
+
+        if (
+          errorMessage.toLowerCase().includes('authentication required') ||
+          errorMessage.includes('401')
+        ) {
+          setSignOutPending(true);
+          setTimeout(() => {
+            void signOut({ callbackUrl: '/loginPage' });
+          }, 1500);
+          return;
+        }
+
+        setNotice({
+          variant: 'error',
+          title: 'Unable to Load Data',
+          text: errorMessage,
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!isSilentPoll) setLoading(false);
+      else setIsPolling(false);
     }
   }, []);
 
-  /**
-   * Single-row patch. Returns whether the call succeeded so callers (eg. bulk
-   * actions) can aggregate results without reading state.
-   */
+  useIntervalWhenVisible(() => void load(true), {
+    enabled:
+      !loading &&
+      !isPolling &&
+      pendingUserId === null &&
+      confirmState === null &&
+      !signOutPending,
+  });
+
   const patchUser = React.useCallback(
     async (
       patch: PatchPayload,
@@ -152,23 +201,25 @@ export function UserManagementClient({
       });
       let json: { success?: boolean; message?: string } = {};
       try {
-        json = (await res.json()) as { success?: boolean; message?: string };
-      } catch {
-        // ignore
-      }
+        json = await res.json();
+      } catch {}
+
       if (!res.ok || !json.success) {
         const message = json.message ?? `Update failed (${res.status})`;
-        // Always surface in the browser console so QA/devtools logs catch it
-        // even when the caller suppresses the toast (bulk actions etc).
-        console.warn('[user-management] patch rejected', {
-          status: res.status,
-          patch,
-          message,
-        });
+
+        if (
+          message.toLowerCase().includes('authentication required') ||
+          message.includes('401')
+        ) {
+          setSignOutPending(true);
+          setTimeout(() => void signOut({ callbackUrl: '/loginPage' }), 1500);
+          return { ok: false, message };
+        }
+
         if (!opts.silent) {
           setNotice({
             variant: 'error',
-            title: 'Update rejected',
+            title: 'Update Failed',
             text: message,
           });
         }
@@ -179,11 +230,6 @@ export function UserManagementClient({
     []
   );
 
-  /**
-   * Returns a non-empty reason string when applying `patch` would strip the
-   * signed-in admin of Executive Board access (role demote or deactivate).
-   * Returns null otherwise.
-   */
   const describeSelfLock = React.useCallback(
     (patch: PatchPayload): string | null => {
       if (patch.userId !== currentUserId) return null;
@@ -193,7 +239,9 @@ export function UserManagementClient({
       const nextActive = patch.isActive ?? me.isActive;
       const losesAdmin = nextRole !== 'Executive Board';
       const becomesInactive = nextActive === false;
+
       if (!losesAdmin && !becomesInactive) return null;
+
       if (becomesInactive) {
         return "You're about to deactivate your own admin account. You won't be able to sign back in until another Executive Board member reactivates you.";
       }
@@ -208,16 +256,9 @@ export function UserManagementClient({
 
   const finishSelfLockingPatch = React.useCallback(() => {
     setSignOutPending(true);
-    setNotice({
-      variant: 'warning',
-      title: 'Access updated — signing you out',
-      text:
-        'Your role has changed. Sign in again so the app can pick up your new permissions.',
-    });
-    // Tiny delay so the notice paints before next-auth navigates away.
-    window.setTimeout(() => {
+    setTimeout(() => {
       void signOut({ callbackUrl: '/loginPage' });
-    }, 1200);
+    }, 1500);
   }, []);
 
   const onPatch = React.useCallback(
@@ -234,6 +275,12 @@ export function UserManagementClient({
               finishSelfLockingPatch();
             } else {
               await load();
+              setNotice({
+                variant: 'success',
+                title: 'Access Updated',
+                text: 'User permissions have been successfully modified.',
+              });
+              setTimeout(() => setNotice(null), 3000);
             }
           }
         } finally {
@@ -268,14 +315,11 @@ export function UserManagementClient({
         let success = 0;
         let selfDeactivated = false;
         const failures: { id: string; message: string }[] = [];
-        // Always process the admin's own account last so the success notice
-        // for the rest of the batch can render before the sign-out kicks in.
+
         const ordered = includesSelf
-          ? [
-              ...userIds.filter((id) => id !== currentUserId),
-              currentUserId,
-            ]
+          ? [...userIds.filter((id) => id !== currentUserId), currentUserId]
           : userIds;
+
         for (const id of ordered) {
           setPendingUserId(id);
           const result = await patchUser(
@@ -295,7 +339,6 @@ export function UserManagementClient({
         setPendingUserId(null);
 
         if (selfDeactivated) {
-          // Skip a normal load(): we're about to sign out.
           finishSelfLockingPatch();
           return;
         }
@@ -305,22 +348,20 @@ export function UserManagementClient({
         if (failures.length === 0) {
           setNotice({
             variant: 'success',
-            title: 'Bulk deactivate complete',
-            text: `Deactivated ${success} account${success === 1 ? '' : 's'}.`,
+            title: 'Accounts Deactivated',
+            text: `Successfully revoked access for ${success} user${success === 1 ? '' : 's'}.`,
           });
         } else if (success === 0) {
           setNotice({
             variant: 'error',
-            title: 'Bulk deactivate failed',
-            text: failures.map((f) => `${f.id}: ${f.message}`).join(' · '),
+            title: 'Action Failed',
+            text: `Unable to deactivate the selected account${failures.length === 1 ? '' : 's'}. Please try again.`,
           });
         } else {
           setNotice({
             variant: 'warning',
-            title: `Bulk deactivate finished with ${failures.length} error${failures.length === 1 ? '' : 's'}`,
-            text: `${success} succeeded · ${failures.length} failed (${failures
-              .map((f) => f.message)
-              .join('; ')})`,
+            title: 'Partial Completion',
+            text: `${success} revoked successfully, but failed on ${failures.length} other${failures.length === 1 ? '' : 's'}.`,
           });
         }
       };
@@ -339,13 +380,7 @@ export function UserManagementClient({
 
       await runBulk();
     },
-    [
-      currentUserId,
-      finishSelfLockingPatch,
-      load,
-      patchUser,
-      requestConfirm,
-    ]
+    [currentUserId, finishSelfLockingPatch, load, patchUser, requestConfirm]
   );
 
   const closeConfirm = React.useCallback(() => {
@@ -376,21 +411,8 @@ export function UserManagementClient({
   );
 
   return (
-    <div className="relative space-y-8">
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => void load()}
-          disabled={loading || signOutPending}
-        >
-          <i className="fa-solid fa-rotate mr-2" aria-hidden />
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </Button>
-      </div>
-
-      {notice ? (
+    <div className="relative space-y-10 animate-in fade-in duration-500 mt-4">
+      {notice && (
         <AppNotice
           variant={notice.variant}
           title={notice.title}
@@ -398,308 +420,579 @@ export function UserManagementClient({
         >
           {notice.text}
         </AppNotice>
-      ) : null}
+      )}
 
-      <section className="bg-card border-border rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-0.5 sm:p-6">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-yellow-100 text-2xl text-yellow-600 dark:bg-yellow-900/40 dark:text-yellow-400">
-              <i className="fa-solid fa-hourglass-half" aria-hidden />
+      {/* SECTION 1: WAITING ROOM */}
+      <section>
+        <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between px-1">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#FFEFCA] text-xl text-[#A28436] shadow-sm">
+              <i className="fa-solid fa-hourglass-half" />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-yellow-700/90 dark:text-yellow-500/90">
+            <div>
+              <h2 className="text-lg font-black tracking-tight text-[#0D1742]">
                 Waiting Room
-              </p>
-              <h2 className="mt-1 text-lg font-black tracking-tight text-foreground">
-                Guests awaiting role assignment
               </h2>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                Every active Guest account, regardless of cohort.
+              <p className="text-sm font-medium text-[#5E5E92]">
+                Guests awaiting role assignment
               </p>
             </div>
           </div>
-          <input
-            type="search"
-            value={waitingQuery}
-            onChange={(e) => setWaitingQuery(e.target.value)}
-            placeholder="Search by name or email…"
-            className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 sm:max-w-xs"
-          />
+          <div className="relative w-full shrink-0 lg:w-72">
+            <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={waitingQuery}
+              onChange={(e) => setWaitingQuery(e.target.value)}
+              placeholder="Search by name..."
+              className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm font-medium text-[#0D1742] shadow-sm transition-colors focus:border-[#0D1742] focus:outline-none focus:ring-1 focus:ring-[#0D1742]"
+            />
+          </div>
         </div>
 
-        {payload.waitingGuests.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No guests are currently waiting.
-          </p>
+        {loading && !isPolling ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white py-16 shadow-sm">
+            <i className="fa-solid fa-spinner fa-spin text-3xl text-gray-300" />
+            <p className="mt-3 text-sm font-bold text-gray-400">
+              Loading guests...
+            </p>
+          </div>
+        ) : payload.waitingGuests.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/50 py-16 text-center">
+            <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+              <i className="fa-solid fa-inbox text-xl" />
+            </div>
+            <p className="text-base font-bold text-[#0D1742]">
+              The waiting room is empty
+            </p>
+            <p className="text-sm text-[#5E5E92] mt-1">
+              When users register, they will appear here.
+            </p>
+          </div>
         ) : filteredWaitingGuests.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No guests match your search.
-          </p>
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/50 py-16 text-center">
+            <p className="text-sm font-bold text-gray-500">
+              No guests match your search.
+            </p>
+          </div>
         ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border">
-            {filteredWaitingGuests.map((g) => (
-              <li
-                key={g.id}
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <UserAvatar user={g} />
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-foreground">
-                      {g.name?.trim() || g.email}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {g.email}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="default"
-                        disabled={pendingUserId === g.id}
-                      >
-                        Grant Head role
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      {HEAD_DEPARTMENTS.map((d) => (
-                        <DropdownMenuItem
-                          key={d}
-                          onClick={() =>
-                            onPatch({
-                              userId: g.id,
-                              role: 'Department Head',
-                              department: d,
-                            })
-                          }
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <ul className="divide-y divide-gray-100">
+              {filteredWaitingGuests.map((g) => {
+                const targetName = g.name?.trim() || g.email.split('@')[0];
+                return (
+                  <li
+                    key={g.id}
+                    className="flex flex-col gap-4 p-5 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-center gap-4">
+                      <UserAvatar user={g} />
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-bold text-[#0D1742]">
+                          {targetName}
+                        </p>
+                        <p className="truncate text-[13px] font-medium text-[#5E5E92]">
+                          {g.email}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0">
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="size-8 rounded-lg p-0 hover:bg-gray-100 text-gray-500 hover:text-gray-900"
+                            disabled={pendingUserId === g.id}
+                          >
+                            {pendingUserId === g.id ? (
+                              <i className="fa-solid fa-spinner fa-spin text-sm" />
+                            ) : (
+                              <i className="fa-solid fa-ellipsis text-sm" />
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-60 rounded-xl border-gray-200 shadow-lg p-1.5"
                         >
-                          {d}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="default"
-                    disabled={pendingUserId === g.id}
-                    onClick={() =>
-                      onPatch({
-                        userId: g.id,
-                        role: 'Executive Board',
-                      })
-                    }
-                  >
-                    Grant Executive Board
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={pendingUserId === g.id}
-                    onClick={() =>
-                      requestConfirm({
-                        title: `Decline ${g.email}?`,
-                        description:
-                          'This deactivates the account; you can reactivate it later from the Inactive accounts section.',
-                        confirmLabel: 'Decline',
-                        variant: 'destructive',
-                        onConfirm: () =>
-                          onPatch({
-                            userId: g.id,
-                            role: 'Guest',
-                            department: 'Unassigned',
-                            isActive: false,
-                          }),
-                      })
-                    }
-                  >
-                    Decline
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                          <DropdownMenuLabel className="text-xs font-bold text-[#5E5E92] uppercase tracking-wider px-2">
+                            Assign Role
+                          </DropdownMenuLabel>
+
+                          {/* SUBMENU: ASSIGN DEPARTMENT HEAD */}
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger className="font-semibold text-sm py-2 cursor-pointer rounded-lg text-[#0D1742]">
+                              <i className="fa-solid fa-user-tie w-4 text-center mr-2 text-gray-400" />
+                              Department Head
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="rounded-xl shadow-lg border-gray-200 p-1.5">
+                              {HEAD_DEPARTMENTS.map((d) => (
+                                <DropdownMenuItem
+                                  key={d}
+                                  className="font-semibold text-sm py-2 cursor-pointer focus:bg-gray-50 rounded-lg text-[#0D1742]"
+                                  onClick={() =>
+                                    requestConfirm({
+                                      title: `Assign Department Head Role?`,
+                                      description: (
+                                        <span className="mt-2 flex flex-col gap-4">
+                                          <span className="block text-sm text-[#5E5E92]">
+                                            Grant{' '}
+                                            <strong className="text-[#0D1742]">
+                                              {targetName}
+                                            </strong>{' '}
+                                            as the Head of{' '}
+                                            <strong className={DEPT_UI[d].text}>
+                                              {d}
+                                            </strong>
+                                            . They will have full access to
+                                            view, evaluate, and export
+                                            candidates in this department.
+                                          </span>
+                                        </span>
+                                      ),
+                                      confirmLabel: 'Assign Role',
+                                      variant: 'default',
+                                      onConfirm: () =>
+                                        onPatch({
+                                          userId: g.id,
+                                          role: 'Department Head',
+                                          department: d,
+                                          isActive: true,
+                                        }),
+                                    })
+                                  }
+                                >
+                                  <i
+                                    className={`fa-solid ${DEPT_UI[d].icon} w-4 text-center mr-2 ${DEPT_UI[d].text}`}
+                                  />
+                                  {d}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+
+                          {/* SUBMENU: ASSIGN MEMBER */}
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger className="font-semibold text-sm py-2 cursor-pointer rounded-lg text-[#0D1742]">
+                              <i className="fa-solid fa-user w-4 text-center mr-2 text-gray-400" />
+                              Member
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="rounded-xl shadow-lg border-gray-200 p-1.5">
+                              {HEAD_DEPARTMENTS.map((d) => (
+                                <DropdownMenuItem
+                                  key={d}
+                                  className="font-semibold text-sm py-2 cursor-pointer focus:bg-gray-50 rounded-lg text-[#0D1742]"
+                                  onClick={() =>
+                                    requestConfirm({
+                                      title: `Assign Member Role?`,
+                                      description: (
+                                        <span className="mt-2 flex flex-col gap-4">
+                                          <span className="block text-sm text-[#5E5E92]">
+                                            Grant{' '}
+                                            <strong className="text-[#0D1742]">
+                                              {targetName}
+                                            </strong>{' '}
+                                            as the Member of{' '}
+                                            <strong className={DEPT_UI[d].text}>
+                                              {d}
+                                            </strong>
+                                            . They will have standard access to
+                                            operations within this department.
+                                          </span>
+                                        </span>
+                                      ),
+                                      confirmLabel: 'Assign Role',
+                                      variant: 'default',
+                                      onConfirm: () =>
+                                        onPatch({
+                                          userId: g.id,
+                                          role: 'Member',
+                                          department: d,
+                                          isActive: true,
+                                        }),
+                                    })
+                                  }
+                                >
+                                  <i
+                                    className={`fa-solid ${DEPT_UI[d].icon} w-4 text-center mr-2 ${DEPT_UI[d].text}`}
+                                  />
+                                  {d}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+
+                          <DropdownMenuItem
+                            className="font-semibold text-sm py-2 cursor-pointer focus:bg-[#F0EDFF] focus:text-[#2C305F] text-[#2C305F] rounded-lg"
+                            onClick={() =>
+                              requestConfirm({
+                                title: 'Assign Executive Board Role?',
+                                description: (
+                                  <span className="mt-2 flex flex-col gap-4">
+                                    <span className="block text-sm text-[#5E5E92]">
+                                      Promote{' '}
+                                      <strong className="text-[#0D1742]">
+                                        {targetName}
+                                      </strong>{' '}
+                                      to the{' '}
+                                      <strong className="text-[#2C305F]">
+                                        Executive Board
+                                      </strong>
+                                      . This grants them supreme administrative
+                                      privileges across all departments.
+                                    </span>
+                                  </span>
+                                ),
+                                confirmLabel: 'Assign Role',
+                                variant: 'default',
+                                onConfirm: () =>
+                                  onPatch({
+                                    userId: g.id,
+                                    role: 'Executive Board',
+                                    department: 'Unassigned',
+                                    isActive: true,
+                                  }),
+                              })
+                            }
+                          >
+                            <i className="fa-solid fa-shield-halved w-4 text-center mr-2" />
+                            Executive Board
+                          </DropdownMenuItem>
+
+                          <DropdownMenuSeparator className="bg-gray-100 my-1" />
+                          <DropdownMenuItem
+                            className="font-semibold text-sm py-2 cursor-pointer focus:bg-[#BB2649]/10 focus:text-[#BB2649] rounded-lg text-[#BB2649]"
+                            onClick={() =>
+                              requestConfirm({
+                                title: `Deactivate Account?`,
+                                description: (
+                                  <span className="mt-2 flex flex-col gap-3">
+                                    <span className="block text-sm text-[#5E5E92]">
+                                      Deactivate the account for{' '}
+                                      <strong className="text-[#0D1742]">
+                                        {targetName}
+                                      </strong>
+                                      . They will be removed from the Waiting
+                                      Room and lose access completely. You can
+                                      restore this account later from the
+                                      Inactive section.
+                                    </span>
+                                  </span>
+                                ),
+                                confirmLabel: 'Deactivate',
+                                variant: 'destructive',
+                                onConfirm: () =>
+                                  onPatch({
+                                    userId: g.id,
+                                    isActive: false,
+                                  }),
+                              })
+                            }
+                          >
+                            <i className="fa-solid fa-ban w-4 text-center mr-2" />
+                            Deactivate Account
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </section>
 
+      {/* SECTION 2: ADMIN PANELS */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="bg-card border-border space-y-4 rounded-2xl border p-4 shadow-sm sm:p-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-2xl text-violet-700 dark:bg-violet-900/40 dark:text-violet-400">
+        <section className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm sm:p-6 flex flex-col">
+          <div className="flex items-start gap-4 mb-5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#F0EDFF] text-xl text-[#2C305F]">
               <i className="fa-solid fa-shield-halved" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-violet-700/90 dark:text-violet-400/90">
-                Executive Board · Admin
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#5E5E92] mb-1">
+                System Admin
               </p>
-              <h2 className="mt-1 text-lg font-black tracking-tight text-foreground">
-                Active Executive Board
-                <span className="ml-2 text-sm font-semibold text-muted-foreground">
-                  ({activeExecutives.length})
+              <h2 className="text-lg font-black tracking-tight text-[#0D1742] flex items-center">
+                Executive Board
+                <span className="ml-2 rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-black text-gray-600">
+                  {activeExecutives.length}
                 </span>
               </h2>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                Full admin access. The system requires at least one to remain
-                active.
-              </p>
             </div>
           </div>
 
-          <UserManagementDataTable
-            data={activeExecutives}
-            soleActiveExecutiveId={payload.soleActiveExecutiveId}
-            onPatch={onPatch}
-            pendingUserId={pendingUserId}
-            requestConfirm={requestConfirm}
-            onBulkInactive={onBulkInactive}
-            bulkScopeLabel="Executive Board"
-          />
+          <div className="flex-1">
+            <UserManagementDataTable
+              data={activeExecutives}
+              soleActiveExecutiveId={payload.soleActiveExecutiveId}
+              onPatch={onPatch}
+              pendingUserId={pendingUserId}
+              requestConfirm={requestConfirm}
+              onBulkInactive={onBulkInactive}
+              bulkScopeLabel="Executive Board"
+              hiddenColumns={['department']}
+            />
+          </div>
         </section>
 
-        <section className="bg-card border-border space-y-4 rounded-2xl border p-4 shadow-sm sm:p-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-2xl text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
-              <i className="fa-solid fa-people-group" aria-hidden />
+        <section className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm sm:p-6 flex flex-col">
+          <div className="flex items-start gap-4 mb-5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-xl text-emerald-600">
+              <i className="fa-solid fa-user-tie" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700/90 dark:text-emerald-400/90">
-                Department Heads
+              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600/80 mb-1">
+                Division Admin
               </p>
-              <h2 className="mt-1 text-lg font-black tracking-tight text-foreground">
-                Active Department Heads
-                <span className="ml-2 text-sm font-semibold text-muted-foreground">
-                  ({activeHeads.length})
+              <h2 className="text-lg font-black tracking-tight text-[#0D1742] flex items-center">
+                Department Head
+                <span className="ml-2 rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-black text-gray-600">
+                  {activeHeads.length}
                 </span>
               </h2>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                Move between departments, promote to Executive Board, or
-                deactivate freely.
-              </p>
             </div>
           </div>
 
-          <UserManagementDataTable
-            data={activeHeads}
-            soleActiveExecutiveId={payload.soleActiveExecutiveId}
-            onPatch={onPatch}
-            pendingUserId={pendingUserId}
-            requestConfirm={requestConfirm}
-            onBulkInactive={onBulkInactive}
-            bulkScopeLabel="Department Heads"
-          />
+          <div className="flex-1">
+            <UserManagementDataTable
+              data={activeHeads}
+              soleActiveExecutiveId={payload.soleActiveExecutiveId}
+              onPatch={onPatch}
+              pendingUserId={pendingUserId}
+              requestConfirm={requestConfirm}
+              onBulkInactive={onBulkInactive}
+              bulkScopeLabel="Department Heads"
+              hiddenColumns={['role']}
+            />
+          </div>
         </section>
       </div>
 
-      <section className="bg-card border-border rounded-2xl border p-4 shadow-sm sm:p-6">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-2xl text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-400">
-              <i className="fa-solid fa-user-slash" aria-hidden />
+      {/* SECTION 3: DEPARTMENT MEMBERS (CHIA 4 CỘT LƯỚI) */}
+      <section>
+        <div className="mb-4 flex items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xl text-blue-600">
+            <i className="fa-solid fa-users" aria-hidden />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wider text-blue-600/80 mb-1">
+              Standard Access
+            </p>
+            <h2 className="text-lg font-black tracking-tight text-[#0D1742]">
+              Department Members
+            </h2>
+          </div>
+        </div>
+
+        {/* Lưới CSS Grid cho 4 phòng ban */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {HEAD_DEPARTMENTS.map((dept) => {
+            const deptMembers = membersByDept[dept];
+            const deptUI = DEPT_UI[dept];
+
+            return (
+              <div
+                key={dept}
+                className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col h-full"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        'flex size-10 shrink-0 items-center justify-center rounded-lg text-lg',
+                        deptUI.bg,
+                        deptUI.text
+                      )}
+                    >
+                      <i className={`fa-solid ${deptUI.icon}`} />
+                    </div>
+                    <h3 className="text-base font-bold text-[#0D1742]">
+                      {dept.replace(' Department', '')}
+                    </h3>
+                  </div>
+                  <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-black text-gray-600">
+                    {deptMembers.length}
+                  </span>
+                </div>
+
+                <div className="flex-1">
+                  <UserManagementDataTable
+                    data={deptMembers}
+                    soleActiveExecutiveId={payload.soleActiveExecutiveId}
+                    onPatch={onPatch}
+                    pendingUserId={pendingUserId}
+                    requestConfirm={requestConfirm}
+                    onBulkInactive={onBulkInactive}
+                    bulkScopeLabel={`${dept.replace(' Department', '')} Members`}
+                    hiddenColumns={['role', 'department']} // Đã chia bảng theo ban nên ẩn luôn 2 cột này
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* SECTION 4: INACTIVE */}
+      <section>
+        <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between px-1">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-xl text-gray-500 shadow-sm">
+              <i className="fa-solid fa-user-slash" />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-zinc-700/90 dark:text-zinc-400/90">
-                Inactive accounts
-              </p>
-              <h2 className="mt-1 text-lg font-black tracking-tight text-foreground">
-                Declined or revoked accounts
+            <div>
+              <h2 className="text-lg font-black tracking-tight text-[#0D1742]">
+                Inactive Accounts
               </h2>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                Reactivate to send a Guest back to the Waiting Room, or restore
-                a Head / Executive to active duty.
+              <p className="text-sm font-medium text-[#5E5E92]">
+                Deactivated and revoked user accounts
               </p>
             </div>
           </div>
-          <input
-            type="search"
-            value={inactiveQuery}
-            onChange={(e) => setInactiveQuery(e.target.value)}
-            placeholder="Search by name or email…"
-            className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 sm:max-w-xs"
-          />
+          <div className="relative w-full shrink-0 lg:w-72">
+            <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={inactiveQuery}
+              onChange={(e) => setInactiveQuery(e.target.value)}
+              placeholder="Search by name..."
+              className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm font-medium text-[#0D1742] shadow-sm transition-colors focus:border-[#0D1742] focus:outline-none focus:ring-1 focus:ring-[#0D1742]"
+            />
+          </div>
         </div>
 
         {payload.inactiveAccounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No inactive accounts.
-          </p>
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/50 py-12 text-center">
+            <p className="text-sm font-bold text-gray-400">
+              No inactive accounts to display.
+            </p>
+          </div>
         ) : filteredInactiveAccounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No inactive accounts match your search.
-          </p>
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/50 py-12 text-center">
+            <p className="text-sm font-bold text-gray-500">No matches found.</p>
+          </div>
         ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border">
-            {filteredInactiveAccounts.map((u) => (
-              <li
-                key={u.id}
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <UserAvatar user={u} />
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-foreground">
-                      {u.name?.trim() || u.email}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {u.email}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Previously:{' '}
-                      <span className="font-semibold">{u.role}</span>
-                      {' · '}
-                      {u.department}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="default"
-                    disabled={pendingUserId === u.id}
-                    onClick={() =>
-                      onPatch({ userId: u.id, isActive: true })
-                    }
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <ul className="divide-y divide-gray-100">
+              {filteredInactiveAccounts.map((u) => {
+                const targetName = u.name?.trim() || u.email;
+                return (
+                  <li
+                    key={u.id}
+                    className="flex flex-col gap-4 p-5 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    Reactivate
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                    <div className="flex min-w-0 items-center gap-4">
+                      <UserAvatar user={u} />
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-bold text-[#0D1742]">
+                          {u.name?.trim() || u.email}
+                        </p>
+                        <p className="truncate text-[13px] font-medium text-[#5E5E92]">
+                          {u.email}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="font-semibold text-[#5E5E92]">
+                            Previous Role:
+                          </span>
+                          <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-600">
+                            {u.role}
+                          </span>
+                          {u.role !== 'Executive Board' &&
+                            u.department !== 'Unassigned' && (
+                              <span className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 shadow-sm">
+                                {u.department.replace(' Department', '')}
+                              </span>
+                            )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl h-9 font-bold text-[#0D1742] hover:text-[#DCB968] hover:bg-[#0D1742] border-gray-200"
+                        disabled={pendingUserId === u.id}
+                        onClick={() =>
+                          requestConfirm({
+                            title: `Reactivate Account?`,
+                            description: (
+                              <span className="mt-2 flex flex-col gap-3">
+                                <span className="block text-sm text-[#5E5E92]">
+                                  Reactivate{' '}
+                                  <strong className="text-[#0D1742]">
+                                    {targetName}
+                                  </strong>
+                                  &apos;s account. This account will be restored
+                                  as a{' '}
+                                  <strong className="text-[#A28436]">
+                                    Guest
+                                  </strong>{' '}
+                                  and moved to the Waiting Room. You can
+                                  reassign their role from there.
+                                </span>
+                              </span>
+                            ),
+                            confirmLabel: 'Reactivate',
+                            variant: 'default',
+                            onConfirm: () =>
+                              onPatch({
+                                userId: u.id,
+                                role: 'Guest',
+                                department: 'Unassigned',
+                                isActive: true,
+                              }),
+                          })
+                        }
+                      >
+                        {pendingUserId === u.id ? (
+                          <i className="fa-solid fa-spinner fa-spin mr-2" />
+                        ) : (
+                          <i className="fa-solid fa-rotate-left mr-2" />
+                        )}
+                        Reactivate
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </section>
 
-      <ConfirmModal
+      {/* Global Confirm Dialog */}
+      <ConfirmDialog
         open={confirmState !== null}
         title={confirmState?.title ?? ''}
         description={confirmState?.description}
         confirmLabel={confirmState?.confirmLabel}
         variant={confirmState?.variant}
-        busy={confirmState?.busy ?? false}
-        onConfirm={() => void runConfirm()}
+        loading={confirmState?.busy ?? false}
         onCancel={closeConfirm}
+        onConfirm={async () => {
+          await runConfirm();
+        }}
       />
 
+      {/* MÀN HÌNH KHÓA KHI HẾT HẠN SESSION */}
       {signOutPending ? (
         <div
           aria-live="assertive"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+          className="fixed inset-0 z-100 flex items-center justify-center bg-white/80 backdrop-blur-sm animate-in fade-in duration-300"
         >
-          <div className="bg-card border-border max-w-sm rounded-2xl border p-6 text-center shadow-xl">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-              <i className="fa-solid fa-right-from-bracket text-xl" aria-hidden />
+          <div className="bg-white max-w-sm rounded-3xl border border-gray-200 p-8 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-300">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <i className="fa-solid fa-lock text-2xl" aria-hidden />
             </div>
-            <h3 className="text-base font-black tracking-tight text-foreground">
-              Signing you out…
+            <h3 className="text-lg font-black tracking-tight text-[#0D1742]">
+              Session Expired
             </h3>
-            <p className="mt-1 text-sm font-semibold text-muted-foreground">
-              Your access has changed. You&apos;ll be redirected to the login
-              page.
+            <p className="mt-2 text-sm font-medium text-[#5E5E92] leading-relaxed">
+              For your security, please sign in again to continue.
+              Redirecting...
             </p>
           </div>
         </div>

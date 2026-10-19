@@ -409,7 +409,7 @@ export default function MasterCandidatesPage() {
               />
             </button>
             {isExportOpen && !exporting && (
-              <div className="border-border bg-card animate-in fade-in slide-in-from-top-2 absolute top-full right-0 z-30 mt-2 w-full min-w-[200px] rounded-xl border p-1.5 shadow-xl duration-200 sm:w-52">
+              <div className="border-border bg-card animate-in fade-in slide-in-from-top-2 absolute top-full right-0 z-30 mt-2 w-full min-w-50 rounded-xl border p-1.5 shadow-xl duration-200 sm:w-52">
                 <button
                   type="button"
                   onClick={() => void downloadExcelExport('Pass')}
