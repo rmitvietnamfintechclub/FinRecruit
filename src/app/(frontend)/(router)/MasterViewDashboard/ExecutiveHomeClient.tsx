@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/card';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { DepartmentTransitionStrip } from '@/components/dashboard/DepartmentTransitionStrip';
-import { signOut } from 'next-auth/react';
+import { useSessionExpired } from '@/components/providers/SessionExpiredProvider';
 
 // --- TYPES ---
 type HeadAccount = {
@@ -116,8 +116,7 @@ export function ExecutiveHomeClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // State khóa màn hình khi Session hết hạn
-  const [signOutPending, setSignOutPending] = useState(false);
+  const { triggerSessionExpired } = useSessionExpired();
 
   const loadAllData = useCallback(async () => {
     setError(null);
@@ -144,24 +143,19 @@ export function ExecutiveHomeClient() {
       const errorMessage =
         e instanceof Error ? e.message : 'Failed to load executive overview.';
 
-      // --- BẮT LỖI AUTHENTICATION ĐỂ BẬT KHÓA MÀN HÌNH ---
       if (
         errorMessage.toLowerCase().includes('authentication required') ||
         errorMessage.includes('401')
       ) {
-        setSignOutPending(true);
-        setTimeout(() => {
-          void signOut({ callbackUrl: '/loginPage' });
-        }, 1500);
+        triggerSessionExpired();
         return;
       }
-      // ---------------------------------------------
 
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [triggerSessionExpired]);
 
   useEffect(() => {
     void loadAllData();
@@ -452,27 +446,6 @@ export function ExecutiveHomeClient() {
         </h2>
         <DepartmentTransitionStrip />
       </div>
-
-      {/* MÀN HÌNH KHÓA KHI HẾT HẠN SESSION CHUẨN XÁC VỚI Z-[100] */}
-      {signOutPending ? (
-        <div
-          aria-live="assertive"
-          className="fixed inset-0 z-100 flex items-center justify-center bg-white/80 backdrop-blur-sm animate-in fade-in duration-300"
-        >
-          <div className="bg-white max-w-sm rounded-3xl border border-gray-200 p-8 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-300">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
-              <i className="fa-solid fa-lock text-2xl" aria-hidden />
-            </div>
-            <h3 className="text-lg font-black tracking-tight text-gray-900">
-              Session Expired
-            </h3>
-            <p className="mt-2 text-sm font-medium text-gray-500 leading-relaxed">
-              For your security, please sign in again to continue.
-              Redirecting...
-            </p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

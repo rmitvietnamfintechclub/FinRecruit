@@ -552,7 +552,7 @@ export function UserManagementDataTable({
                                 </span>
                               </span>
                             ),
-                            confirmLabel: 'Promote to ExB',
+                            confirmLabel: 'Assign Role',
                             variant: 'default',
                             onConfirm: () =>
                               onPatch({

@@ -8,7 +8,7 @@ import {
 } from '@/components/feedback/AppNotice';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
-import { signOut } from 'next-auth/react';
+import { useSessionExpired } from '@/components/providers/SessionExpiredProvider';
 
 type SerializedManagementUser = {
   id: string;
@@ -93,61 +93,53 @@ export function HeadUserManagementClient({
     text: string;
   } | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
+  const { triggerSessionExpired } = useSessionExpired();
 
-  // State quản lý UI khóa màn hình khi Session hết hạn
-  const [signOutPending, setSignOutPending] = useState(false);
+  const loadData = useCallback(
+    async (isSilentPoll = false) => {
+      if (!isSilentPoll) setLoading(true);
+      else setIsPolling(true);
 
-  const loadData = useCallback(async (isSilentPoll = false) => {
-    if (!isSilentPoll) setLoading(true);
-    else setIsPolling(true);
+      try {
+        const res = await fetch('/api/users', { credentials: 'include' });
+        const json = await res.json();
+        if (!res.ok || !json.success)
+          throw new Error(json.message || 'Failed to load users');
 
-    try {
-      const res = await fetch('/api/users', { credentials: 'include' });
-      const json = await res.json();
-      if (!res.ok || !json.success)
-        throw new Error(json.message || 'Failed to load users');
-
-      setPayload(json);
-    } catch (e) {
-      if (!isSilentPoll) {
+        setPayload(json);
+      } catch (e) {
         const errorMessage =
           e instanceof Error ? e.message : 'Unknown error occurred.';
 
-        // --- BẮT LỖI AUTHENTICATION VÀ KHÓA MÀN HÌNH ---
         if (
           errorMessage.toLowerCase().includes('authentication required') ||
           errorMessage.includes('401')
         ) {
-          setSignOutPending(true);
-          setTimeout(() => {
-            void signOut({ callbackUrl: '/loginPage' });
-          }, 1500);
+          triggerSessionExpired();
           return;
         }
-        // ---------------------------------------------
 
-        setNotice({
-          variant: 'error',
-          title: 'Error loading data',
-          text: errorMessage,
-        });
+        if (!isSilentPoll) {
+          setNotice({
+            variant: 'error',
+            title: 'Error loading data',
+            text: errorMessage,
+          });
+        }
+      } finally {
+        if (!isSilentPoll) setLoading(false);
+        else setIsPolling(false);
       }
-    } finally {
-      if (!isSilentPoll) setLoading(false);
-      else setIsPolling(false);
-    }
-  }, []);
+    },
+    [triggerSessionExpired]
+  );
 
   useEffect(() => {
     void loadData(false);
   }, [loadData]);
 
   useIntervalWhenVisible(() => void loadData(true), {
-    enabled:
-      !loading &&
-      pendingUserId === null &&
-      confirmState === null &&
-      !signOutPending,
+    enabled: !loading && pendingUserId === null && confirmState === null,
   });
 
   const patchUser = async (
@@ -492,27 +484,6 @@ export function HeadUserManagementClient({
           if (confirmState) await confirmState.action();
         }}
       />
-
-      {/* MÀN HÌNH KHÓA KHI HẾT HẠN SESSION */}
-      {signOutPending ? (
-        <div
-          aria-live="assertive"
-          className="fixed inset-0 z-100 flex items-center justify-center bg-white/80 backdrop-blur-sm animate-in fade-in duration-300"
-        >
-          <div className="bg-white max-w-sm rounded-3xl border border-gray-200 p-8 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-300">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
-              <i className="fa-solid fa-lock text-2xl" aria-hidden />
-            </div>
-            <h3 className="text-lg font-black tracking-tight text-gray-900">
-              Session Expired
-            </h3>
-            <p className="mt-2 text-sm font-medium text-gray-500 leading-relaxed">
-              For your security, please sign in again to continue.
-              Redirecting...
-            </p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
