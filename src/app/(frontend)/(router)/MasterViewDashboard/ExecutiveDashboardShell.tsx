@@ -61,16 +61,16 @@ const NAV: NavItem[] = [
 ];
 
 function getDynamicTitle(pathname: string): string {
-  if (pathname === '/MasterViewDashboard') return 'Executive Overview';
   if (
     pathname.includes('/candidates') ||
     pathname.includes('/interview-scheduling')
   )
     return 'Recruitment Management';
   if (pathname.includes('/user-management')) return 'User Management';
-  if (pathname.includes('/system-config') || pathname.includes('/system-logs'))
-    return 'System Settings';
-  return 'Executive Board';
+  if (pathname.includes('/system-logs')) return 'System Logs';
+  if (pathname.includes('/system-config')) return 'System Configuration';
+
+  return 'Executive Overview';
 }
 
 export function ExecutiveDashboardShell({

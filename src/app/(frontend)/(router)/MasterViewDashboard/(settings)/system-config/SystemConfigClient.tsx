@@ -3,18 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { cn } from '@/lib/utils';
+import { useSessionExpired } from '@/components/providers/SessionExpiredProvider';
 
+// --- TYPES ---
 type ActiveConfig = {
   currentGeneration: string;
   currentSemester: string;
@@ -31,6 +26,7 @@ type Payload = {
   success?: boolean;
   active?: ActiveConfig;
   generations?: Generation[];
+  generation?: Generation;
   message?: string;
 };
 
@@ -46,219 +42,266 @@ function isActiveSemester(
   );
 }
 
-const inputClass =
-  'border-input bg-background w-full min-w-0 rounded-xl border px-3 py-2.5 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600/40';
-
+// --- MAIN COMPONENT ---
 export function SystemConfigClient() {
   const [active, setActive] = useState<ActiveConfig | null>(null);
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
-  const [newGenName, setNewGenName] = useState('');
-  const [semesterCodes, setSemesterCodes] = useState<Record<string, string>>({});
+  // Smart Create Gen State
+  const [showSmartCreate, setShowSmartCreate] = useState(false);
+  const [smartGenName, setSmartGenName] = useState('');
+  const [smartGenYear, setSmartGenYear] = useState('');
+
+  // Delete State (Đã gỡ bỏ state edit)
+  const [deleteGenTarget, setDeleteGenTarget] = useState<Generation | null>(
+    null
+  );
+
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [activateConfirm, setActivateConfirm] = useState<{
     generation: string;
     semester: string;
   } | null>(null);
 
-  // Animation hints — short-lived highlight keys flipped on after a successful
-  // mutation so the relevant row plays an enter / activate keyframe once.
-  const [highlightGenId, setHighlightGenId] = useState<string | null>(null);
-  const [highlightSemKey, setHighlightSemKey] = useState<string | null>(null);
-  const [highlightActive, setHighlightActive] = useState<string | null>(null);
+  const { triggerSessionExpired } = useSessionExpired();
 
-  const flashHighlight = useCallback(
-    (setter: (v: string | null) => void, key: string, durationMs = 1400) => {
-      setter(key);
-      window.setTimeout(() => setter(null), durationMs);
+  const showSuccessNotice = useCallback((msg: string) => {
+    setSuccess(msg);
+    window.setTimeout(() => setSuccess(null), 4000);
+  }, []);
+
+  // --- CENTRALIZED API WRAPPER ---
+  const fetchApi = useCallback(
+    async (url: string, options?: RequestInit): Promise<Payload | null> => {
+      const res = await fetch(url, { ...options, credentials: 'include' });
+
+      if (res.redirected && res.url.toLowerCase().includes('login')) {
+        triggerSessionExpired();
+        return null;
+      }
+
+      const json = (await res.json()) as Payload;
+
+      if (!res.ok || !json.success) {
+        const msg = json.message || `Error ${res.status}`;
+        if (
+          msg.toLowerCase().includes('authentication required') ||
+          msg.includes('401')
+        ) {
+          triggerSessionExpired();
+          return null;
+        }
+        throw new Error(msg);
+      }
+      return json;
     },
-    []
+    [triggerSessionExpired]
   );
 
-  const showSuccess = useCallback((msg: string) => {
-    setSuccess(msg);
-    window.setTimeout(() => setSuccess(null), 3500);
-  }, []);
+  // --- ACTIONS ---
+  const load = useCallback(
+    async (isSilent = false) => {
+      if (!isSilent) setLoading(true);
+      setError(null);
+      try {
+        const json = await fetchApi('/api/executive/system-config');
+        if (!json) return;
 
-  const load = useCallback(async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch('/api/executive/system-config', {
-        credentials: 'include',
-      });
-      const json = (await res.json()) as Payload;
-      if (!res.ok || !json.success) {
-        setError(json.message ?? `Failed (${res.status})`);
-        return;
+        setActive(json.active ?? null);
+        const gens = json.generations ?? [];
+        setGenerations(gens);
+
+        if (!isSilent) {
+          const activeGen = gens.find(
+            (g) => g.name === json.active?.currentGeneration
+          );
+          setExpandedIds(
+            new Set(activeGen ? [activeGen.id] : gens[0] ? [gens[0].id] : [])
+          );
+        }
+      } catch (e) {
+        if (!isSilent)
+          setError(e instanceof Error ? e.message : 'Load failed.');
+      } finally {
+        if (!isSilent) setLoading(false);
       }
-      setActive(json.active ?? null);
-      const gens = json.generations ?? [];
-      setGenerations(gens);
+    },
+    [fetchApi]
+  );
 
-      const activeGen = gens.find(
-        (g) => g.name === json.active?.currentGeneration
-      );
-      setExpandedIds(
-        new Set(activeGen ? [activeGen.id] : gens[0] ? [gens[0].id] : [])
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Load failed.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Polling ngầm chuẩn xác bằng setInterval độc lập (Cứ 8 giây đồng bộ 1 lần)
   useEffect(() => {
-    void load();
+    void load(false);
+    const interval = setInterval(() => {
+      void load(true);
+    }, 8000);
+    return () => clearInterval(interval);
   }, [load]);
 
-  const totalSemesters = useMemo(
-    () => generations.reduce((n, g) => n + g.semesters.length, 0),
-    [generations]
-  );
+  const handleToggleSmartCreate = () => {
+    if (!showSmartCreate) {
+      let maxGen = 7;
+      let maxYear = 2026;
 
-  type PostJsonResult =
-    | { ok: true; data: Payload }
-    | { ok: false; message: string };
+      generations.forEach((g) => {
+        const genNumMatch = g.name.match(/\d+/);
+        if (genNumMatch) {
+          const num = parseInt(genNumMatch[0], 10);
+          if (num > maxGen) maxGen = num;
+        }
+        g.semesters.forEach((s) => {
+          const yearMatch = s.code.match(/\d{4}/);
+          if (yearMatch) {
+            const yearNum = parseInt(yearMatch[0], 10);
+            if (yearNum > maxYear) maxYear = yearNum;
+          }
+        });
+      });
 
-  async function postJson(
-    body: Record<string, unknown>,
-    successMsg: string
-  ): Promise<PostJsonResult> {
+      setSmartGenName(`Gen ${maxGen + 1}`);
+      setSmartGenYear((maxYear + 1).toString());
+    }
+    setShowSmartCreate(!showSmartCreate);
+  };
+
+  // SMART CREATE (Đã tối ưu chạy song song Promise.all giúp không bị đơ giao diện)
+  const executeSmartCreate = async () => {
+    const name = smartGenName.trim();
+    const year = smartGenYear.trim();
+    if (!name || !year) return;
+
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/api/executive/system-config', {
+      const json = await fetchApi('/api/executive/system-config', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ action: 'create-generation', name }),
       });
-      const json = (await res.json()) as Payload;
-      if (!res.ok || !json.success) {
-        const message = json.message ?? `Request failed (${res.status})`;
-        setError(message);
-        return { ok: false, message };
+      if (!json) return;
+
+      const createdGenId = json.generation?.id;
+
+      if (createdGenId) {
+        const sems = [`${year}A`, `${year}B`, `${year}C`];
+        await Promise.all(
+          sems.map((code) =>
+            fetchApi(
+              `/api/executive/system-config/generations/${createdGenId}/semesters`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code }),
+              }
+            )
+          )
+        );
+
+        showSuccessNotice(
+          `Successfully initialized ${name} with semesters ${sems.join(', ')}`
+        );
+        setShowSmartCreate(false);
+        await load(true);
       }
-      showSuccess(successMsg);
-      await load();
-      return { ok: true, data: json };
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Request failed.';
-      setError(message);
-      return { ok: false, message };
+      setError(e instanceof Error ? e.message : 'Smart creation failed.');
     } finally {
       setBusy(false);
     }
-  }
+  };
 
-  async function createGeneration(rawName: string) {
-    const name = rawName.trim();
-    if (!name) return;
-    const result = await postJson(
-      { action: 'create-generation', name },
-      `Created ${name}`
-    );
-    if (!result.ok) return;
-    setNewGenName('');
-    const created = (result.data.generations ?? []).find(
-      (g) => g.name.toLowerCase() === name.toLowerCase()
-    );
-    if (created) {
-      // Open the new generation card so the highlight is actually visible.
-      setExpandedIds((prev) => new Set([...prev, created.id]));
-      flashHighlight(setHighlightGenId, created.id);
-    }
-  }
+  // DELETE GENERATION (Có bảo vệ không cho xóa Gen đang chứa Active Semester)
+  const handleDeleteGeneration = async () => {
+    if (!deleteGenTarget) return;
 
-  function requestActivateCohort(generation: string, semester: string) {
-    setActivateConfirm({ generation, semester });
-  }
-
-  async function confirmActivateCohort() {
-    if (!activateConfirm) return;
-    const { generation, semester } = activateConfirm;
-    setActivateConfirm(null);
-    const result = await postJson(
-      { action: 'activate', generation, semester },
-      `Current recruitment period set to ${generation} / ${semester}`
+    const hasActiveSem = deleteGenTarget.semesters.some((s) =>
+      isActiveSemester(active, deleteGenTarget.name, s.code)
     );
-    if (result.ok) {
-      flashHighlight(
-        setHighlightActive,
-        `${generation.toLowerCase()}|${semester.toLowerCase()}`,
-        1800
+
+    if (hasActiveSem) {
+      setError(
+        `Cannot delete "${deleteGenTarget.name}" because it contains the currently active semester.`
       );
+      setDeleteGenTarget(null);
+      return;
     }
-  }
-
-  async function patchRecruitment(isRecruitmentActive: boolean) {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/executive/system-config', {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isRecruitmentActive }),
-      });
-      const json = (await res.json()) as Payload;
-      if (!res.ok || !json.success) {
-        setError(json.message ?? `Update failed (${res.status})`);
-        return;
-      }
-      setActive(json.active ?? null);
-      showSuccess(
-        isRecruitmentActive
-          ? 'Now accepting new applications'
-          : 'New applications are no longer accepted'
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Update failed.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function addSemester(generationId: string, generationName: string) {
-    const code = semesterCodes[generationId]?.trim();
-    if (!code) return;
 
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(
-        `/api/executive/system-config/generations/${generationId}/semesters`,
+        `/api/executive/system-config/generations/${deleteGenTarget.id}`,
         {
-          method: 'POST',
+          method: 'DELETE',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
         }
       );
-      const json = (await res.json()) as { success?: boolean; message?: string };
-      if (!res.ok || !json.success) {
-        setError(json.message ?? `Failed (${res.status})`);
-        return;
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.message || 'Failed to delete generation.');
       }
-      setSemesterCodes((prev) => ({ ...prev, [generationId]: '' }));
-      showSuccess(`Added semester ${code} to ${generationName}`);
-      await load();
-      flashHighlight(
-        setHighlightSemKey,
-        `${generationId}|${code.toLowerCase()}`
-      );
+      showSuccessNotice(`Deleted generation "${deleteGenTarget.name}"`);
+      setDeleteGenTarget(null);
+      await load(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to add semester.');
+      setError(e instanceof Error ? e.message : 'Delete failed.');
     } finally {
       setBusy(false);
     }
-  }
+  };
+
+  const requestActivateCohort = (generation: string, semester: string) => {
+    setActivateConfirm({ generation, semester });
+  };
+
+  const confirmActivateCohort = async () => {
+    if (!activateConfirm) return;
+    const { generation, semester } = activateConfirm;
+    setActivateConfirm(null);
+    setBusy(true);
+    setError(null);
+    try {
+      const json = await fetchApi('/api/executive/system-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'activate', generation, semester }),
+      });
+      if (!json) return;
+      showSuccessNotice(`Active period set to ${generation} / ${semester}`);
+      await load(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Activation failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const patchRecruitment = async (isRecruitmentActive: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const json = await fetchApi('/api/executive/system-config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isRecruitmentActive }),
+      });
+      if (!json) return;
+      setActive(json.active ?? null);
+      showSuccessNotice(
+        isRecruitmentActive
+          ? 'Recruitment form is now OPEN'
+          : 'Recruitment form is now CLOSED'
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Status update failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   function toggleExpanded(id: string) {
     setExpandedIds((prev) => {
@@ -270,481 +313,390 @@ export function SystemConfigClient() {
   }
 
   const recruitmentOn = Boolean(active?.isRecruitmentActive);
+  const totalSemesters = useMemo(
+    () => generations.reduce((n, g) => n + g.semesters.length, 0),
+    [generations]
+  );
 
   return (
-    <div className="space-y-6">
-      <style>{`
-        @keyframes systemConfigRowEnter {
-          0% {
-            opacity: 0;
-            transform: translateY(-6px) scale(0.985);
-          }
-          60% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        @keyframes systemConfigRowActivate {
-          0% {
-            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
-            transform: scale(1);
-          }
-          35% {
-            box-shadow: 0 0 0 10px rgba(34, 197, 94, 0.18);
-            transform: scale(1.012);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
-            transform: scale(1);
-          }
-        }
-        @keyframes systemConfigHeroSwap {
-          0% {
-            opacity: 0;
-            transform: translateY(8px);
-            filter: blur(2px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-            filter: blur(0);
-          }
-        }
-        @keyframes systemConfigBadgePop {
-          0% {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          60% {
-            transform: scale(1.05);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        .sc-row-enter {
-          animation: systemConfigRowEnter 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-        .sc-row-activate {
-          animation: systemConfigRowActivate 1500ms ease-out both;
-        }
-        .sc-hero-swap {
-          animation: systemConfigHeroSwap 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-        .sc-badge-pop {
-          animation: systemConfigBadgePop 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-        .sc-collapsible {
-          display: grid;
-          grid-template-rows: 0fr;
-          opacity: 0;
-          transition:
-            grid-template-rows 280ms cubic-bezier(0.16, 1, 0.3, 1),
-            opacity 220ms ease;
-        }
-        .sc-collapsible[data-open='true'] {
-          grid-template-rows: 1fr;
-          opacity: 1;
-        }
-        .sc-collapsible > .sc-collapsible-inner {
-          overflow: hidden;
-          min-height: 0;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .sc-row-enter,
-          .sc-row-activate,
-          .sc-hero-swap,
-          .sc-badge-pop {
-            animation: none !important;
-          }
-          .sc-collapsible {
-            transition: none !important;
-          }
-        }
-      `}</style>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-xl font-black tracking-tight text-foreground sm:text-2xl">
-            System Config
-          </h2>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Manage generations and semesters, choose which period is currently
-            live, and control whether new applications are accepted.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={loading || busy}
-          onClick={() => void load()}
-          className="shrink-0"
-        >
-          <i className="fa-solid fa-rotate-right mr-2" />
-          Refresh
-        </Button>
-      </div>
-
+    <div className="space-y-8 animate-in fade-in duration-500 my-4">
       {(error || success) && (
         <div className="space-y-2">
-          {error ? (
+          {error && (
             <AppNotice variant="error" onDismiss={() => setError(null)}>
               {error}
             </AppNotice>
-          ) : null}
-          {success ? (
+          )}
+          {success && (
             <AppNotice variant="success" onDismiss={() => setSuccess(null)}>
               {success}
             </AppNotice>
-          ) : null}
+          )}
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card
-          className={cn(
-            'lg:col-span-2 overflow-hidden border-2',
-            recruitmentOn
-              ? 'border-green-500/30 bg-linear-to-br from-green-500/5 to-card'
-              : 'border-red-500/20 bg-linear-to-br from-red-500/5 to-card'
-          )}
-        >
-          <CardHeader className="border-b border-border/60 pb-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-lg font-black">
-                  Current recruitment period
-                </CardTitle>
-                <CardDescription>
-                  New applications and role assignments use this generation
-                  and semester
-                </CardDescription>
-              </div>
-              <Badge
-                variant={recruitmentOn ? 'default' : 'destructive'}
-                className={cn(
-                  'px-3 py-1 text-xs font-bold',
-                  recruitmentOn &&
-                    'bg-green-600 text-white hover:bg-green-600/90'
+      {/* 2. HERO: ACTIVE CYCLE */}
+      <div className="relative overflow-hidden rounded-[24px] border border-gray-200 bg-white p-8 shadow-sm">
+        <div className="absolute -right-20 -top-20 z-0 h-64 w-64 rounded-full bg-linear-to-br from-[#DCB968]/20 to-[#0D1742]/5 opacity-50 blur-3xl"></div>
+        <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-6">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFEFCA] text-[#A28436] shadow-sm">
+              <i className="fa-solid fa-bullseye text-2xl" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#A28436]">
+                Active Period
+              </p>
+              <h3 className="text-3xl font-black text-[#0D1742] mt-1">
+                {loading ? (
+                  <span className="opacity-50">Loading...</span>
+                ) : (
+                  <>
+                    {active?.currentGeneration || '—'}{' '}
+                    <span className="text-[#5E5E92] font-medium mx-1">/</span>{' '}
+                    {active?.currentSemester || '—'}
+                  </>
                 )}
-              >
-                {loading
-                  ? '…'
-                  : recruitmentOn
-                    ? 'Recruitment: OPEN'
-                    : 'Recruitment: CLOSED'}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-5">
-            {loading ? (
-              <p className="text-muted-foreground text-sm">Loading…</p>
-            ) : (
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap gap-4">
-                  <div className="min-w-30 rounded-xl bg-background/80 px-5 py-4 ring-1 ring-foreground/10">
-                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">
-                      Generation
-                    </p>
-                    <p
-                      key={active?.currentGeneration ?? '—'}
-                      className="sc-hero-swap mt-1 text-2xl font-black text-purple-700 dark:text-purple-300"
-                    >
-                      {active?.currentGeneration || '—'}
-                    </p>
-                  </div>
-                  <div className="min-w-30 rounded-xl bg-background/80 px-5 py-4 ring-1 ring-foreground/10">
-                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">
-                      Semester
-                    </p>
-                    <p
-                      key={active?.currentSemester ?? '—'}
-                      className="sc-hero-swap mt-1 text-2xl font-black text-purple-700 dark:text-purple-300"
-                    >
-                      {active?.currentSemester || '—'}
-                    </p>
-                  </div>
-                </div>
-                <div className="border-border flex items-center gap-4 rounded-xl border bg-muted/30 px-5 py-4">
-                  <Switch
-                    checked={recruitmentOn}
-                    disabled={loading || busy}
-                    onCheckedChange={(v) => void patchRecruitment(v)}
-                  />
-                  <div>
-                    <p className="text-sm font-bold">Accept new applications</p>
-                    <p className="text-muted-foreground text-xs">
-                      {recruitmentOn
-                        ? 'The recruitment form can submit and save new candidates'
-                        : 'New applications are blocked — the form cannot submit'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-black">Catalog overview</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3">
-              <span className="text-muted-foreground text-sm">Generations</span>
-              <span className="text-2xl font-black">
-                {loading ? '—' : generations.length}
-              </span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3">
-              <span className="text-muted-foreground text-sm">Semesters</span>
-              <span className="text-2xl font-black">
-                {loading ? '—' : totalSemesters}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="border-b border-border/60">
-          <CardTitle className="text-lg font-black">Generation catalog</CardTitle>
-          <CardDescription>
-            Expand each generation to add semesters, then set one as the current
-            recruitment period.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-5">
-          <div className="flex flex-col gap-3 rounded-xl border border-dashed border-purple-300/50 bg-purple-500/5 p-4 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <label
-                htmlFor="new-generation"
-                className="text-sm font-bold"
-              >
-                New generation
-              </label>
-              <input
-                id="new-generation"
-                type="text"
-                placeholder="vd. Gen 13"
-                value={newGenName}
-                disabled={busy}
-                onChange={(e) => setNewGenName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newGenName.trim()) {
-                    void createGeneration(newGenName);
-                  }
-                }}
-                className={inputClass}
-              />
-            </div>
-            <Button
-              disabled={busy || !newGenName.trim()}
-              className="shrink-0 sm:mb-0.5"
-              onClick={() => void createGeneration(newGenName)}
-            >
-              <i className="fa-solid fa-plus mr-2" />
-              Add generation
-            </Button>
-          </div>
-
-          {loading ? (
-            <div className="text-muted-foreground space-y-3 py-8 text-center text-sm">
-              <i className="fa-solid fa-spinner fa-spin text-2xl" />
-              <p>Loading catalog…</p>
-            </div>
-          ) : generations.length === 0 ? (
-            <div className="border-border rounded-xl border border-dashed py-16 text-center">
-              <i className="fa-solid fa-layer-group text-muted-foreground mb-3 text-3xl" />
-              <p className="font-bold">No generations yet</p>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Create your first generation using the form above.
+              </h3>
+              <p className="text-sm font-medium text-[#5E5E92] mt-1">
+                New form submissions and role assignments are mapped to this
+                period.
               </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {generations.map((g) => {
-                const expanded = expandedIds.has(g.id);
-                const isActiveGen = active?.currentGeneration === g.name;
-                const justAddedGen = highlightGenId === g.id;
-                return (
-                  <div
-                    key={g.id}
-                    className={cn(
-                      'overflow-hidden rounded-xl border transition-[border-color,background-color,box-shadow] duration-300',
-                      isActiveGen
-                        ? 'border-purple-500/50 bg-purple-500/5 ring-1 ring-purple-500/20'
-                        : 'border-border bg-card',
-                      justAddedGen && 'sc-row-enter'
-                    )}
-                  >
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl bg-gray-50 p-5 border border-gray-100">
+            <div className="sm:text-right">
+              <p className="text-sm font-bold text-[#0D1742]">
+                Recruitment Form
+              </p>
+              <p
+                className={cn(
+                  'text-xs font-semibold mt-0.5',
+                  recruitmentOn ? 'text-emerald-600' : 'text-red-600'
+                )}
+              >
+                {recruitmentOn ? 'Accepting Responses' : 'Form Closed'}
+              </p>
+            </div>
+            <Switch
+              checked={recruitmentOn}
+              disabled={loading || busy}
+              onCheckedChange={(v) => void patchRecruitment(v)}
+              className="data-[state=checked]:bg-emerald-500 shrink-0 shadow-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 3. GENERATIONS DIRECTORY */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-black tracking-tight text-[#0D1742]">
+              Generations Directory
+            </h3>
+            <Badge
+              variant="secondary"
+              className="bg-gray-100 text-gray-600 font-semibold"
+            >
+              {generations.length}{' '}
+              {generations.length === 1 ? 'Generation' : 'Generations'} •{' '}
+              {totalSemesters} {totalSemesters === 1 ? 'Semester' : 'Semesters'}
+            </Badge>
+          </div>
+          <Button
+            variant={showSmartCreate ? 'outline' : 'default'}
+            size="sm"
+            className={cn(
+              'rounded-xl text-xs font-bold transition-all',
+              !showSmartCreate &&
+                'bg-[#0D1742] text-[#DCB968] hover:bg-[#0D1742]/90'
+            )}
+            onClick={handleToggleSmartCreate}
+          >
+            <i
+              className={cn(
+                'fa-solid mr-2',
+                showSmartCreate ? 'fa-xmark' : 'fa-wand-magic-sparkles'
+              )}
+            />
+            {showSmartCreate ? 'Cancel' : 'Quick Add'}
+          </Button>
+        </div>
+
+        {/* SMART SETUP FORM */}
+        {showSmartCreate && (
+          <div className="animate-in slide-in-from-top-4 fade-in duration-300 rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-sm">
+            <h4 className="text-sm font-black uppercase tracking-wider text-[#0D1742] mb-4">
+              Quick Setup
+            </h4>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs font-bold text-[#5E5E92]">
+                  Generation Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Gen 8"
+                  value={smartGenName}
+                  onChange={(e) => setSmartGenName(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-[#0D1742] shadow-sm focus:border-[#0D1742] focus:outline-none focus:ring-1 focus:ring-[#0D1742]"
+                />
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs font-bold text-[#5E5E92]">
+                  Academic Year
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 2027"
+                  value={smartGenYear}
+                  onChange={(e) => setSmartGenYear(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-[#0D1742] shadow-sm focus:border-[#0D1742] focus:outline-none focus:ring-1 focus:ring-[#0D1742]"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  disabled={
+                    busy || !smartGenName.trim() || !smartGenYear.trim()
+                  }
+                  onClick={() => void executeSmartCreate()}
+                  className="h-10.5 w-full sm:w-auto rounded-xl bg-[#0D1742] text-[#DCB968] hover:bg-[#0D1742]/90 font-bold shadow-sm"
+                >
+                  {busy ? (
+                    <i className="fa-solid fa-spinner fa-spin mr-2" />
+                  ) : (
+                    <i className="fa-solid fa-bolt mr-2" />
+                  )}
+                  Create Generation
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs font-medium text-[#5E5E92] mt-4 bg-white/60 py-2 px-3 rounded-lg border border-gray-100 inline-flex items-center">
+              <i className="fa-solid fa-circle-info text-[#DCB968] mr-2" />
+              Automatically creates standard semesters:{' '}
+              <strong className="mx-1 text-[#0D1742]">
+                {smartGenYear || 'YYYY'}A, {smartGenYear || 'YYYY'}B,{' '}
+                {smartGenYear || 'YYYY'}C
+              </strong>{' '}
+            </p>
+          </div>
+        )}
+
+        {/* LIST */}
+        {loading && generations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white py-16 shadow-sm">
+            <i className="fa-solid fa-spinner fa-spin text-3xl text-gray-300" />
+            <p className="mt-3 text-sm font-bold text-gray-400">
+              Loading generations...
+            </p>
+          </div>
+        ) : generations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 py-16 text-center">
+            <i className="fa-solid fa-layer-group text-4xl text-gray-300 mb-4" />
+            <p className="text-base font-bold text-[#0D1742]">
+              No generations created yet
+            </p>
+            <p className="text-sm text-[#5E5E92] mt-1">
+              Use Quick Add to set up your first generation.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {generations.map((g) => {
+              const expanded = expandedIds.has(g.id);
+              const isActiveGen = active?.currentGeneration === g.name;
+
+              // KIỂM TRA XEM GEN NÀY CÓ CHỨA SEMESTER ĐANG ACTIVE KHÔNG
+              const hasActiveSem = g.semesters.some((s) =>
+                isActiveSemester(active, g.name, s.code)
+              );
+
+              return (
+                <div
+                  key={g.id}
+                  className={cn(
+                    'overflow-hidden rounded-2xl border transition-all duration-300',
+                    isActiveGen
+                      ? 'border-[#0D1742]/20 bg-[#F0EDFF]/30 shadow-sm'
+                      : 'border-gray-200 bg-white'
+                  )}
+                >
+                  <div className="flex w-full items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-gray-50">
                     <button
                       type="button"
-                      className="hover:bg-muted/40 flex w-full items-center gap-3 px-4 py-4 text-left transition-colors"
+                      className="flex min-w-0 flex-1 items-center gap-4 text-left"
                       onClick={() => toggleExpanded(g.id)}
                     >
-                      <i
+                      <div
                         className={cn(
-                          'fa-solid fa-chevron-right text-muted-foreground shrink-0 text-xs transition-transform duration-300',
-                          expanded && 'rotate-90'
+                          'flex size-8 shrink-0 items-center justify-center rounded-full transition-all duration-300',
+                          expanded
+                            ? 'bg-gray-200 text-gray-700 rotate-90'
+                            : 'bg-gray-100 text-gray-400'
                         )}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-base font-black">{g.name}</span>
-                          {isActiveGen ? (
-                            <Badge
-                              key={g.name}
-                              className="sc-badge-pop bg-purple-600 text-white hover:bg-purple-600/90"
-                            >
-                              Current generation
-                            </Badge>
-                          ) : null}
-                          <Badge variant="secondary">
-                            {g.semesters.length} semester
+                      >
+                        <i className="fa-solid fa-chevron-right text-[10px]" />
+                      </div>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="text-lg font-black text-[#0D1742] truncate">
+                          {g.name}
+                        </span>
+                        {isActiveGen && (
+                          <Badge className="bg-emerald-100 text-emerald-700 text-[10px] uppercase tracking-wider hover:bg-emerald-200 border-0 font-bold shadow-none shrink-0">
+                            Current
                           </Badge>
-                        </div>
+                        )}
                       </div>
                     </button>
 
-                    <div className="sc-collapsible" data-open={expanded}>
-                      <div className="sc-collapsible-inner">
-                        <div className="border-t border-border/60 bg-muted/20 px-4 pb-4 pt-3">
-                          {g.semesters.length === 0 ? (
-                            <p className="text-muted-foreground mb-3 text-sm">
-                              No semesters yet — add a code below.
-                            </p>
-                          ) : (
-                            <ul className="mb-4 space-y-2">
-                              {g.semesters.map((s) => {
-                                const activeRow = isActiveSemester(
-                                  active,
-                                  g.name,
-                                  s.code
-                                );
-                                const semKey = `${g.id}|${s.code.toLowerCase()}`;
-                                const activeKey = `${g.name.toLowerCase()}|${s.code.toLowerCase()}`;
-                                const justAddedSem = highlightSemKey === semKey;
-                                const justActivated =
-                                  highlightActive === activeKey;
-                                return (
-                                  <li
-                                    key={s.code}
-                                    className={cn(
-                                      'flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-[border-color,background-color,box-shadow] duration-300',
-                                      activeRow
-                                        ? 'border-green-500/50 bg-green-500/10'
-                                        : 'border-border bg-background',
-                                      justAddedSem && 'sc-row-enter',
-                                      justActivated && 'sc-row-activate'
-                                    )}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <span className="font-mono text-sm font-bold">
-                                        {s.code}
-                                      </span>
-                                      {activeRow ? (
-                                        <Badge
-                                          key={`${s.code}-active`}
-                                          className="sc-badge-pop bg-green-600 text-white hover:bg-green-600/90"
-                                        >
-                                          Live now
-                                        </Badge>
-                                      ) : null}
-                                    </div>
-                                    {!activeRow ? (
-                                      <Button
-                                        size="sm"
-                                        disabled={busy}
-                                        onClick={() =>
-                                          requestActivateCohort(g.name, s.code)
-                                        }
-                                      >
-                                        Set as current
-                                      </Button>
-                                    ) : (
-                                      <span className="text-muted-foreground text-xs font-semibold">
-                                        Receiving new applications
-                                      </span>
-                                    )}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                            <div className="min-w-0 flex-1 space-y-1.5">
-                              <label className="text-xs font-bold text-muted-foreground">
-                                Add semester for {g.name}
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="vd. 2026B"
-                                value={semesterCodes[g.id] ?? ''}
-                                disabled={busy}
-                                onChange={(e) =>
-                                  setSemesterCodes((prev) => ({
-                                    ...prev,
-                                    [g.id]: e.target.value,
-                                  }))
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    void addSemester(g.id, g.name);
-                                  }
-                                }}
-                                className={inputClass}
-                              />
-                            </div>
-                            <Button
-                              variant="outline"
-                              disabled={busy || !(semesterCodes[g.id] ?? '').trim()}
-                              className="shrink-0"
-                              onClick={() => void addSemester(g.id, g.name)}
-                            >
-                              Add
-                            </Button>
-                          </div>
-                        </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-xs font-bold text-[#5E5E92] bg-gray-100 px-3 py-1 rounded-full hidden sm:block">
+                        {g.semesters.length}{' '}
+                        {g.semesters.length === 1 ? 'Semester' : 'Semesters'}
                       </div>
+
+                      {/* CHỈ HIỂN THỊ NÚT XÓA NẾU KHÔNG CÓ SEMESTER NÀO ĐANG ACTIVE */}
+                      {!hasActiveSem && (
+                        <div className="flex items-center gap-1 border-l border-gray-200 pl-3">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeleteGenTarget(g)}
+                            className="size-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                            title="Delete Generation"
+                          >
+                            <i className="fa-solid fa-trash text-xs" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
+                  {/* ACCORDION CONTENT */}
+                  {expanded && (
+                    <div className="border-t border-gray-100 bg-gray-50/50 px-5 pb-5 pt-4 animate-in slide-in-from-top-2 duration-300">
+                      {g.semesters.length === 0 ? (
+                        <p className="text-sm font-medium text-gray-500 italic">
+                          No semesters added to this generation yet.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {g.semesters.map((s) => {
+                            const isLive = isActiveSemester(
+                              active,
+                              g.name,
+                              s.code
+                            );
+                            return (
+                              <div
+                                key={s.code}
+                                className={cn(
+                                  'flex items-center justify-between rounded-xl border p-4 shadow-sm transition-all',
+                                  isLive
+                                    ? 'border-emerald-200 bg-emerald-50'
+                                    : 'border-gray-200 bg-white'
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    'font-bold text-base',
+                                    isLive
+                                      ? 'text-emerald-900'
+                                      : 'text-[#0D1742]'
+                                  )}
+                                >
+                                  {s.code}
+                                </span>
+                                {isLive ? (
+                                  <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/50 px-2.5 py-1 rounded-md border border-emerald-200 shadow-sm">
+                                    <span className="relative flex size-1.5">
+                                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                                      <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500"></span>
+                                    </span>
+                                    Active
+                                  </span>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      requestActivateCohort(g.name, s.code)
+                                    }
+                                    className="h-8 text-xs font-bold rounded-lg border-gray-200 text-gray-600 hover:text-[#0D1742] hover:bg-gray-100 hover:border-gray-300 transition-all shadow-sm"
+                                  >
+                                    Activate
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Confirm Dialog Active Cycle */}
       <ConfirmDialog
         open={activateConfirm !== null}
-        title="Set current recruitment period"
+        title="Set Active Period"
         description={
           activateConfirm ? (
-            <>
-              Set{' '}
-              <span className="text-foreground font-semibold">
-                {activateConfirm.generation} / {activateConfirm.semester}
-              </span>{' '}
-              as the live recruitment period? New applications and newly
-              assigned users will be tagged with this generation and semester.
-              Existing records are unchanged.
-            </>
+            <span className="mt-2 flex flex-col gap-3">
+              <span className="block text-sm text-[#5E5E92]">
+                Are you sure you want to set{' '}
+                <strong className="text-[#0D1742]">
+                  {activateConfirm.generation} / {activateConfirm.semester}
+                </strong>{' '}
+                as the active recruitment period? New form applications and
+                role assignments will be mapped to this period. Past records
+               remain unchanged.
+              </span>
+            </span>
           ) : (
             ''
           )
         }
-        confirmLabel="Set as current"
+        confirmLabel="Set as Active"
         onConfirm={() => void confirmActivateCohort()}
         onCancel={() => setActivateConfirm(null)}
+        loading={busy}
+      />
+
+      {/* Confirm Dialog Delete Generation */}
+      <ConfirmDialog
+        open={deleteGenTarget !== null}
+        title="Delete Generation?"
+        description={
+          deleteGenTarget ? (
+            <span className="mt-2 flex flex-col gap-3">
+              <span className="block text-sm text-[#5E5E92]">
+                You are about to permanently delete{' '}
+                <strong className="text-[#0D1742]">
+                  {deleteGenTarget.name}
+                </strong>
+                . This action cannot be undone and will erase all associated
+                semesters.
+              </span>
+            </span>
+          ) : (
+            ''
+          )
+        }
+        variant="destructive"
+        confirmLabel="Delete Generation"
+        onConfirm={() => void handleDeleteGeneration()}
+        onCancel={() => setDeleteGenTarget(null)}
         loading={busy}
       />
     </div>
   );
 }
-

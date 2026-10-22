@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { useCallback, useEffect, useState } from 'react';
 import { HEAD_DEPARTMENTS } from '@/app/(backend)/libs/departments';
 import {
@@ -188,77 +189,58 @@ export function ExecutiveHomeClient() {
         </AppNotice>
       )}
 
-      {/* 1. HERO SECTION: ACTIVE COHORT */}
-      <section className="relative overflow-hidden rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="absolute -right-20 -top-20 z-0 h-64 w-64 rounded-full bg-linear-to-br from-[#DCB968]/20 to-transparent opacity-50 blur-3xl"></div>
-
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#A28436]">
-              Current Campaign
-            </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight text-gray-900 sm:text-3xl">
-              Active Cohort
-            </h1>
-            <p className="mt-1 text-sm font-medium text-gray-500">
-              Generation and semester currently open for recruitment.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-gray-50 p-4 border border-gray-100">
-            <div className="min-w-30">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                Generation
-              </p>
-              {loading ? (
-                <Skeleton className="mt-1 h-7 w-20" />
-              ) : (
-                <p className="mt-0.5 text-xl font-black text-[#0D1742]">
-                  {active?.currentGeneration ?? '—'}
-                </p>
-              )}
+      {/* 1. HERO SECTION: ACTIVE PERIOD */}
+      <section className="relative overflow-hidden rounded-[24px] border border-gray-200 bg-white p-8 shadow-sm">
+        <div className="absolute -right-20 -top-20 z-0 h-64 w-64 rounded-full bg-linear-to-br from-[#DCB968]/20 to-[#0D1742]/5 opacity-50 blur-3xl"></div>
+        <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          
+          <div className="flex items-center gap-6">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFEFCA] text-[#A28436] shadow-sm">
+              <i className="fa-solid fa-bullseye text-2xl" />
             </div>
-            <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
-            <div className="min-w-30">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                Semester
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#A28436]">
+                Active Period
               </p>
-              {loading ? (
-                <Skeleton className="mt-1 h-7 w-20" />
-              ) : (
-                <p className="mt-0.5 text-xl font-black text-[#0D1742]">
-                  {active?.currentSemester ?? '—'}
-                </p>
-              )}
-            </div>
-            <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
-            <div className="min-w-35">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                Form Status
-              </p>
-              <div className="mt-1.5 flex items-center gap-2">
+              <h3 className="text-3xl font-black text-[#0D1742] mt-1">
                 {loading ? (
-                  <Skeleton className="h-5 w-24 rounded-full" />
+                  <span className="opacity-50">Loading...</span>
                 ) : (
                   <>
-                    <span className="relative flex size-2.5">
-                      <span
-                        className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${recruitmentOn ? 'bg-green-400' : 'bg-red-400'}`}
-                      />
-                      <span
-                        className={`relative inline-flex size-2.5 rounded-full ${recruitmentOn ? 'bg-green-500' : 'bg-red-500'}`}
-                      />
-                    </span>
-                    <span
-                      className={`text-sm font-black uppercase tracking-wide ${recruitmentOn ? 'text-green-600' : 'text-red-600'}`}
-                    >
-                      {recruitmentOn ? 'Open' : 'Closed'}
-                    </span>
+                    {active?.currentGeneration || '—'}{' '}
+                    <span className="text-[#5E5E92] font-medium mx-1">/</span>{' '}
+                    {active?.currentSemester || '—'}
                   </>
                 )}
-              </div>
+              </h3>
+              <p className="text-sm font-medium text-[#5E5E92] mt-1">
+                New form submissions and role assignments are mapped to this period.
+              </p>
             </div>
           </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl bg-gray-50 p-5 border border-gray-100">
+            <div className="sm:text-right">
+              <p className="text-sm font-bold text-[#0D1742]">
+                Recruitment Form
+              </p>
+              <p
+                className={cn(
+                  'text-xs font-semibold mt-0.5',
+                  recruitmentOn ? 'text-emerald-600' : 'text-red-600'
+                )}
+              >
+                {recruitmentOn ? 'Accepting Responses' : 'Form Closed'}
+              </p>
+            </div>
+            {/* Lưu ý: Nếu ở trang Overview không cho phép gạt mở/đóng Form, 
+                bạn có thể thay Switch bằng thẻ hiển thị trạng thái tĩnh, 
+                hoặc giữ nguyên Switch nhưng set thêm thuộc tính disabled */}
+            <div className="flex items-center justify-center size-8 rounded-full bg-white shadow-sm border border-gray-200">
+                <span className={cn("size-3 rounded-full", recruitmentOn ? "bg-emerald-500" : "bg-red-500")} />
+            </div>
+          </div>
+
         </div>
       </section>
 

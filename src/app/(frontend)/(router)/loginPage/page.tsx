@@ -93,8 +93,7 @@ export default function LoginPage() {
                 Welcome to FinRecruit!
               </h2>
               <p className="mt-2 text-sm text-[#2C305F] dark:text-[#EBEBEB]/70">
-                Sign in with your RMIT student email to access the recruitment
-                workspace.
+                Sign in with your personal Gmail to access the recruitment workspace.
               </p>
             </div>
 

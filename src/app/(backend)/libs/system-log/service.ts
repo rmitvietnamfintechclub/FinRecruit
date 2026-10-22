@@ -28,7 +28,7 @@ export type LogSystemEventInput = {
 export async function logSystemEvent(input: LogSystemEventInput): Promise<void> {
     try {
         await dbConnect();
-        await AuditLog.create({ input });
+        await AuditLog.create(input);
     } catch (e) {
         console.error('[system-log] failed to persist event', {
             action: input.action,

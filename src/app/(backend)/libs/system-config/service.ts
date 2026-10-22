@@ -165,3 +165,11 @@ export async function setRecruitmentActive( isRecruitmentActive: boolean ): Prom
     await cfg.save();
     return getActiveConfig();
 }
+
+export async function deleteGeneration(generationId: string): Promise<void> {
+    await dbConnect();
+    const doc = await RecruitmentGeneration.findByIdAndDelete(generationId).exec();
+    if (!doc) {
+        throw new Error('Generation not found.');
+    }
+}

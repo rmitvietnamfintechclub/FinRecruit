@@ -24,7 +24,7 @@ const TargetSchema = new Schema(
 const AuditLogSchema = new Schema<IAuditLog>(
     {
         level: { type: String, enum: AUDIT_LOG_LEVELS, required: true, default: 'info' },
-        category: { type: String, enum: AUDIT_LOG_CATEGORIES, required: true },
+        category: { type: String, enum: AUDIT_LOG_CATEGORIES, required: true, default: 'system' },
         action: { type: String, required: true, trim: true },
         message: { type: String, required: true, trim: true },
         performedBy: { type: ActorSchema, default: undefined },

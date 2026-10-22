@@ -2,17 +2,11 @@
 
 import * as React from 'react';
 import { AppNotice } from '@/components/feedback/AppNotice';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useSessionExpired } from '@/components/providers/SessionExpiredProvider';
 
+// --- TYPES ---
 type Level = 'info' | 'warning' | 'error';
 type Category = 'candidate' | 'role' | 'system-config' | 'security' | 'system';
 
@@ -51,51 +45,40 @@ type Payload = {
   total?: number;
   page?: number;
   pageSize?: number;
-  filters?: {
-    levels?: string[];
-    categories?: string[];
-  };
 };
 
+// --- CONFIG ---
 const LEVEL_OPTIONS: Array<{ value: Level | 'all'; label: string }> = [
-  { value: 'all', label: 'All levels' },
+  { value: 'all', label: 'All Levels' },
   { value: 'info', label: 'Info' },
   { value: 'warning', label: 'Warning' },
   { value: 'error', label: 'Error' },
 ];
 
 const CATEGORY_OPTIONS: Array<{ value: Category | 'all'; label: string }> = [
-  { value: 'all', label: 'All categories' },
+  { value: 'all', label: 'All Categories' },
   { value: 'candidate', label: 'Candidate' },
-  { value: 'role', label: 'Role / User' },
+  { value: 'role', label: 'Role & User' },
   { value: 'security', label: 'Security' },
   { value: 'system-config', label: 'System Config' },
   { value: 'system', label: 'System' },
 ];
 
-const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
-
-const LEVEL_STYLES: Record<
-  Level,
-  { dot: string; badge: string; text: string }
-> = {
+const LEVEL_STYLES: Record<Level, { dot: string; bg: string; text: string }> = {
   info: {
     dot: 'bg-blue-500',
-    badge:
-      'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300',
-    text: 'text-blue-700 dark:text-blue-300',
+    bg: 'bg-blue-50 border-blue-100',
+    text: 'text-blue-700',
   },
   warning: {
     dot: 'bg-amber-500',
-    badge:
-      'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300',
-    text: 'text-amber-700 dark:text-amber-300',
+    bg: 'bg-amber-50 border-amber-100',
+    text: 'text-amber-700',
   },
   error: {
     dot: 'bg-red-500',
-    badge:
-      'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300',
-    text: 'text-red-700 dark:text-red-300',
+    bg: 'bg-red-50 border-red-100',
+    text: 'text-red-700',
   },
 };
 
@@ -107,10 +90,19 @@ const CATEGORY_LABEL: Record<Category, string> = {
   system: 'System',
 };
 
+// --- UTILS ---
 function formatDate(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString();
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(d);
   } catch {
     return iso;
   }
@@ -133,9 +125,7 @@ function targetLabel(target: Target): string {
   );
 }
 
-const inputClass =
-  'border-input bg-background w-full min-w-0 rounded-xl border px-3 py-2.5 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600/40';
-
+// --- MAIN COMPONENT ---
 export function SystemLogsClient() {
   const [level, setLevel] = React.useState<Level | 'all'>('all');
   const [category, setCategory] = React.useState<Category | 'all'>('all');
@@ -151,49 +141,89 @@ export function SystemLogsClient() {
   const [error, setError] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
+  const { triggerSessionExpired } = useSessionExpired();
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set('level', level);
-      params.set('category', category);
-      if (q.trim()) params.set('q', q.trim());
-      if (from) params.set('from', new Date(from).toISOString());
-      if (to) params.set('to', new Date(to).toISOString());
-      params.set('page', String(page));
-      params.set('pageSize', String(pageSize));
+  // CENTRALIZED API WRAPPER
+  const fetchApi = React.useCallback(
+    async (url: string, options?: RequestInit): Promise<Payload | null> => {
+      const res = await fetch(url, { ...options, credentials: 'include' });
 
-      const res = await fetch(`/api/executive/system-logs?${params.toString()}`, {
-        credentials: 'include',
-      });
+      if (res.redirected && res.url.toLowerCase().includes('login')) {
+        triggerSessionExpired();
+        return null;
+      }
+
       const json = (await res.json()) as Payload;
+
       if (!res.ok || !json.success) {
-        setError(json.message ?? `Failed (${res.status})`);
+        const msg = json.message || `Error ${res.status}`;
+        if (
+          msg.toLowerCase().includes('authentication required') ||
+          msg.includes('401')
+        ) {
+          triggerSessionExpired();
+          return null;
+        }
+        throw new Error(msg);
+      }
+      return json;
+    },
+    [triggerSessionExpired]
+  );
+
+  const load = React.useCallback(
+    async (isSilent = false) => {
+      if (!isSilent) setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        params.set('level', level);
+        params.set('category', category);
+        if (q.trim()) params.set('q', q.trim());
+        if (from) params.set('from', new Date(from).toISOString());
+        if (to) params.set('to', new Date(to).toISOString());
+        params.set('page', String(page));
+        params.set('pageSize', String(pageSize));
+
+        const json = await fetchApi(
+          `/api/executive/system-logs?${params.toString()}`
+        );
+        if (!json) return;
+
+        setItems(json.items ?? []);
+        setTotal(json.total ?? 0);
+      } catch (e) {
+        if (!isSilent)
+          setError(
+            e instanceof Error ? e.message : 'Failed to load audit logs.'
+          );
         setItems([]);
         setTotal(0);
-        return;
+      } finally {
+        if (!isSilent) setLoading(false);
       }
-      setItems(json.items ?? []);
-      setTotal(json.total ?? 0);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load system logs.');
-      setItems([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [level, category, q, from, to, page, pageSize]);
+    },
+    [level, category, q, from, to, page, pageSize, fetchApi]
+  );
 
   // Reset to page 1 whenever filters change.
   React.useEffect(() => {
     setPage(1);
   }, [level, category, q, from, to, pageSize]);
 
+  // SMART AUTO-POLLING: Cứ 10s tự refresh ngầm, NHƯNG sẽ TẠM NGƯNG nếu user đang mở xem chi tiết một row (tránh giật UI).
   React.useEffect(() => {
-    void load();
+    void load(false);
+    const interval = setInterval(() => {
+      setExpanded((prev) => {
+        if (prev.size === 0) {
+          void load(true);
+        }
+        return prev;
+      });
+    }, 10000);
+    return () => clearInterval(interval);
   }, [load]);
 
   const toggleExpanded = (id: string) => {
@@ -214,50 +244,33 @@ export function SystemLogsClient() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-xl font-black tracking-tight sm:text-2xl">System Logs</h2>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Audit trail of role grants, system-config changes, candidate intake
-            failures, and security events. Entries are kept for 90 days.
-          </p>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => void load()}
-          disabled={loading}
-          className="shrink-0"
-        >
-          <i className="fa-solid fa-rotate mr-2" aria-hidden />
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </Button>
-      </div>
-
-      {error ? (
+    <div className="space-y-6 my-4 animate-in fade-in duration-500">
+      {error && (
         <AppNotice variant="error" onDismiss={() => setError(null)}>
           {error}
         </AppNotice>
-      ) : null}
+      )}
 
-      <Card>
-        <CardHeader className="border-b border-border/60 pb-4">
-          <CardTitle className="text-base font-black">Filters</CardTitle>
-          <CardDescription>
-            Combine filters to drill into a specific incident.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 pt-5 md:grid-cols-2 lg:grid-cols-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Level
-            </label>
+      {/* FILTER BAR & DATA TABLE (SaaS Container) */}
+      <div className="rounded-[24px] border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
+        {/* COMPACT FILTER BAR */}
+        <div className="flex flex-col xl:flex-row gap-4 p-5 border-b border-gray-100 bg-gray-50/50">
+          <div className="flex-1 relative">
+            <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by message, action, email or target..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#0D1742] focus:ring-1 focus:ring-[#0D1742] shadow-sm transition-all placeholder:text-gray-400"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
             <select
               value={level}
               onChange={(e) => setLevel(e.target.value as Level | 'all')}
-              className={inputClass}
+              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:outline-none focus:border-[#0D1742] focus:ring-1 focus:ring-[#0D1742] shadow-sm cursor-pointer outline-none"
             >
               {LEVEL_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -265,17 +278,11 @@ export function SystemLogsClient() {
                 </option>
               ))}
             </select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Category
-            </label>
+
             <select
               value={category}
-              onChange={(e) =>
-                setCategory(e.target.value as Category | 'all')
-              }
-              className={inputClass}
+              onChange={(e) => setCategory(e.target.value as Category | 'all')}
+              className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:outline-none focus:border-[#0D1742] focus:ring-1 focus:ring-[#0D1742] shadow-sm cursor-pointer outline-none"
             >
               {CATEGORY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -283,351 +290,261 @@ export function SystemLogsClient() {
                 </option>
               ))}
             </select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Search
-            </label>
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="message, action, email, msFormResponseId…"
-              className={inputClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              From
-            </label>
-            <input
-              type="datetime-local"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              To
-            </label>
-            <input
-              type="datetime-local"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Page size
-            </label>
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className={inputClass}
-            >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n} per page
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end md:col-span-2 lg:col-span-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              disabled={
-                level === 'all' && category === 'all' && !q && !from && !to
-              }
-            >
-              <i className="fa-solid fa-xmark mr-2" aria-hidden />
-              Clear filters
-            </Button>
-            <div className="ml-auto text-sm text-muted-foreground">
-              {loading
-                ? 'Loading…'
-                : `${total.toLocaleString()} event${total === 1 ? '' : 's'}`}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader className="border-b border-border/60">
-          <CardTitle className="text-base font-black">Events</CardTitle>
-          <CardDescription>
-            Most recent first. Click a row to expand metadata.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-5">
-          {loading ? (
-            <div className="text-muted-foreground space-y-3 py-12 text-center text-sm">
-              <i className="fa-solid fa-spinner fa-spin text-2xl" />
-              <p>Loading events…</p>
+            {/* DateTime Range Picker */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm focus-within:border-[#0D1742] focus-within:ring-1 focus-within:ring-[#0D1742]">
+              <input
+                type="datetime-local"
+                className="bg-transparent text-sm font-medium outline-none text-gray-700"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+              <span className="text-gray-300 px-1">→</span>
+              <input
+                type="datetime-local"
+                className="bg-transparent text-sm font-medium outline-none text-gray-700"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </div>
+
+            {(q || level !== 'all' || category !== 'all' || from || to) && (
+              <Button
+                variant="ghost"
+                onClick={clearFilters}
+                className="text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl px-3 h-10.5"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* TABLE SECTION */}
+        <div className="overflow-x-auto min-h-100">
+          {loading && items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <i className="fa-solid fa-spinner fa-spin text-3xl text-gray-300 mb-4" />
+              <p className="text-sm font-bold text-gray-400">
+                Loading audit trail...
+              </p>
             </div>
           ) : items.length === 0 ? (
-            <div className="border-border rounded-xl border border-dashed py-16 text-center">
-              <i className="fa-solid fa-clipboard-list text-muted-foreground mb-3 text-3xl" />
-              <p className="font-bold">No events match the current filters</p>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Try clearing filters or widening the date range.
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <i className="fa-solid fa-clipboard-list text-4xl text-gray-300 mb-4" />
+              <p className="text-base font-bold text-[#0D1742]">
+                No events match your criteria
+              </p>
+              <p className="text-sm text-[#5E5E92] mt-1">
+                Try widening your date range or clearing filters.
               </p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="hidden px-3 py-3 text-left font-bold sm:table-cell sm:px-4">Time</th>
-                      <th className="px-3 py-3 text-left font-bold sm:px-4">Level</th>
-                      <th className="hidden px-3 py-3 text-left font-bold md:table-cell sm:px-4">Category</th>
-                      <th className="hidden px-3 py-3 text-left font-bold lg:table-cell sm:px-4">Action</th>
-                      <th className="px-3 py-3 text-left font-bold sm:px-4">Message</th>
-                      <th className="hidden px-3 py-3 text-left font-bold lg:table-cell sm:px-4">Performed by</th>
-                      <th className="hidden px-3 py-3 text-left font-bold xl:table-cell sm:px-4">Target</th>
-                      <th className="px-4 py-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {items.map((log) => {
-                      const isOpen = expanded.has(log.id);
-                      const lvl = LEVEL_STYLES[log.level];
-                      return (
-                        <React.Fragment key={log.id}>
-                          <tr
-                            className={cn(
-                              'cursor-pointer transition-colors hover:bg-muted/30',
-                              isOpen && 'bg-muted/40'
-                            )}
-                            onClick={() => toggleExpanded(log.id)}
-                          >
-                            <td className="hidden whitespace-nowrap px-3 py-3 text-xs text-muted-foreground sm:table-cell sm:px-4">
-                              {formatDate(log.timestamp)}
-                            </td>
-                            <td className="px-3 py-3 sm:px-4">
-                              <Badge
-                                variant="outline"
-                                className={cn('uppercase', lvl.badge)}
-                              >
-                                <span
-                                  className={cn(
-                                    'mr-1 inline-block size-2 rounded-full',
-                                    lvl.dot
-                                  )}
-                                />
-                                {log.level}
-                              </Badge>
-                            </td>
-                            <td className="hidden whitespace-nowrap px-3 py-3 text-xs font-semibold text-muted-foreground md:table-cell sm:px-4">
-                              {CATEGORY_LABEL[log.category] ?? log.category}
-                            </td>
-                            <td className="hidden whitespace-nowrap px-3 py-3 lg:table-cell sm:px-4">
-                              <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-bold">
-                                {log.action}
-                              </code>
-                            </td>
-                            <td className="px-3 py-3 sm:px-4">
-                              <p className="line-clamp-3 font-semibold text-foreground sm:line-clamp-2 sm:max-w-md">
-                                {log.message}
-                              </p>
-                              <p className="mt-1 text-[11px] text-muted-foreground sm:hidden">
-                                {formatDate(log.timestamp)}
-                              </p>
-                            </td>
-                            <td className="hidden whitespace-nowrap px-3 py-3 text-xs lg:table-cell sm:px-4">
-                              <span className="font-semibold text-foreground">
-                                {actorLabel(log.performedBy)}
-                              </span>
-                              {log.performedBy?.role ? (
-                                <span className="ml-1 text-muted-foreground">
-                                  · {log.performedBy.role}
-                                </span>
-                              ) : null}
-                            </td>
-                            <td className="hidden whitespace-nowrap px-3 py-3 text-xs text-muted-foreground xl:table-cell sm:px-4">
-                              {targetLabel(log.target)}
-                            </td>
-                            <td className="px-3 py-3 text-right sm:px-4">
-                              <i
-                                className={cn(
-                                  'fa-solid fa-chevron-right text-xs text-muted-foreground transition-transform',
-                                  isOpen && 'rotate-90'
-                                )}
-                                aria-hidden
-                              />
-                            </td>
-                          </tr>
-                          {isOpen ? (
-                            <tr className="bg-muted/20">
-                              <td colSpan={8} className="px-4 py-4">
-                                <div className="grid gap-4 lg:grid-cols-2">
-                                  <div className="space-y-2 text-xs">
-                                    <p className="font-bold uppercase tracking-wider text-muted-foreground">
-                                      Context
-                                    </p>
-                                    <dl className="space-y-1.5">
-                                      <div className="flex gap-2">
-                                        <dt className="w-28 shrink-0 font-semibold text-muted-foreground">
-                                          ID
-                                        </dt>
-                                        <dd className="break-all font-mono">
-                                          {log.id}
-                                        </dd>
-                                      </div>
-                                      <div className="flex gap-2">
-                                        <dt className="w-28 shrink-0 font-semibold text-muted-foreground">
-                                          Timestamp
-                                        </dt>
-                                        <dd>{formatDate(log.timestamp)}</dd>
-                                      </div>
-                                      {log.performedBy?.email ? (
-                                        <div className="flex gap-2">
-                                          <dt className="w-28 shrink-0 font-semibold text-muted-foreground">
-                                            Actor
-                                          </dt>
-                                          <dd className="break-all">
-                                            {log.performedBy.email}
-                                            {log.performedBy.userId
-                                              ? ` (${log.performedBy.userId})`
-                                              : ''}
-                                          </dd>
-                                        </div>
-                                      ) : null}
-                                      {log.target?.email ||
-                                      log.target?.label ||
-                                      log.target?.userId ||
-                                      log.target?.candidateId ||
-                                      log.target?.msFormResponseId ? (
-                                        <div className="flex gap-2">
-                                          <dt className="w-28 shrink-0 font-semibold text-muted-foreground">
-                                            Target
-                                          </dt>
-                                          <dd className="break-all">
-                                            {targetLabel(log.target)}
-                                            {log.target?.userId
-                                              ? ` (${log.target.userId})`
-                                              : ''}
-                                            {log.target?.msFormResponseId
-                                              ? ` · MS Form: ${log.target.msFormResponseId}`
-                                              : ''}
-                                          </dd>
-                                        </div>
-                                      ) : null}
-                                      {log.ipAddress ? (
-                                        <div className="flex gap-2">
-                                          <dt className="w-28 shrink-0 font-semibold text-muted-foreground">
-                                            IP
-                                          </dt>
-                                          <dd className="font-mono">
-                                            {log.ipAddress}
-                                          </dd>
-                                        </div>
-                                      ) : null}
-                                      {log.userAgent ? (
-                                        <div className="flex gap-2">
-                                          <dt className="w-28 shrink-0 font-semibold text-muted-foreground">
-                                            User-Agent
-                                          </dt>
-                                          <dd className="break-all">
-                                            {log.userAgent}
-                                          </dd>
-                                        </div>
-                                      ) : null}
-                                    </dl>
-                                  </div>
-                                  <div className="space-y-2 text-xs">
-                                    <p className="font-bold uppercase tracking-wider text-muted-foreground">
-                                      Metadata
-                                    </p>
-                                    {log.metadata &&
-                                    Object.keys(log.metadata).length > 0 ? (
-                                      <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-background p-3 text-[11px] leading-relaxed">
-                                        {JSON.stringify(log.metadata, null, 2)}
-                                      </pre>
-                                    ) : (
-                                      <p className="text-muted-foreground">
-                                        No metadata.
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : null}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+            <table className="w-full text-left text-sm text-gray-600">
+              <thead className="bg-white border-b border-gray-100 text-[10px] uppercase tracking-widest text-gray-400 font-black">
+                <tr>
+                  <th className="px-5 py-4 w-1/4">Event</th>
+                  <th className="px-5 py-4 w-2/4 hidden md:table-cell">
+                    Message
+                  </th>
+                  <th className="px-5 py-4 w-1/4 text-right">Actor & Time</th>
+                  <th className="px-4 py-4 w-10"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {items.map((log) => {
+                  const isOpen = expanded.has(log.id);
+                  const lvl = LEVEL_STYLES[log.level] || LEVEL_STYLES.info;
 
-          {items.length > 0 ? (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-              <p className="text-muted-foreground">
-                Page <span className="font-bold text-foreground">{page}</span>{' '}
-                of <span className="font-bold text-foreground">{totalPages}</span>
-                {' · '}
-                showing{' '}
-                <span className="font-bold text-foreground">
-                  {(page - 1) * pageSize + 1}
-                </span>
-                –
-                <span className="font-bold text-foreground">
+                  return (
+                    <React.Fragment key={log.id}>
+                      <tr
+                        onClick={() => toggleExpanded(log.id)}
+                        className={cn(
+                          'cursor-pointer transition-colors hover:bg-gray-50',
+                          isOpen && 'bg-gray-50/80 shadow-inner'
+                        )}
+                      >
+                        <td className="px-5 py-4 align-top">
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={cn(
+                                'mt-1.5 flex size-2 shrink-0 rounded-full',
+                                lvl.dot
+                              )}
+                            />
+                            <div>
+                              <p className="font-bold text-[#0D1742] tracking-tight">
+                                {log.action}
+                              </p>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mt-0.5">
+                                {CATEGORY_LABEL[log.category] || log.category}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 align-top hidden md:table-cell">
+                          <p className="text-sm font-medium text-gray-700 line-clamp-2 pr-4">
+                            {log.message}
+                          </p>
+                        </td>
+                        <td className="px-5 py-4 align-top text-right">
+                          <p className="text-sm font-bold text-[#0D1742] truncate pl-4">
+                            {actorLabel(log.performedBy)}
+                          </p>
+                          <p className="text-[11px] font-bold text-gray-400 mt-0.5 whitespace-nowrap">
+                            {formatDate(log.timestamp)}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4 align-middle text-right">
+                          <i
+                            className={cn(
+                              'fa-solid fa-chevron-left text-xs text-gray-300 transition-transform',
+                              isOpen && '-rotate-90 text-[#0D1742]'
+                            )}
+                          />
+                        </td>
+                      </tr>
+
+                      {/* INLINE EXPANSION VIEW (Terminal Style) */}
+                      {isOpen && (
+                        <tr className="bg-gray-50 shadow-inner">
+                          <td
+                            colSpan={4}
+                            className="p-0 border-y border-gray-100"
+                          >
+                            <div className="px-6 py-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                              <div className="space-y-5">
+                                <div>
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1.5">
+                                    Target Identity
+                                  </p>
+                                  <p className="text-sm font-semibold text-[#0D1742] break-all">
+                                    {targetLabel(log.target)}
+                                  </p>
+                                  {log.target?.msFormResponseId && (
+                                    <p className="text-xs font-medium text-[#5E5E92] mt-1 break-all">
+                                      MS Form: {log.target.msFormResponseId}
+                                    </p>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1.5">
+                                    Network Context
+                                  </p>
+                                  <p className="text-sm font-mono font-medium text-gray-600 break-all">
+                                    {log.ipAddress || '—'}
+                                  </p>
+                                  <p
+                                    className="text-xs font-medium text-gray-400 mt-1.5 leading-relaxed line-clamp-3"
+                                    title={log.userAgent || ''}
+                                  >
+                                    {log.userAgent || '—'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="lg:col-span-2">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">
+                                  Metadata / Payload
+                                </p>
+                                {log.metadata &&
+                                Object.keys(log.metadata).length > 0 ? (
+                                  <div className="bg-[#0D1742] rounded-xl p-4 overflow-x-auto shadow-sm">
+                                    <pre className="text-xs text-[#DCB968] font-mono leading-relaxed">
+                                      {JSON.stringify(log.metadata, null, 2)}
+                                    </pre>
+                                  </div>
+                                ) : (
+                                  <div className="bg-white rounded-xl p-4 border border-dashed border-gray-300 flex items-center justify-center h-24 shadow-sm">
+                                    <p className="text-sm text-gray-400 font-bold">
+                                      No metadata attached to this event.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* PAGINATION */}
+        {items.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 border-t border-gray-100 bg-gray-50/50">
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                Show
+              </span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-[#0D1742] cursor-pointer shadow-sm"
+              >
+                <option value={25}>25 rows</option>
+                <option value={50}>50 rows</option>
+                <option value={100}>100 rows</option>
+              </select>
+              <span className="text-xs font-medium text-gray-500 ml-2 hidden md:inline-block">
+                Showing{' '}
+                <strong className="text-[#0D1742]">
+                  {total === 0 ? 0 : (page - 1) * pageSize + 1}
+                </strong>{' '}
+                to{' '}
+                <strong className="text-[#0D1742]">
                   {Math.min(page * pageSize, total)}
-                </span>{' '}
-                of <span className="font-bold text-foreground">{total}</span>
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={loading || page <= 1}
-                  onClick={() => setPage(1)}
-                >
-                  <i className="fa-solid fa-angles-left" aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={loading || page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <i className="fa-solid fa-angle-left mr-1" aria-hidden />
-                  Prev
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={loading || page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                  <i className="fa-solid fa-angle-right ml-1" aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={loading || page >= totalPages}
-                  onClick={() => setPage(totalPages)}
-                >
-                  <i className="fa-solid fa-angles-right" aria-hidden />
-                </Button>
-              </div>
+                </strong>{' '}
+                of <strong className="text-[#0D1742]">{total}</strong> entries
+              </span>
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(1)}
+                disabled={loading || page <= 1}
+                className="h-8 w-8 p-0 rounded-lg"
+              >
+                <i className="fa-solid fa-angles-left" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={loading || page <= 1}
+                className="h-8 px-3 rounded-lg text-xs font-bold"
+              >
+                Prev
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={loading || page >= totalPages}
+                className="h-8 px-3 rounded-lg text-xs font-bold"
+              >
+                Next
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(totalPages)}
+                disabled={loading || page >= totalPages}
+                className="h-8 w-8 p-0 rounded-lg"
+              >
+                <i className="fa-solid fa-angles-right" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
