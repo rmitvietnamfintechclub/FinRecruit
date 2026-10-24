@@ -480,6 +480,131 @@ export function UserManagementDataTable({
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
 
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="font-semibold text-sm py-2 cursor-pointer rounded-lg text-gray-600 focus:text-gray-900 data-[state=open]:bg-gray-100">
+                        <i className="fa-solid fa-user w-4 text-center mr-2 text-gray-400" />
+                        Move to Member
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="rounded-xl shadow-lg border-gray-200 p-1.5">
+                        {HEAD_DEPARTMENTS.filter(
+                          (d) =>
+                            !(
+                              r.role === 'Member' && r.department === d
+                            )
+                        ).map((d) => (
+                          <DropdownMenuItem
+                            key={d}
+                            className="font-semibold text-sm py-2 cursor-pointer focus:bg-gray-50 rounded-lg text-gray-700"
+                            onClick={() =>
+                              requestConfirm({
+                                title: `Change to Member Role?`,
+                                description: (
+                                  <span className="mt-2 flex flex-col gap-4">
+                                    <span className="block text-sm text-gray-600">
+                                      Assign{' '}
+                                      <strong className="text-gray-900">
+                                        {targetName}
+                                      </strong>{' '}
+                                      to a standard member role.
+                                    </span>
+
+                                    <span className="flex flex-col items-center justify-center gap-2 rounded-xl bg-gray-50 p-4 border border-gray-100">
+                                      {/* Trạng thái HIỆN TẠI */}
+                                      <span className="flex flex-col items-center">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                          Current Role
+                                        </span>
+                                        <span className="flex items-center gap-1.5">
+                                          <span
+                                            className={cn(
+                                              'px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border',
+                                              isCurrentExB
+                                                ? 'bg-violet-50 text-violet-700 border-violet-200'
+                                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                            )}
+                                          >
+                                            {r.role}
+                                          </span>
+                                          {!isCurrentExB &&
+                                            r.department &&
+                                            r.department !== 'Unassigned' && (
+                                              <span
+                                                className={cn(
+                                                  'px-2 py-0.5 rounded-md text-[11px] font-bold border border-gray-200 flex items-center gap-1 w-fit',
+                                                  currentDeptUI.bg,
+                                                  currentDeptUI.text
+                                                )}
+                                              >
+                                                <i
+                                                  className={`fa-solid ${currentDeptUI.icon}`}
+                                                />{' '}
+                                                {r.department.replace(
+                                                  ' Department',
+                                                  ''
+                                                )}
+                                              </span>
+                                            )}
+                                        </span>
+                                      </span>
+
+                                      <i className="fa-solid fa-arrow-down text-gray-300 my-1" />
+
+                                      {/* Trạng thái MỚI */}
+                                      <span className="flex flex-col items-center">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                          New Role
+                                        </span>
+                                        <span className="flex items-center gap-1.5">
+                                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border bg-blue-50 text-blue-700 border-blue-200">
+                                            Member
+                                          </span>
+                                          <span
+                                            className={cn(
+                                              'px-2 py-0.5 rounded-md text-[11px] font-bold border border-gray-200 flex items-center gap-1 w-fit',
+                                              DEPT_UI[d].bg,
+                                              DEPT_UI[d].text
+                                            )}
+                                          >
+                                            <i
+                                              className={`fa-solid ${DEPT_UI[d].icon}`}
+                                            />{' '}
+                                            {d.replace(' Department', '')}
+                                          </span>
+                                        </span>
+                                      </span>
+                                    </span>
+
+                                    <span className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-blue-800">
+                                      <i
+                                        className={`fa-solid ${DEPT_UI[d].icon} mt-0.5 text-blue-600`}
+                                      />
+                                      <span className="text-sm font-medium leading-tight">
+                                        They will have standard access to operations within the{' '}
+                                        {d}.
+                                      </span>
+                                    </span>
+                                  </span>
+                                ),
+                                confirmLabel: 'Assign Role',
+                                variant: 'default',
+                                onConfirm: () =>
+                                  onPatch({
+                                    userId: r.id,
+                                    role: 'Member',
+                                    department: d,
+                                  }),
+                              })
+                            }
+                          >
+                            <i
+                              className={`fa-solid ${DEPT_UI[d].icon} w-4 text-center mr-2 ${DEPT_UI[d].text}`}
+                            />
+                            {d}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+
                     {r.role !== 'Executive Board' && (
                       <DropdownMenuItem
                         className="font-semibold text-sm py-2 cursor-pointer focus:bg-violet-50 focus:text-violet-700 text-violet-600 rounded-lg"

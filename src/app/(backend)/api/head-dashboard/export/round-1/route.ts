@@ -8,6 +8,7 @@ import ExcelJS from 'exceljs';
 
 export const runtime = 'nodejs';
 
+// --- 1. TYPE & VALIDATION HELPERS ---
 type ExportableStatus = 'Pass' | 'Fail';
 
 function isExportableStatus(value: string | null): value is ExportableStatus {
@@ -20,11 +21,11 @@ interface ErrorResponse {
   error?: string;
 }
 
-// Hàm format ngày sinh để chống nhầm lẫn (DD MMM YYYY - VD: 20 Sep 2007)
+// --- 2. FORMATTING HELPERS ---
 function formatDOB(dateString: string | null | undefined): string {
   if (!dateString) return '—';
   const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return dateString; // Trả về chuỗi gốc nếu không parse được
+  if (Number.isNaN(date.getTime())) return dateString;
 
   return new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
@@ -33,6 +34,23 @@ function formatDOB(dateString: string | null | undefined): string {
   }).format(date);
 }
 
+function normalizeString(str?: string | null): string {
+  return str ? str.trim().toLowerCase() : '';
+}
+
+// Lấy màu nền (ARGB) cho từng phòng ban (Màu Pastel)
+function getDepartmentBgColor(deptName?: string | null): string {
+  const name = normalizeString(deptName);
+  if (name.includes('tech')) return 'FFD0E2FF'; // Light Blue
+  if (name.includes('business')) return 'FFFFE5B4'; // Peach / Light Orange
+  if (name.includes('marketing')) return 'FFFFD6D6'; // Light Pink / Red
+  if (name.includes('design')) return 'FFE8D8FF'; // Light Purple
+  if (name.includes('hr') || name.includes('human')) return 'FFD9EAD3'; // Light Green
+
+  return 'FFF3F4F6'; // Default: Light Gray
+}
+
+// --- 3. MAIN API HANDLER ---
 export const GET = withRBAC(
   'Department Head',
   async (
@@ -62,7 +80,7 @@ export const GET = withRBAC(
       await dbConnect();
       const active = await getActiveConfig();
 
-      // Query full data dựa trên Schema thực tế
+      // Query database chỉ lấy data của ban hiện tại
       const candidates = await Candidate.find({
         status: statusParam,
         department: departmentParam,
@@ -77,7 +95,8 @@ export const GET = withRBAC(
         .exec();
 
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet(`${departmentParam} Candidates`);
+      const safeDeptName = departmentParam.replace(/\s+/g, '_');
+      const worksheet = workbook.addWorksheet(`${safeDeptName} Candidates`);
 
       worksheet.columns = [
         { header: 'No.', key: 'no', width: 6 },
@@ -93,6 +112,7 @@ export const GET = withRBAC(
         { header: 'Final Evaluation At', key: 'department', width: 25 },
       ];
 
+      // Format header row đồng bộ
       const headerRow = worksheet.getRow(1);
       headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
       headerRow.fill = {
@@ -102,24 +122,25 @@ export const GET = withRBAC(
       };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-      // Chèn dữ liệu
+      // Chèn dữ liệu và tô màu
       candidates.forEach((candidate, index) => {
         const row = worksheet.addRow({
           no: index + 1,
           name: candidate.fullName,
           email: candidate.email || '—',
-          dob: formatDOB(candidate.dob), // Gọi hàm format tại đây
+          dob: formatDOB(candidate.dob),
           major: candidate.majorAndYear || '—',
           phone: candidate.phone || '—',
           fb: candidate.facebookLink || '—',
           cv: candidate.cvLink || '—',
           choice1: candidate.choice1 || '—',
           choice2: candidate.choice2 || '—',
-          department: candidate.department,
+          department: candidate.department || '—',
         });
 
         row.getCell('no').alignment = { horizontal: 'center' };
 
+        // Xử lý chèn Link (Hyperlink màu xanh gạch chân)
         if (candidate.facebookLink) {
           row.getCell('fb').value = {
             text: 'View Profile',
@@ -140,16 +161,53 @@ export const GET = withRBAC(
             underline: true,
           };
         }
+
+        // --- XỬ LÝ HIGHLIGHT & TÔ MÀU PHÒNG BAN ---
+        const deptCell = row.getCell('department');
+        const choice1Cell = row.getCell('choice1');
+        const choice2Cell = row.getCell('choice2');
+
+        // 1. Tô nền cột Final Evaluation theo ban (Sẽ luôn ra 1 màu vì query đã filter)
+        deptCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: getDepartmentBgColor(candidate.department) },
+        };
+        deptCell.font = { bold: true, color: { argb: 'FF000000' } }; // Mặc định chữ đen in đậm
+
+        // 2. Kiểm tra xem ca này có bị đẩy sang NV2 không?
+        const cDept = normalizeString(candidate.department);
+        const c1 = normalizeString(candidate.choice1);
+        const c2 = normalizeString(candidate.choice2);
+
+        // Bị đẩy sang NV2 = Eval Dept giống NV2, nhưng khác NV1
+        const isPushedToSecondChoice =
+          cDept && c2 && cDept === c2 && cDept !== c1;
+
+        if (isPushedToSecondChoice) {
+          // Làm nổi bật cột Department bằng chữ màu Đỏ tươi (Red)
+          deptCell.font = { bold: true, color: { argb: 'FFB82649' } };
+
+          // Đánh dấu cột NV2 bằng nền Vàng nhạt
+          choice2Cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFEFCA' },
+          };
+          choice2Cell.font = { bold: true, color: { argb: 'FFA28436' } };
+
+          // Gạch bỏ (Strikethrough) và làm mờ cột NV1
+          choice1Cell.font = { strike: true, color: { argb: 'FF9CA3AF' } };
+        }
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
+
       const headers = new Headers();
       headers.append(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       );
-
-      const safeDeptName = departmentParam.replace(/\s+/g, '_');
       headers.append(
         'Content-Disposition',
         `attachment; filename="${safeDeptName}_Round_1_${statusParam}_Export.xlsx"`
@@ -161,10 +219,8 @@ export const GET = withRBAC(
       });
     } catch (error: unknown) {
       console.error('[export/GET] Error:', error);
-
       const message =
         error instanceof Error ? error.message : 'Unknown error occurred';
-
       const errorResponse: ErrorResponse = {
         success: false,
         message: 'Failed to generate Excel file.',

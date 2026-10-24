@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import { getOrCreateGlobalConfig } from '@/app/(backend)/libs/system-config/service';
-import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withActiveRBAC } from '@/app/(backend)/guards/auth&RBAC';
 
 export const runtime = 'nodejs';
 

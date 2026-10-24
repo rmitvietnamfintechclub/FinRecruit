@@ -1,0 +1,141 @@
+import { Types } from 'mongoose';
+import { NextResponse, type NextRequest } from 'next/server';
+import dbConnect from '@/app/(backend)/libs/dbConnect';
+import {
+  buildDepartmentHeadCandidateMatch,
+  parseDashboardStatus,
+  parsePaginationParams,
+  sanitizeSearchQuery,
+  serializeCandidateListItem,
+} from '@/app/(backend)/libs/departmentHeadDashboard';
+import { STATUSES, type DepartmentType, type StatusType } from '@/app/(backend)/types';
+import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
+import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
+import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
+import Candidate from '@/app/(backend)/models/Candidate';
+
+export const runtime = 'nodejs';
+
+type CandidateListAggregationResult = {
+  metadata: Array<{ total: number }>;
+  items: Array<{
+    _id: Types.ObjectId;
+    fullName: string;
+    email: string;
+    phone: string;
+    dob: string;
+    department: DepartmentType;
+    choice1: DepartmentType;
+    choice2?: DepartmentType | null;
+    status: StatusType;
+    generation: string;
+    semester: string;
+    appliedAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    round2Status: StatusType;
+    interviewSlotId?: Types.ObjectId | null;
+    round2Evaluation?: { score?: number | null };
+  }>;
+};
+
+// CHỈ CẤP QUYỀN CHO MEMBER
+export const GET = withRBAC('Member', async (req: NextRequest, { session }) => {
+  const assignedDepartment = normalizeHeadDepartment(session.user.department);
+
+  if (!assignedDepartment) {
+    return NextResponse.json(
+      { success: false, message: 'Invalid department assignment for Member.' },
+      { status: 403 }
+    );
+  }
+
+  const searchParams = req.nextUrl.searchParams;
+  const search = sanitizeSearchQuery(searchParams.get('search'));
+  const statusParam = searchParams.get('status');
+  const status = parseDashboardStatus(statusParam);
+  const { page, limit, skip } = parsePaginationParams(searchParams);
+  const sourceByScore = searchParams.get('sortByScore') === 'true';
+
+  if (statusParam && statusParam !== 'All' && !status) {
+    return NextResponse.json(
+      { success: false, message: `Invalid status filter. Supported values: ${STATUSES.join(', ')}.` },
+      { status: 400 }
+    );
+  }
+
+  await dbConnect();
+  const active = await getActiveConfig();
+  const cohort = { generation: active.currentGeneration, semester: active.currentSemester };
+
+  const match = buildDepartmentHeadCandidateMatch({
+    department: assignedDepartment,
+    search,
+    status,
+    cohort,
+  });
+
+  const sortStage: Record<string, 1 | -1> = sourceByScore
+    ? { 'round2Evaluation.score': -1, createdAt: -1, _id: -1 }
+    : { createdAt: -1, _id: -1 };
+
+  const aggregateResults = (await Candidate.aggregate([
+    { $match: match },
+    {
+      $facet: {
+        metadata: [{ $count: 'total' }],
+        items: [
+          { $sort: sortStage },
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $project: {
+              customAnswers: 0,
+              cvLink: 0, // Cân nhắc: Có cho Member xem CV không? Nếu không, giữ số 0.
+              __v: 0,
+              'round2Evaluation.templateAnswers': 0,
+              'round2Evaluation.adHocQuestions': 0,
+              'round2Evaluation.notes': 0, // Giấu note đánh giá chi tiết
+            },
+          },
+        ],
+      },
+    },
+  ]).exec()) as CandidateListAggregationResult[];
+
+  const aggregationResult = aggregateResults[0];
+  const total = aggregationResult?.metadata?.[0]?.total ?? 0;
+  const items = aggregationResult?.items?.map((candidate) =>
+    serializeCandidateListItem({
+      ...candidate,
+      _id: candidate._id,
+      choice2: candidate.choice2 ?? null,
+    })
+  ) ?? [];
+
+  const hasNoDepartmentCandidates = total === 0 && !search && !status;
+  const hasNoFilteredResults = total === 0 && !hasNoDepartmentCandidates;
+
+  return NextResponse.json(
+    {
+      success: true,
+      message: 'Candidates fetched successfully.',
+      candidates: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+        filters: { search, status, department: assignedDepartment, sortByScore: sourceByScore },
+        activeCohort: { ...cohort, isRecruitmentActive: active.isRecruitmentActive },
+        allowedStatusOptions: [...STATUSES],
+        emptyState: hasNoDepartmentCandidates
+          ? `No candidates have been routed to your department for ${cohort.semester} · ${cohort.generation} yet.`
+          : hasNoFilteredResults
+            ? 'No results found for the current search or filter.'
+            : null,
+      },
+    },
+    { status: 200 }
+  );
+});

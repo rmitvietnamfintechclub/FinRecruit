@@ -7,7 +7,7 @@ import {
     getOrCreateGlobalConfig,
 } from '@/app/(backend)/libs/system-config/service';
 import { logSystemEvent } from '@/app/(backend)/libs/system-log/service';
-import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
 
 export const runtime = 'nodejs';

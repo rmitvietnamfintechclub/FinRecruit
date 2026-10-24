@@ -148,6 +148,7 @@ export default function HeadDashboardPage() {
   const [isLockingRound2, setIsLockingRound2] = useState(false);
   const [round2Locked, setRound2Locked] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+  const [lockSuccess, setLockSuccess] = useState(false);
 
   const [round2ConfirmAction, setRound2ConfirmAction] = useState<
     'lock' | 'unlock' | null
@@ -458,16 +459,19 @@ export default function HeadDashboardPage() {
   }, [triggerSessionExpired]);
 
   const handleLockRound1 = useCallback(async (): Promise<LockRound1Result> => {
-    if (!headDepartment)
+    if (!headDepartment) {
       return { success: false, message: 'No department assignment found.' };
+    }
+
     const result = await lock(headDepartment);
-    if (result.success) await Promise.all([loadList(1, false), refreshStats()]);
+
+    if (result.success) {
+      await Promise.all([loadList(1, false), refreshStats()]);
+      setLockSuccess(true);
+    }
+
     return result;
   }, [headDepartment, lock, loadList, refreshStats]);
-
-  useEffect(() => {
-    if (isRound1Locked) setMode('round2');
-  }, [isRound1Locked]);
 
   useEffect(() => {
     if (isRound1Locked && mode === 'round2') void loadRound2();
@@ -562,6 +566,28 @@ export default function HeadDashboardPage() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="relative space-y-6">
+        {lockSuccess && (
+          <AppNotice
+            variant="info" 
+            title="Round 1 Locked Successfully"
+            onDismiss={() => setLockSuccess(false)}
+            action={
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('round2');
+                  setLockSuccess(false);
+                }}
+                className="flex items-center gap-2 rounded-lg bg-[#0D1742] px-4 py-2 text-sm font-bold text-[#DCB968] shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+              >
+                Go to Round 2 <i className="fa-solid fa-arrow-right" />
+              </button>
+            }
+          >
+            All evaluations for Round 1 have been finalized. The interview pool is now unlocked and ready for Round 2.
+          </AppNotice>
+        )}
+
         {error && (
           <AppNotice
             variant="error"

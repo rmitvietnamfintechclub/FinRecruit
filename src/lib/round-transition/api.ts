@@ -35,5 +35,5 @@ const httpApi: RoundTransitionApi = {
 };
 
 export function getRoundTransitionApi(): RoundTransitionApi {
-  return process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'false' ? httpApi : mockApi;
+  return httpApi;
 }

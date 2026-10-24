@@ -24,7 +24,7 @@ export const MASTER_VIEW_DEPT_OPTIONS = [
   'All',
   'Technology',
   'Business',
-  'Human Resources',
+  'HR',
   'Marketing',
 ] as const;
 
@@ -36,7 +36,7 @@ const UI_TO_API_DEPARTMENT: Record<
 > = {
   Technology: 'Technology Department',
   Business: 'Business Department',
-  'Human Resources': 'HR Department',
+  HR: 'HR Department',
   Marketing: 'Marketing Department',
 };
 
@@ -170,11 +170,11 @@ export function mapExecutiveDetailToHeadDetail(
       ? (raw.customAnswers as ICustomAnswer[])
       : [],
   });
-  
+
   const rawRound2 = raw.round2Evaluation as
     | Partial<IRound2Evaluation>
     | undefined;
-    
+
   const round2Evaluation: IRound2Evaluation = {
     templateAnswers: Array.isArray(rawRound2?.templateAnswers)
       ? rawRound2.templateAnswers

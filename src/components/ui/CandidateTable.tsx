@@ -18,7 +18,7 @@ interface CandidateTableProps {
   onUpdateStatus: (id: string, newStatus: 'Pass' | 'Fail' | 'Pending') => void;
   /** Executive MasterView: no PATCH status API yet — hide quick actions + pass readOnly to modal */
   readOnly?: boolean;
-  detailApi?: 'head' | 'executive';
+  detailApi?: 'head' | 'executive' | 'member-dashboard';
   /** Layout for the candidate list. Defaults to `'grid'` (card layout). */
   viewMode?: CandidateViewMode;
 }

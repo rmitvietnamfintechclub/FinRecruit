@@ -30,6 +30,33 @@ export function RoundModeTabs({
     );
   }
 
+  // Tách riêng button Round 2 ra để xử lý bọc Tooltip có điều kiện
+  const round2Button = (
+    <span className={cn('flex flex-1', !isLocked && 'cursor-not-allowed')}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={mode === 'round2'}
+        disabled={!isLocked}
+        onClick={() => onChange('round2')}
+        className={cn(
+          'flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all duration-300 disabled:pointer-events-none',
+          mode === 'round2'
+            ? 'bg-[#0D1742] text-[#DCB968] shadow-md'
+            : 'text-gray-500',
+          !isLocked
+            ? 'opacity-50 hover:bg-transparent'
+            : 'hover:bg-gray-100 hover:text-[#0D1742]'
+        )}
+      >
+        {!isLocked && (
+          <i className="fa-solid fa-lock text-[11px]" aria-hidden />
+        )}
+        Interview (Round 2)
+      </button>
+    </span>
+  );
+
   return (
     <div
       role="tablist"
@@ -48,42 +75,17 @@ export function RoundModeTabs({
             : 'text-gray-500 hover:bg-gray-100 hover:text-[#0D1742]'
         )}
       >
-        {isLocked && (
-          <i className="fa-solid fa-lock text-[11px] opacity-80" aria-hidden />
-        )}
         Application Form (Round 1)
       </button>
-      <Tooltip
-        content={
-          !isLocked
-            ? 'Finalize Round 1 evaluations to unlock the interview pool.'
-            : ''
-        }
-      >
-        <span className={cn('flex flex-1', !isLocked && 'cursor-not-allowed')}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'round2'}
-            disabled={!isLocked}
-            onClick={() => onChange('round2')}
-            className={cn(
-              'flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all duration-300 disabled:pointer-events-none',
-              mode === 'round2'
-                ? 'bg-[#0D1742] text-[#DCB968] shadow-md'
-                : 'text-gray-500',
-              !isLocked
-                ? 'opacity-50 hover:bg-transparent'
-                : 'hover:bg-gray-100 hover:text-[#0D1742]'
-            )}
-          >
-            {!isLocked && (
-              <i className="fa-solid fa-lock text-[11px]" aria-hidden />
-            )}
-            Interview (Round 2)
-          </button>
-        </span>
-      </Tooltip>
+
+      {/* CHỈ BỌC TOOLTIP KHI CHƯA KHÓA XONG ROUND 1 */}
+      {!isLocked ? (
+        <Tooltip content="Finalize Round 1 evaluations to unlock the interview pool.">
+          {round2Button}
+        </Tooltip>
+      ) : (
+        round2Button
+      )}
     </div>
   );
 }

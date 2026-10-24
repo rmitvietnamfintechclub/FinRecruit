@@ -36,10 +36,10 @@ const NAV: NavItem[] = [
     ],
     subItems: [
       { label: 'Candidates', href: '/MasterViewDashboard/candidates' },
-      {
-        label: 'Interview Scheduling',
-        href: '/MasterViewDashboard/interview-scheduling',
-      },
+      // {
+      //   label: 'Interview Scheduling',
+      //   href: '/MasterViewDashboard/interview-scheduling',
+      // },
     ],
   },
   {
@@ -61,11 +61,8 @@ const NAV: NavItem[] = [
 ];
 
 function getDynamicTitle(pathname: string): string {
-  if (
-    pathname.includes('/candidates') ||
-    pathname.includes('/interview-scheduling')
-  )
-    return 'Recruitment Management';
+  if (pathname.includes('/candidates')) return 'Recruitment Management';
+  if (pathname.includes('/interview-scheduling')) return 'Interview Management';
   if (pathname.includes('/user-management')) return 'User Management';
   if (pathname.includes('/system-logs')) return 'System Logs';
   if (pathname.includes('/system-config')) return 'System Configuration';

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import { getOrCreateGlobalConfig } from '@/app/(backend)/libs/system-config/service';
-import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 
 export const runtime = 'nodejs';
 
@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
  * Used by the Department Head dashboard and the Executive Board overview.
  */
 export const GET = withRBAC(
-    ['Department Head', 'Executive Board'],
+    ['Department Head', 'Executive Board', 'Member'],
     async () => {
         await dbConnect();
 

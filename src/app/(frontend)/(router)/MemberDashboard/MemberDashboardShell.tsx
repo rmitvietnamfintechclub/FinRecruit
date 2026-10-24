@@ -24,7 +24,7 @@ export function MemberDashboardShell({
       userName={userName}
       userInitial={userInitial}
       userAvatar={userAvatar}
-      userSubtitle={`Member • ${departmentLabel.replace(' Department', '')}`}
+      userSubtitle={`Member of ${departmentLabel}`}
     >
       {children}
     </DashboardAppShell>

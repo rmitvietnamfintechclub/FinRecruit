@@ -1,12 +1,8 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { buildAuthOptions } from '@/app/(backend)/libs/auth';
-import { HeadDashboardShell } from '@/app/(frontend)/(router)/HeadDashboard/HeadDashboardShell';
+import { MemberDashboardShell } from './MemberDashboardShell';
 import { getHomePathForRole } from '@/lib/role-routes';
-
-const MEMBER_NAVIGATION_ITEMS = [
-  ['/MemberDashboard', 'Interview (Round 2)'],
-] as const;
 
 export default async function MemberDashboardLayout({
   children,
@@ -32,16 +28,13 @@ export default async function MemberDashboardLayout({
     '?';
 
   return (
-    <HeadDashboardShell
+    <MemberDashboardShell
       departmentLabel={department}
       userName={userName}
       userInitial={initial}
       userAvatar={session.user.image ?? null}
-      title="Member Dashboard"
-      userSubtitle="Member"
-      navigationItems={MEMBER_NAVIGATION_ITEMS}
     >
       {children}
-    </HeadDashboardShell>
+    </MemberDashboardShell>
   );
 }

@@ -11,7 +11,6 @@ import {
 import {
   STATUSES,
   type DepartmentType,
-  type CandidateChoiceType,
   type StatusType,
 } from '@/app/(backend)/types';
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';

@@ -13,7 +13,7 @@ export type CohortBannerProps = {
    * scope of the page (e.g. "Department Head view · Technology Department").
    */
   scopeLabel?: string;
-  variant?: 'default' | 'head';
+  variant?: 'default' | 'head' | 'executive';
   /** Props xác định trạng thái UI cho các vòng */
   mode?: 'round1' | 'round2';
   isRound1Locked?: boolean;
@@ -72,42 +72,61 @@ export function CohortBanner({
     pulse: false,
   };
 
-  if (mode === 'round1' && !isRound1Locked) {
-    toneConfig = {
-      ring: 'ring-emerald-200',
-      chip: 'bg-[#D1FAE5] text-[#065F46]',
-      dot: 'bg-[#10B981]',
-      label: 'Recruitment Open',
-      sub: 'Actively accepting new applications from the public form.',
-      pulse: true,
-    };
-  } else if (mode === 'round1' && isRound1Locked) {
-    toneConfig = {
-      ring: 'ring-amber-200',
-      chip: 'bg-[#FEF3C7] text-[#92400E]',
-      dot: 'bg-[#F59E0B]',
-      label: 'Recruitment Closed',
-      sub: 'Application intake has ended. No new submissions can be made.',
-      pulse: false,
-    };
-  } else if (mode === 'round2' && !isRound2Locked) {
-    toneConfig = {
-      ring: 'ring-blue-200',
-      chip: 'bg-[#DBEAFE] text-[#1E40AF]',
-      dot: 'bg-[#3B82F6]',
-      label: 'Interviews In Progress',
-      sub: 'Actively conducting interviews and evaluating passed candidates.',
-      pulse: true,
-    };
-  } else if (mode === 'round2' && isRound2Locked) {
-    toneConfig = {
-      ring: 'ring-emerald-200',
-      chip: 'bg-[#D1FAE5] text-[#065F46]',
-      dot: 'bg-[#10B981]',
-      label: 'Round 2 Completed',
-      sub: 'All interviews have concluded. Candidates are ready for the probation round.',
-      pulse: false,
-    };
+  if (mode === 'round1') {
+    // 1. FORM ĐANG MỞ
+    if (cohort.isRecruitmentActive) {
+      toneConfig = {
+        ring: 'ring-emerald-200',
+        chip: 'bg-[#D1FAE5] text-[#065F46]',
+        dot: 'bg-[#10B981]',
+        label: 'Recruitment Open',
+        sub: 'Actively accepting new applications from the recruitment form.',
+        pulse: true,
+      };
+    }
+    // 2. FORM ĐÃ ĐÓNG NHƯNG CHƯA CHỐT ĐIỂM (ĐANG CHẤM)
+    else if (!isRound1Locked) {
+      toneConfig = {
+        ring: 'ring-blue-200',
+        chip: 'bg-[#DBEAFE] text-[#1E40AF]',
+        dot: 'bg-[#3B82F6]',
+        label: 'Applications Closed · Evaluating',
+        sub: 'Recruitment form has closed. Department Heads are currently evaluating submissions.',
+        pulse: true, // Vẫn nháy pulse báo hiệu công việc đang diễn ra
+      };
+    }
+    // 3. FORM ĐÃ ĐÓNG VÀ ĐÃ CHỐT ĐIỂM XONG
+    else {
+      toneConfig = {
+        ring: 'ring-amber-200',
+        chip: 'bg-[#FEF3C7] text-[#92400E]',
+        dot: 'bg-[#F59E0B]',
+        label: 'Round 1 Locked',
+        sub: 'All evaluations are finalized. Passed candidates have been moved to the interview pool.',
+        pulse: false, // Tắt pulse vì mọi thứ đã chốt cứng
+      };
+    }
+  }
+  else if (mode === 'round2') {
+    if (!isRound2Locked) {
+      toneConfig = {
+        ring: 'ring-blue-200',
+        chip: 'bg-[#DBEAFE] text-[#1E40AF]',
+        dot: 'bg-[#3B82F6]',
+        label: 'Interviews In Progress',
+        sub: 'Actively conducting interviews and evaluating candidates.',
+        pulse: true,
+      };
+    } else {
+      toneConfig = {
+        ring: 'ring-emerald-200',
+        chip: 'bg-[#D1FAE5] text-[#065F46]',
+        dot: 'bg-[#10B981]',
+        label: 'Round 2 Completed',
+        sub: 'All interviews have concluded. Passed candidates are ready for the probation round.',
+        pulse: false,
+      };
+    }
   }
 
   return (

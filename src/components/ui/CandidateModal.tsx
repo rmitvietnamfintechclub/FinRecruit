@@ -29,7 +29,7 @@ interface CandidateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateStatus: (id: string, newStatus: 'Pass' | 'Fail' | 'Pending') => void;
-  detailApi?: 'head' | 'executive';
+  detailApi?: 'head' | 'executive' | 'member-dashboard';
   readOnly?: boolean;
 }
 
@@ -99,7 +99,12 @@ export const CandidateModal: FC<CandidateModalProps> = ({
           return;
         }
 
-        const res = await fetch(`/api/head-dashboard/candidates/${id}`, {
+        const endpoint =
+          detailApi === 'member-dashboard'
+            ? `/api/member-dashboard/candidates/${id}`
+            : `/api/head-dashboard/candidates/${id}`;
+
+        const res = await fetch(endpoint, {
           credentials: 'include',
         });
         const json = (await res.json()) as HeadDetailResponse;
