@@ -203,7 +203,7 @@ export function UserManagementDataTable({
                 <p className="truncate text-sm font-bold text-gray-900">
                   {label}
                 </p>
-                <p className="truncate text-xs font-medium text-gray-500">
+                <p className="text-xs font-medium text-gray-500">
                   {r.email}
                 </p>
               </div>
