@@ -50,6 +50,12 @@ type StatisticsPayload = {
   };
 };
 
+type DepartmentProgress = {
+  department: string;
+  evaluated: number;
+  total: number;
+};
+
 // --- UI CONFIG ---
 const DEPT_UI: Record<
   (typeof HEAD_DEPARTMENTS)[number],
@@ -116,16 +122,56 @@ export function ExecutiveHomeClient() {
   const [stats, setStats] = useState<StatisticsPayload['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deptStats, setDeptStats] = useState<DepartmentProgress[]>([]);
 
   const { triggerSessionExpired } = useSessionExpired();
+
+  const fetchCounts = useCallback(async (deptName: string | null) => {
+    const dParam = deptName
+      ? `department=${encodeURIComponent(deptName)}&`
+      : '';
+    const base = '/api/executive/candidates';
+
+    try {
+      const [rAll, rP] = await Promise.all([
+        fetch(`${base}?${dParam}limit=1`, { credentials: 'include' }),
+        fetch(`${base}?${dParam}status=Pending&limit=1`, {
+          credentials: 'include',
+        }),
+      ]);
+
+      const [jAll, jP] = await Promise.all([
+        rAll.json().catch(() => ({})),
+        rP.json().catch(() => ({})),
+      ]);
+
+      return {
+        total: jAll.data?.count ?? 0,
+        pending: jP.data?.count ?? 0,
+      };
+    } catch {
+      return { total: 0, pending: 0 };
+    }
+  }, []);
 
   const loadAllData = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      const [dashRes, statsRes] = await Promise.all([
+      const [dashRes, statsRes, breakdownData] = await Promise.all([
         fetch('/api/executive/dashboard', { credentials: 'include' }),
         fetch('/api/executive/statistics', { credentials: 'include' }),
+        // Lấy số liệu đếm của cả 4 phòng ban
+        Promise.all(
+          HEAD_DEPARTMENTS.map(async (d) => {
+            const c = await fetchCounts(d);
+            return {
+              department: d,
+              total: c.total,
+              evaluated: Math.max(c.total - c.pending, 0),
+            };
+          })
+        ),
       ]);
 
       const dashJson = (await dashRes.json()) as DashboardPayload;
@@ -140,6 +186,7 @@ export function ExecutiveHomeClient() {
 
       setDashboard(dashJson);
       setStats(statsJson.data ?? null);
+      setDeptStats(breakdownData);
     } catch (e) {
       const errorMessage =
         e instanceof Error ? e.message : 'Failed to load executive overview.';
@@ -156,7 +203,7 @@ export function ExecutiveHomeClient() {
     } finally {
       setLoading(false);
     }
-  }, [triggerSessionExpired]);
+  }, [triggerSessionExpired, fetchCounts]);
 
   useEffect(() => {
     void loadAllData();
@@ -182,7 +229,7 @@ export function ExecutiveHomeClient() {
     loading || hasPendingGuests || departmentsMissingHeads.length > 0;
 
   return (
-    <div className="space-y-6 mt-4 animate-in fade-in duration-500 pb-12">
+    <div className="space-y-6 mt-4 animate-in fade-in duration-500 pb-6">
       {error && (
         <AppNotice variant="error" onDismiss={() => setError(null)}>
           {error}
@@ -193,7 +240,6 @@ export function ExecutiveHomeClient() {
       <section className="relative overflow-hidden rounded-[24px] border border-gray-200 bg-white p-8 shadow-sm">
         <div className="absolute -right-20 -top-20 z-0 h-64 w-64 rounded-full bg-linear-to-br from-[#DCB968]/20 to-[#0D1742]/5 opacity-50 blur-3xl"></div>
         <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-          
           <div className="flex items-center gap-6">
             <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFEFCA] text-[#A28436] shadow-sm">
               <i className="fa-solid fa-bullseye text-2xl" />
@@ -214,7 +260,8 @@ export function ExecutiveHomeClient() {
                 )}
               </h3>
               <p className="text-sm font-medium text-[#5E5E92] mt-1">
-                New form submissions and role assignments are mapped to this period.
+                New form submissions and role assignments are mapped to this
+                period.
               </p>
             </div>
           </div>
@@ -233,14 +280,15 @@ export function ExecutiveHomeClient() {
                 {recruitmentOn ? 'Accepting Responses' : 'Form Closed'}
               </p>
             </div>
-            {/* Lưu ý: Nếu ở trang Overview không cho phép gạt mở/đóng Form, 
-                bạn có thể thay Switch bằng thẻ hiển thị trạng thái tĩnh, 
-                hoặc giữ nguyên Switch nhưng set thêm thuộc tính disabled */}
             <div className="flex items-center justify-center size-8 rounded-full bg-white shadow-sm border border-gray-200">
-                <span className={cn("size-3 rounded-full", recruitmentOn ? "bg-emerald-500" : "bg-red-500")} />
+              <span
+                className={cn(
+                  'size-3 rounded-full',
+                  recruitmentOn ? 'bg-emerald-500' : 'bg-red-500'
+                )}
+              />
             </div>
           </div>
-
         </div>
       </section>
 
@@ -422,11 +470,14 @@ export function ExecutiveHomeClient() {
       </div>
 
       {/* 5. STAGE GATES / TRANSITION STRIP (FULL WIDTH Ở CUỐI) */}
-      <div className="pt-6">
+      <div className="pt-2">
         <h2 className="mb-4 text-sm font-black uppercase tracking-[0.15em] text-gray-400 pl-2">
           Round Transitions
         </h2>
-        <DepartmentTransitionStrip />
+        <DepartmentTransitionStrip
+          isRecruitmentActive={active?.isRecruitmentActive ?? false}
+          deptStats={deptStats}
+        />
       </div>
     </div>
   );

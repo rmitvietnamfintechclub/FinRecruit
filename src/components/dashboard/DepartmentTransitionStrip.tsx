@@ -12,13 +12,26 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-export function DepartmentTransitionStrip() {
+type DepartmentProgress = {
+  department: string;
+  evaluated: number;
+  total: number;
+};
+
+interface DepartmentTransitionStripProps {
+  isRecruitmentActive?: boolean;
+  deptStats?: DepartmentProgress[];
+}
+
+export function DepartmentTransitionStrip({
+  isRecruitmentActive = false,
+  deptStats = [],
+}: DepartmentTransitionStripProps) {
   const states = useDepartmentStates();
   const locked = lockedCount(states);
   const total = HEAD_DEPARTMENTS.length;
   const percentage = total > 0 ? Math.round((locked / total) * 100) : 0;
 
-  // Tính toán màu sắc của thanh tiến độ dựa trên %
   const progressColor =
     percentage === 100
       ? 'from-emerald-400 to-green-500'
@@ -33,7 +46,7 @@ export function DepartmentTransitionStrip() {
               Round 1 Evaluation Status
             </CardTitle>
             <CardDescription className="text-sm font-medium mt-0.5">
-              Departments that have finalized their Round 1 screening.
+              Departments that have finalized their Round 1 evaluation.
             </CardDescription>
           </div>
           <div className="text-right">
@@ -49,13 +62,11 @@ export function DepartmentTransitionStrip() {
       </CardHeader>
 
       <CardContent className="pt-6 space-y-6">
-        {/* Progress Bar Chuẩn SaaS */}
         <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-100 shadow-inner">
           <div
             className={cn(
               'absolute left-0 top-0 h-full rounded-full bg-linear-to-r transition-all duration-1000 ease-out',
               progressColor,
-              // Hiệu ứng "shimmer/pulse" nhẹ cho dải tiến độ khi chưa hoàn thành 100%
               percentage > 0 &&
                 percentage < 100 &&
                 'after:absolute after:inset-0 after:animate-[shimmer_2s_infinite] after:bg-linear-to-r after:from-transparent after:via-white/20 after:to-transparent'
@@ -69,6 +80,14 @@ export function DepartmentTransitionStrip() {
             const isLocked =
               states.find((state) => state.department === department)
                 ?.isRound1Locked ?? false;
+            const stat = deptStats.find((s) => s.department === department);
+
+            const isPendingLock =
+              !isLocked &&
+              !isRecruitmentActive &&
+              stat &&
+              stat.total > 0 &&
+              stat.evaluated === stat.total;
 
             return (
               <div
@@ -77,29 +96,43 @@ export function DepartmentTransitionStrip() {
                   'flex items-center justify-between w-full gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm font-bold transition-all duration-300 shadow-sm',
                   isLocked
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    : isPendingLock
+                      ? 'border-amber-200 bg-amber-50 text-amber-800'
+                      : 'border-blue-200 bg-blue-50 text-blue-800'
                 )}
               >
-                {/* Tên Ban (Cắt chữ nếu quá dài để không vỡ layout) */}
-                <span className="truncate">{department}</span>
+                <div className="flex flex-col min-w-0 flex-1 mr-2">
+                  <span className="truncate text-sm tracking-tight">{department}</span>
+                  {stat && (
+                    <span className="text-[10px] font-medium opacity-70">
+                      {stat.evaluated} / {stat.total}
+                    </span>
+                  )}
+                </div>
 
-                {/* Badge Trạng Thái Nằm Gọn Bên Trong */}
                 <div
                   className={cn(
-                    'flex shrink-0 items-center justify-center rounded-full text-[10px] font-black uppercase tracking-widest px-2 py-0.5',
+                    'flex shrink-0 items-center justify-center rounded-full text-[10px] font-black uppercase tracking-widest px-2 py-0.5 border',
                     isLocked
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-100 text-gray-500 border border-gray-200/60'
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : isPendingLock
+                        ? 'bg-amber-100 text-amber-700 border-amber-200'
+                        : 'bg-blue-100 text-blue-700 border-blue-200'
                   )}
                 >
                   {isLocked ? (
                     <>
                       <i className="fa-solid fa-lock mr-1.5" /> Locked
                     </>
+                  ) : isPendingLock ? (
+                    <>
+                      <i className="fa-solid fa-hourglass-half mr-1.5" />{' '}
+                      Pending
+                    </>
                   ) : (
                     <>
-                      <i className="fa-solid fa-hourglass-half mr-1.5 animate-pulse" />{' '}
-                      Pending
+                      <i className="fa-solid fa-spinner fa-spin mr-1.5" />{' '}
+                      Eval
                     </>
                   )}
                 </div>
