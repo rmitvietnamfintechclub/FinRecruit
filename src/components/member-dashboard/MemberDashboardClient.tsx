@@ -21,6 +21,9 @@ import {
 import { Tooltip, TooltipProvider } from '@/components/ui/Tooltip';
 import { useSessionExpired } from '@/components/providers/SessionExpiredProvider';
 
+// IMPORT COMPONENT VỪA TẠO VÀO ĐÂY
+import { RoundTransitionBar } from '@/components/member-dashboard/RoundTransitionBar';
+
 const PAGE_SIZE = 12;
 
 const AnimatedNumber = ({ value }: { value: number }) => {
@@ -160,7 +163,6 @@ export default function MemberDashboardClient() {
         const q = searchQuery.trim();
         if (q) params.set('search', q);
 
-        // <-- URL API cho Member
         const res = await fetch(`/api/member-dashboard/candidates?${params}`, {
           credentials: 'include',
         });
@@ -274,10 +276,7 @@ export default function MemberDashboardClient() {
 
   const filterOptions = ['All', 'Pending', 'Pass', 'Fail'];
 
-  // UI Progress Bar Read-only cho Member
   const evaluatedCount = Math.max(stats.total - stats.pending, 0);
-  const percentage =
-    stats.total > 0 ? Math.round((evaluatedCount / stats.total) * 100) : 0;
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -311,7 +310,7 @@ export default function MemberDashboardClient() {
           </AppNotice>
         )}
 
-        {/* 1. Round Toggle (Đồng bộ logic y hệt Head) */}
+        {/* 1. Round Toggle */}
         {headDepartment || loading ? (
           <RoundModeTabs
             mode={mode}
@@ -324,7 +323,7 @@ export default function MemberDashboardClient() {
         {/* 2. Cohort Banner */}
         <CohortBanner
           cohort={activeCohort}
-          variant="default" // Member dùng default
+          variant="default"
           scopeLabel={assignedDepartment ? `${assignedDepartment}` : undefined}
           mode={mode}
           isRound1Locked={isRound1Locked}
@@ -402,7 +401,7 @@ export default function MemberDashboardClient() {
         {/* KHÔNG RENDER VÒNG 1 KHI ĐANG Ở TAB VÒNG 2 */}
         {mode === 'round1' && (
           <>
-            {/* 4. Filter / Action Bar (Read-Only, Không có nút Export) */}
+            {/* 4. Filter / Action Bar */}
             <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex w-full overflow-x-auto rounded-xl bg-gray-100 p-1 sm:w-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {filterOptions.map((option) => (
@@ -470,68 +469,19 @@ export default function MemberDashboardClient() {
               </div>
             </div>
 
-            {/* 5. Read-Only Progress Bar */}
+            {/* 5. Read-Only Progress Bar TÁCH COMPONENT MỚI */}
             <div className="relative mt-4">
-              {headDepartment && (
-                <section
-                  aria-label="Round 1 evaluation status"
-                  className="mb-6 flex flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
-                >
-                  <div className="mb-2 flex w-full sm:max-w-xl items-center justify-between">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
-                      Round 1 Progress • {headDepartment}
-                    </p>
-                    {/* LOGIC TRẠNG THÁI (EVALUATING -> PENDING LOCK -> LOCKED) */}
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${
-                        isRound1Locked
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : percentage === 100
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-blue-50 text-blue-700 border-blue-200'
-                      }`}
-                    >
-                      <i
-                        className={`fa-solid ${
-                          isRound1Locked
-                            ? 'fa-lock'
-                            : percentage === 100
-                              ? 'fa-hourglass-half'
-                              : 'fa-spinner fa-spin'
-                        }`}
-                      />
-                      {isRound1Locked
-                        ? 'Locked'
-                        : percentage === 100
-                          ? 'Pending Lock'
-                          : 'Evaluating'}
-                    </span>
-                  </div>
-
-                  <div className="w-full sm:max-w-xl">
-                    <h2 className="text-xl font-black tracking-tight text-[#0D1742]">
-                      {stats.total === 0
-                        ? 'No candidates'
-                        : isRound1Locked
-                          ? 'Evaluation closed — Results are final'
-                          : percentage === 100
-                            ? `Complete — ${evaluatedCount} evaluated`
-                            : `In progress — ${evaluatedCount} of ${stats.total} evaluated`}
-                    </h2>
-                    <div
-                      className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100"
-                      role="progressbar"
-                      aria-valuenow={evaluatedCount}
-                      aria-valuemin={0}
-                      aria-valuemax={stats.total}
-                    >
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 bg-[#10B981] `}
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                </section>
+              {(headDepartment || loading) && (
+                <RoundTransitionBar
+                  department={headDepartment ?? 'Loading...'}
+                  evaluated={evaluatedCount}
+                  total={stats.total}
+                  isLocked={isRound1Locked}
+                  isRecruitmentActive={
+                    activeCohort?.isRecruitmentActive ?? false
+                  }
+                  isLoading={loading} 
+                />
               )}
 
               {/* 6. Candidate Table */}
@@ -592,10 +542,9 @@ export default function MemberDashboardClient() {
           </>
         )}
 
-        {/* KHU VỰC VÒNG 2 (Tích hợp Round2DashboardClient sau này) */}
+        {/* KHU VỰC VÒNG 2 */}
         {mode === 'round2' && (
           <div className="mt-4 animate-in fade-in slide-in-from-bottom-2">
-            {/* <Round2DashboardClient viewerRole="Member" /> */}
             <div className="flex min-h-75 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white py-20 text-center shadow-sm">
               <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-blue-50">
                 <i className="fa-solid fa-person-chalkboard text-3xl text-blue-500" />

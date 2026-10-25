@@ -19,6 +19,7 @@ type RoundTransitionBarProps = {
     isRound1Locked: boolean;
   }>;
   departmentStats?: DepartmentProgress[];
+  isRecruitmentActive?: boolean; // <-- THÊM PROP NÀY
 };
 
 export function RoundTransitionBar({
@@ -28,12 +29,15 @@ export function RoundTransitionBar({
   isLocked,
   departmentStates = [],
   departmentStats = [],
+  isRecruitmentActive = false, // <-- GIÁ TRỊ MẶC ĐỊNH
 }: RoundTransitionBarProps) {
   const percentage = total > 0 ? Math.round((evaluated / total) * 100) : 0;
-  const isEvaluatedAll = evaluated === total && total > 0;
-
+  
   // 1. NẾU ĐANG CHỌN 1 PHÒNG BAN CỤ THỂ
   if (department) {
+    // LOGIC CHUẨN: Chưa khóa + Form Đã Đóng + Chấm xong hết
+    const isPendingLock = !isLocked && !isRecruitmentActive && evaluated === total;
+
     return (
       <section
         aria-label="Round 1 evaluation status"
@@ -44,14 +48,14 @@ export function RoundTransitionBar({
             Round 1 Progress • {department}
           </p>
 
-          {/* BADGE TRẠNG THÁI RÕ RÀNG TRÁNH GÂY HIỂU LẦM */}
+          {/* BADGE TRẠNG THÁI RÕ RÀNG */}
           {isLocked ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-600">
               <i className="fa-solid fa-lock" /> Locked
             </span>
-          ) : isEvaluatedAll ? (
+          ) : isPendingLock ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700">
-              <i className="fa-solid fa-unlock" /> Pending Lock
+              <i className="fa-solid fa-hourglass-half" /> Pending Lock
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-blue-600">
@@ -66,8 +70,8 @@ export function RoundTransitionBar({
               ? 'No candidates'
               : isLocked
                 ? `Evaluation closed — Results are final`
-                : isEvaluatedAll
-                  ? `Complete — ${evaluated} evaluated`
+                : isPendingLock
+                  ? `All evaluated — Waiting to lock`
                   : `In progress — ${evaluated} of ${total} evaluated`}
           </h2>
           <div
@@ -78,7 +82,9 @@ export function RoundTransitionBar({
             aria-valuenow={evaluated}
           >
             <div
-              className="h-full rounded-full bg-[#10B981] transition-all duration-500"
+              className={`h-full rounded-full transition-all duration-500 ${
+                isPendingLock ? 'bg-amber-400' : 'bg-[#10B981]'
+              }`}
               style={{ width: `${percentage}%` }}
             />
           </div>
@@ -87,13 +93,14 @@ export function RoundTransitionBar({
     );
   }
 
-  // 2. NẾU ĐANG CHỌN "ALL DEPARTMENTS" (Breakdown View)
   const lockedCount = ROUND_TRANSITION_DEPARTMENTS.filter((dept) => {
     const state = departmentStates.find((s) => s.department === dept);
     return state?.isRound1Locked;
   }).length;
 
   const isAllLocked = lockedCount === ROUND_TRANSITION_DEPARTMENTS.length;
+  // LOGIC CHUẨN: Chưa khóa hết + Form đóng + Toàn bộ CLB đã chấm xong
+  const isOverallPendingLock = !isAllLocked && !isRecruitmentActive && evaluated === total;
 
   return (
     <section
@@ -111,9 +118,9 @@ export function RoundTransitionBar({
               <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-600">
                 <i className="fa-solid fa-lock" /> All Locked
               </span>
-            ) : isEvaluatedAll ? (
+            ) : isOverallPendingLock ? (
               <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700">
-                <i className="fa-solid fa-unlock" /> Pending Locks
+                <i className="fa-solid fa-hourglass-half" /> Pending Locks
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-blue-600">
@@ -126,9 +133,9 @@ export function RoundTransitionBar({
             {total === 0
               ? 'No candidates'
               : isAllLocked
-                ? `Complete — ${evaluated} evaluated`
-                : isEvaluatedAll
-                  ? `Evaluated — ${evaluated} candidates`
+                ? `Evaluation complete — Results are final`
+                : isOverallPendingLock
+                  ? `All evaluated — Waiting for locks`
                   : `In progress — ${evaluated} of ${total} evaluated`}
           </h2>
           <div
@@ -139,7 +146,9 @@ export function RoundTransitionBar({
             aria-valuenow={evaluated}
           >
             <div
-              className="h-full rounded-full bg-[#10B981] transition-all duration-500"
+              className={`h-full rounded-full transition-all duration-500 ${
+                isOverallPendingLock ? 'bg-amber-400' : 'bg-[#10B981]'
+              }`}
               style={{ width: `${percentage}%` }}
             />
           </div>
@@ -186,10 +195,10 @@ export function RoundTransitionBar({
 
               const deptEvaluated = deptStat?.evaluated ?? 0;
               const deptTotal = deptStat?.total ?? 0;
-
               const isEmpty = deptTotal === 0;
-              const isDeptEvaluatedAll =
-                !isEmpty && deptEvaluated === deptTotal;
+
+              // LOGIC CHUẨN: Chưa khóa + Form đóng + Đã chấm hết 
+              const isDeptPendingLock = !isDeptLocked && !isRecruitmentActive && deptEvaluated === deptTotal;
 
               return (
                 <div
@@ -197,8 +206,8 @@ export function RoundTransitionBar({
                   className={`flex flex-col p-3 rounded-xl border transition-colors ${
                     isDeptLocked
                       ? 'border-emerald-200 bg-emerald-50/50'
-                      : isDeptEvaluatedAll
-                        ? 'border-amber-200 bg-amber-50/50' // Highlight phòng ban quên khóa
+                      : isDeptPendingLock
+                        ? 'border-amber-200 bg-amber-50/50'
                         : 'border-gray-200 bg-white'
                   }`}
                 >
@@ -207,7 +216,7 @@ export function RoundTransitionBar({
                       className={`text-xs font-bold truncate pr-2 ${
                         isDeptLocked
                           ? 'text-emerald-900'
-                          : isDeptEvaluatedAll
+                          : isDeptPendingLock
                             ? 'text-amber-900'
                             : 'text-[#0D1742]'
                       }`}
@@ -221,7 +230,7 @@ export function RoundTransitionBar({
                       className={`text-[11px] font-black ${
                         isDeptLocked
                           ? 'text-emerald-700'
-                          : isDeptEvaluatedAll
+                          : isDeptPendingLock
                             ? 'text-amber-700'
                             : 'text-[#5E5E92]'
                       }`}
@@ -238,9 +247,9 @@ export function RoundTransitionBar({
                       <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-gray-500 bg-gray-100">
                         Empty
                       </span>
-                    ) : isDeptEvaluatedAll ? (
+                    ) : isDeptPendingLock ? (
                       <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-100/50">
-                        <i className="fa-solid fa-unlock" /> Pending
+                        <i className="fa-solid fa-hourglass-half" /> Pending
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-700 bg-blue-50">

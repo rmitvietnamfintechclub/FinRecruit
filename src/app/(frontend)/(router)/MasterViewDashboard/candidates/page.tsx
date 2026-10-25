@@ -715,6 +715,7 @@ export default function MasterCandidatesPage() {
               isLocked={isCurrentDeptLocked} // ĐÃ ĐỔI THÀNH BIẾN MỚI
               departmentStates={departmentStates}
               departmentStats={deptStats}
+              isRecruitmentActive={activeCohort?.isRecruitmentActive ?? false}
             />
           </div>
 
