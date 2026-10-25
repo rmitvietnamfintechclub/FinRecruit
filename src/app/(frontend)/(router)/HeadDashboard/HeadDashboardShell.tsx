@@ -13,6 +13,8 @@ type HeadDashboardShellProps = {
   userInitial: string;
   userAvatar?: string | null;
   userSubtitle?: string;
+  title?: string;
+  showNavigation?: boolean;
 };
 
 export function HeadDashboardShell({
@@ -22,6 +24,8 @@ export function HeadDashboardShell({
   userInitial,
   userAvatar,
   userSubtitle = 'Head of',
+  title,
+  showNavigation = true,
 }: HeadDashboardShellProps) {
   const pathname = usePathname();
   const isMembers = pathname.includes('/member-management');
@@ -59,12 +63,12 @@ export function HeadDashboardShell({
 
   return (
     <DashboardAppShell
-      title={dynamicTitle} 
+      title={title ?? dynamicTitle}
       userName={userName}
       userInitial={userInitial}
       userAvatar={userAvatar}
       userSubtitle={`${userSubtitle} ${departmentLabel}`}
-      headerNav={headerNav}
+      headerNav={showNavigation ? headerNav : undefined}
     >
       {children}
     </DashboardAppShell>

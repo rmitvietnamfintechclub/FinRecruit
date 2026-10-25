@@ -73,9 +73,6 @@ export async function middleware(request: NextRequest) {
     if (role !== 'Department Head') {
       return safeRedirect(homePath);
     }
-    if (role === 'Member') {
-      return NextResponse.redirect(new URL('/MemberDashboard', request.url));
-    }
     return NextResponse.next();
   }
 

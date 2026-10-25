@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withActiveRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import {
     getActiveCohortSlots,
     publishMasterSlots,

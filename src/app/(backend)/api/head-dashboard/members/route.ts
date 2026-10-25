@@ -6,7 +6,7 @@ import {
     getDepartmentAliases,
     normalizeHeadDepartment,
 } from '@/app/(backend)/libs/departments';
-import { withRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import User from '@/app/(backend)/models/User';
 import {
     patchUserInDb,

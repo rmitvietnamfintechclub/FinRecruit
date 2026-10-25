@@ -15,9 +15,6 @@ export function getHomePathForRole(role: AppRole | undefined | null): string {
   if (role === 'Department Head') {
     return '/HeadDashboard';
   }
-  if (role === 'Member') {
-    return '/MemberDashboard';
-  }
   if (role === 'Executive Board') {
     return '/MasterViewDashboard';
   }

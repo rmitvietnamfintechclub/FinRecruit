@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withActiveRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import { getAvailabilityMonitorData } from '@/app/(backend)/libs/interview-scheduling/service';
 import type { DepartmentType } from '@/app/(backend)/types';
 

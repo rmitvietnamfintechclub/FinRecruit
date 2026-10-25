@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { withActiveRBAC } from '@/app/(backend)/middleware/auth&RBAC';
+import { withActiveRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import { getAvailabilityMonitorData } from '@/app/(backend)/libs/interview-scheduling/service';
 
 export const runtime = 'nodejs';
