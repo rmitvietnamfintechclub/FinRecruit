@@ -14,7 +14,7 @@ type RouteContext = {
 };
 
 export const PATCH = withActiveRBAC<RouteContext>(
-    'Executive Board',
+    ['Executive Board', 'Department Head'],
     async (req: NextRequest, { params, session }: { params: Promise<{ id: string }>; session: ActiveAppSession }) => {
         try {
             const { id } = await params;

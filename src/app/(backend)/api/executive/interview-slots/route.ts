@@ -8,7 +8,7 @@ import type { ActiveAppSession } from '@/app/(backend)/libs/session';
 
 export const runtime = 'nodejs';
 
-export const GET = withActiveRBAC('Executive Board', async () => {
+export const GET = withActiveRBAC(['Executive Board', 'Department Head'], async () => {
     try {
         const slots = await getActiveCohortSlots();
         return NextResponse.json({ success: true, slots });

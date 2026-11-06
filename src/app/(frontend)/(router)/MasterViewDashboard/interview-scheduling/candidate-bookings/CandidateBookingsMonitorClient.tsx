@@ -195,7 +195,14 @@ export function CandidateBookingsMonitorClient() {
     'Time',
     ...DEPARTMENT_ORDER.map((d) => DEPARTMENT_META[d].full),
   ];
-  const deptCols = ['Activity', 'Time', 'Candidate', 'Student ID', 'Room', 'Status'];
+  const deptCols = [
+    'Activity',
+    'Time',
+    'Candidate',
+    'Student ID',
+    'Room',
+    'Status',
+  ];
   const cols = view === 'all' ? allCols : deptCols;
   const tones = view === 'all' ? null : DEPARTMENT_COLORS[view];
 
@@ -331,9 +338,7 @@ export function CandidateBookingsMonitorClient() {
                             key={room}
                             className="overflow-hidden rounded-xl border border-gray-200 bg-[#E6B656] shadow-sm"
                           >
-                            <div
-                              className="border-b px-4 py-2.5"
-                            >
+                            <div className="border-b px-4 py-2.5">
                               <h3 className="text-xs font-bold uppercase tracking-widest text-[#0D1742]">
                                 Room {room}
                               </h3>
@@ -384,7 +389,11 @@ export function CandidateBookingsMonitorClient() {
                                           </span>
                                         </td>
                                         {DEPARTMENT_ORDER.map((d) => {
-                                          const state = cellState(s, availability, d);
+                                          const state = cellState(
+                                            s,
+                                            availability,
+                                            d
+                                          );
                                           if (state === 'booked') {
                                             const booking = s.bookings?.find(
                                               (b) => b.department === d
@@ -396,14 +405,20 @@ export function CandidateBookingsMonitorClient() {
                                                   'px-4 py-3 leading-tight font-semibold border-l border-gray-100',
                                                   booking?.status === 'BOOKED'
                                                     ? 'bg-emerald-50/40'
-                                                    : booking?.status === 'NO_SHOW'
+                                                    : booking?.status ===
+                                                        'NO_SHOW'
                                                       ? 'bg-red-50/40'
                                                       : 'bg-gray-50'
                                                 )}
                                               >
                                                 <div className="flex flex-col items-center">
-                                                  <span className="text-[#0D1742] text-xs">
-                                                    {booking?.candidateName ?? 'N/A'}
+                                                  <span className="text-[#0D1742] text-xs font-bold">
+                                                    {booking?.candidateName ??
+                                                      'N/A'}
+                                                  </span>
+                                                  <span className="text-[10px] font-bold text-gray-500 mt-0.5">
+                                                    {booking?.candidateStudentId ??
+                                                      'N/A'}
                                                   </span>
                                                 </div>
                                               </td>
@@ -446,7 +461,11 @@ export function CandidateBookingsMonitorClient() {
                       <table className="w-full min-w-180 border-collapse text-center text-sm">
                         <thead>
                           <tr
-                            style={tones ? { backgroundColor: tones.medium } : undefined}
+                            style={
+                              tones
+                                ? { backgroundColor: tones.medium }
+                                : undefined
+                            }
                             className="text-white"
                           >
                             {cols.map((c) => (
@@ -477,8 +496,10 @@ export function CandidateBookingsMonitorClient() {
                               );
                             }
                             const s = row.slot;
-                            const b = s.bookings?.find((x) => x.department === view);
-                            
+                            const b = s.bookings?.find(
+                              (x) => x.department === view
+                            );
+
                             return (
                               <tr
                                 key={s.id}
@@ -508,9 +529,15 @@ export function CandidateBookingsMonitorClient() {
                                     <InteractiveStatusBadge
                                       status={b.status}
                                       onStatusChangeRequest={(newStatus) =>
-                                        handleStatusChangeRequest(s, view as InterviewDepartment, newStatus)
+                                        handleStatusChangeRequest(
+                                          s,
+                                          view as InterviewDepartment,
+                                          newStatus
+                                        )
                                       }
-                                      isPending={isUpdating && updatingSlotId === s.id}
+                                      isPending={
+                                        isUpdating && updatingSlotId === s.id
+                                      }
                                     />
                                   ) : (
                                     <span className="inline-flex items-center rounded-full border px-4 py-0.5 text-[10px] font-black uppercase tracking-widest shadow-sm bg-gray-100 border-gray-200 text-gray-500">

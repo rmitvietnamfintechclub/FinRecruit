@@ -28,7 +28,6 @@ import {
 } from '@/components/head-dashboard/RoundModeTabs';
 import { RoundTransitionBar } from '@/components/head-dashboard/RoundTransitionBar';
 import type { LockRound1Result } from '@/types/roundTransition';
-import { HeadRound2SubNav } from './HeadDashboardShell';
 import { HeadDashboardDialogs } from '@/components/head-dashboard/HeadDashboardDialogs';
 import { Tooltip, TooltipProvider } from '@/components/ui/Tooltip';
 import { useSessionExpired } from '@/components/providers/SessionExpiredProvider';
@@ -623,9 +622,6 @@ export default function HeadDashboardPage() {
           isRound1Locked={isRound1Locked}
           isRound2Locked={round2Locked}
         />
-
-        {/* 3. Sub Nav (Chỉ hiển thị khi đang ở Round 2) */}
-        {mode === 'round2' && <HeadRound2SubNav />}
 
         {/* 4. Stats Grid */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
