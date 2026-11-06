@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import {
     getActiveCohortSlots,
     submitInterviewerAvailability,
+    getAvailabilityMonitorData,
 } from '@/app/(backend)/libs/interview-scheduling/service';
 
 export const runtime = 'nodejs';
@@ -13,13 +14,26 @@ function getClientDetails(req: NextRequest) {
     return { ip, userAgent };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
+        const url = new URL(req.url);
+        const email = url.searchParams.get('email');
+
+        // BỔ SUNG: Nếu URL có query ?email=..., trả về lịch sử Availability của cá nhân đó
+        if (email) {
+            const records = await getAvailabilityMonitorData('all');
+            const userHistory = records.availability.filter(
+                (a) => a.interviewerEmail?.toLowerCase() === email.trim().toLowerCase()
+            );
+            return NextResponse.json({ success: true, availability: userHistory });
+        }
+
+        // Mặc định: Trả về danh sách Slots cho Public Page
         const slots = await getActiveCohortSlots();
         return NextResponse.json({ success: true, slots });
     } catch (e) {
         return NextResponse.json(
-            { success: false, message: e instanceof Error ? e.message : 'Failed to load slots.' },
+            { success: false, message: e instanceof Error ? e.message : 'Failed to load data.' },
             { status: 500 }
         );
     }

@@ -1,14 +1,24 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Calendar, MapPin, Info } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { SlotChip } from '@/components/interview-scheduling/SlotChip';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { DEPARTMENT_COLORS } from '@/lib/interview-scheduling/departmentColors';
 import { DEPARTMENT_META } from '@/lib/interview-scheduling/departments';
-import { formatDateBand, slotDuration, slotRangeLabel } from '@/lib/interview-scheduling/format';
-import { groupSlotsByDate, groupSlotsByRoom } from '@/lib/interview-scheduling/reducer';
+import {
+  formatDateBand,
+  slotDuration,
+  slotRangeLabel,
+} from '@/lib/interview-scheduling/format';
+import {
+  groupSlotsByDate,
+  groupSlotsByRoom,
+} from '@/lib/interview-scheduling/reducer';
 import { cn } from '@/lib/utils';
-import type { InterviewDepartment, InterviewSlot } from '@/types/interviewScheduling';
+import type {
+  InterviewDepartment,
+  InterviewSlot,
+} from '@/types/interviewScheduling';
 
 type SlotPickerProps<T extends InterviewSlot> = {
   slots: T[];
@@ -31,59 +41,156 @@ export function SlotPicker<T extends InterviewSlot>({
   band,
 }: SlotPickerProps<T>) {
   const [open, setOpen] = useState(true);
-  const byDate = useMemo(() => groupSlotsByDate(slots) as Map<string, T[]>, [slots]);
+  const byDate = useMemo(
+    () => groupSlotsByDate(slots) as Map<string, T[]>,
+    [slots]
+  );
 
   const tones = band ? DEPARTMENT_COLORS[band.department] : null;
 
   const grid = (
     <div
-      className="space-y-5 p-4 text-black"
-      style={tones ? { backgroundColor: `${tones.light}80` } : undefined}
+      className={cn('space-y-8 transition-all duration-300', band && 'py-6')}
+      style={tones ? { backgroundColor: `${tones.light}50` } : undefined}
     >
       {byDate.size === 0 ? (
-        <p className="text-muted-foreground py-6 text-center text-sm">No interview slots are available yet.</p>
+        <div className="flex flex-col items-center justify-center py-8">
+          <Calendar className="h-8 w-8 text-gray-300 mb-3" />
+          <p className="text-sm font-bold text-gray-500">
+            No interview slots available.
+          </p>
+        </div>
       ) : (
         [...byDate.entries()].map(([date, daySlots]) => (
-          <div key={date}>
-            <p className="mb-2 text-sm font-extrabold tracking-wide text-black">{formatDateBand(date)}</p>
-            {[...groupSlotsByRoom(daySlots).entries()].map(([room, list]) => (
-              <div key={room} className="mb-3">
-                <p className="mb-1.5 text-[11px] font-bold tracking-wider text-black uppercase">Room: {room}</p>
-                <div className="flex flex-wrap gap-2">
-                  {list.map((s) => (
-                    <SlotChip
-                      key={s.id}
-                      label={slotRangeLabel(s)}
-                      caption={slotDuration(s)}
-                      state={isDisabled?.(s) ? 'disabled' : isSelected(s) ? 'selected' : 'idle'}
-                      title={chipTitle?.(s)}
-                      onClick={() => onToggle(s)}
-                    />
-                  ))}
+          <div key={date} className="animate-in fade-in duration-300">
+            {/* Header Ngày */}
+            <div className="mb-4 flex items-center gap-2 px-4 sm:px-8">
+              <Calendar className="h-5 w-5 text-[#DCB968]" />
+              <h3 className="text-[15px] font-black tracking-wide text-[#0D1742] uppercase">
+                {formatDateBand(date, true)}
+              </h3>
+            </div>
+
+            <div className="space-y-6">
+              {[...groupSlotsByRoom(daySlots).entries()].map(([room, list]) => (
+                <div key={room} className="px-4 sm:px-8">
+                  {/* Header Phòng */}
+                  <div className="mb-3 flex items-center gap-1.5 text-[#5E5E92]">
+                    <MapPin className="h-4 w-4" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest">
+                      Room: {room}
+                    </span>
+                  </div>
+
+                  {/* Grid chứa Chips */}
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                    {list.map((s) => {
+                      const disabled = isDisabled?.(s) ?? false;
+                      const selected = isSelected(s);
+                      const titleMsg = chipTitle?.(s);
+
+                      const chipElement = (
+                        <button
+                          type="button"
+                          onClick={() => !disabled && onToggle(s)}
+                          disabled={disabled}
+                          className={cn(
+                            'relative flex w-full flex-col items-center justify-center rounded-2xl border p-3.5 transition-all focus:outline-none focus:ring-2 focus:ring-[#0D1742] focus:ring-offset-2',
+                            selected
+                              ? 'border-[#0D1742] bg-[#0D1742] shadow-md ring-1 ring-[#0D1742]'
+                              : disabled
+                                ? 'cursor-not-allowed border-gray-100 bg-gray-50/50 opacity-60'
+                                : 'border-gray-200 bg-white hover:border-[#0D1742]/30 hover:bg-gray-50 hover:shadow-sm'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'text-sm font-black tracking-tight',
+                              selected
+                                ? 'text-[#DCB968]'
+                                : disabled
+                                  ? 'text-gray-400'
+                                  : 'text-gray-900'
+                            )}
+                          >
+                            {slotRangeLabel(s)}
+                          </span>
+                          <span
+                            className={cn(
+                              'mt-1 text-[10px] font-bold uppercase tracking-widest',
+                              selected ? 'text-white/80' : 'text-gray-400'
+                            )}
+                          >
+                            {slotDuration(s)}
+                          </span>
+
+                          {/* Icon cảnh báo nhỏ nếu bị disabled */}
+                          {disabled && (
+                            <Info className="absolute top-2 right-2 h-3 w-3 text-gray-400 opacity-50" />
+                          )}
+                        </button>
+                      );
+
+                      // Sử dụng Tooltip component đã wrap sẵn của bạn
+                      if (disabled && titleMsg) {
+                        return (
+                          <Tooltip key={s.id} content={titleMsg}>
+                            <div className="w-full h-full cursor-not-allowed">
+                              {chipElement}
+                            </div>
+                          </Tooltip>
+                        );
+                      }
+
+                      return (
+                        <div key={s.id} className="w-full h-full">
+                          {chipElement}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         ))
       )}
     </div>
   );
 
-  if (!band) return <div className="bg-card border-border rounded-xl border">{grid}</div>;
+  if (!band) return <div className="w-full">{grid}</div>;
 
   return (
-    <div className="bg-card border-border overflow-hidden rounded-xl border">
+    <div className="overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         style={{ backgroundColor: DEPARTMENT_META[band.department].strong }}
-        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-extrabold tracking-wide text-white"
+        className="flex w-full items-center justify-between px-6 py-4 text-left transition-opacity hover:opacity-95"
       >
-        {band.label}
-        <ChevronDown className={cn('h-4 w-4 transition-transform', !open && '-rotate-90')} aria-hidden />
+        <span className="text-[15px] font-black tracking-wide text-white">
+          {band.label}
+        </span>
+        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm">
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 transition-transform duration-200',
+              !open && 'rotate-90'
+            )}
+            aria-hidden
+          />
+        </div>
       </button>
-      {open ? grid : null}
+
+      <div
+        className={cn(
+          'transition-all duration-300 ease-in-out origin-top',
+          open ? 'max-h-500 opacity-100' : 'max-h-0 opacity-0'
+        )}
+      >
+        {grid}
+      </div>
     </div>
   );
 }

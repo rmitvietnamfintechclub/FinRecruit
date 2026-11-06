@@ -10,147 +10,102 @@ import type {
   NewInterviewSlot,
   SlotMutationResult,
   SubmitAvailabilityInput,
+  InterviewDepartment,
 } from '@/types/interviewScheduling';
-import { getInterviewSchedulingApi } from '@/lib/interview-scheduling/api';
-import {
-  getAvailabilityServerSnapshot,
-  getAvailabilitySnapshot,
-  getSlotsServerSnapshot,
-  getSlotsSnapshot,
-  subscribe as subscribeMock,
-} from '@/lib/interview-scheduling/mock-store';
+import * as httpApi from '@/lib/interview-scheduling/http-api';
 
-const isMock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false';
+// ==========================================
+// GLOBAL STATE CACHE (Dành cho Real API)
+// ==========================================
+let globalSlots: InterviewSlot[] = [];
+let globalAvailability: InterviewerAvailabilityRecord[] = [];
+const EMPTY_SLOTS: InterviewSlot[] = [];
+const EMPTY_AVAILABILITY: InterviewerAvailabilityRecord[] = [];
+const listeners = new Set<() => void>();
 
-// Shared state cache & subscriber listeners for real API mode
-let realSlots: InterviewSlot[] = [];
-let realAvailability: InterviewerAvailabilityRecord[] = [];
-const realListeners = new Set<() => void>();
+const notifyListeners = () => listeners.forEach((l) => l());
+const subscribe = (l: () => void) => {
+  listeners.add(l);
+  return () => listeners.delete(l);
+};
 
-function notifyRealListeners() {
-  realListeners.forEach((listener) => listener());
-}
-
-function subscribeReal(listener: () => void) {
-  realListeners.add(listener);
-  return () => {
-    realListeners.delete(listener);
-  };
-}
-
-export async function refreshRealSlots(): Promise<void> {
+export async function refreshSlots(): Promise<void> {
   try {
-    const slots = await getInterviewSchedulingApi().listSlots();
-    realSlots = slots;
-    notifyRealListeners();
-  } catch (err) {
-    console.error('[useInterviewSlots] Failed to fetch interview slots:', err);
+    globalSlots = await httpApi.httpListSlots();
+    notifyListeners();
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('401')) {
+       console.warn('[System] Unauthorized to fetch slots. Session might have expired.');
+    } else {
+       console.error('[System] Failed to fetch slots:', err);
+    }
   }
 }
 
-export async function refreshRealAvailability(): Promise<void> {
+export async function refreshAvailability(): Promise<void> {
   try {
-    const data = await getInterviewSchedulingApi().getAvailabilityMonitor();
-    realSlots = data.slots;
-    realAvailability = data.availability;
-    notifyRealListeners();
-  } catch (err) {
-    console.error('[useAvailabilityRecords] Failed to fetch availability records:', err);
+    const data = await httpApi.httpGetAvailabilityMonitor();
+    globalSlots = data.slots;
+    globalAvailability = data.availability;
+    notifyListeners();
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes('401')) {
+       console.warn('[System] Unauthorized to fetch availability. Session might have expired.');
+    } else {
+       console.error('[System] Failed to fetch availability:', err);
+    }
   }
 }
 
-/**
- * Returns all interview slots for the current active cohort.
- * Reads from the mock store in mock mode, or fetches from the real backend with auto-polling.
- */
+// ==========================================
+// DATA FETCHING HOOKS
+// ==========================================
 export function useInterviewSlots(): InterviewSlot[] {
   useEffect(() => {
-    if (isMock) return;
-
-    void refreshRealSlots();
-
-    // Poll every 15s when visible to capture bookings made in other tabs/browsers
+    void refreshSlots();
     const interval = setInterval(() => {
-      if (!document.hidden) {
-        void refreshRealSlots();
-      }
+      if (!document.hidden) void refreshSlots();
     }, 15_000);
-
     return () => clearInterval(interval);
   }, []);
 
-  const mockSlots = useSyncExternalStore(
-    subscribeMock,
-    getSlotsSnapshot,
-    getSlotsServerSnapshot
+  return useSyncExternalStore(
+    subscribe,
+    () => globalSlots,
+    () => EMPTY_SLOTS
   );
-
-  const serverSlots = useSyncExternalStore(
-    subscribeReal,
-    () => realSlots,
-    () => []
-  );
-
-  return isMock ? mockSlots : serverSlots;
 }
 
-/**
- * Returns interviewer availability declarations for all published slots.
- * Reads from the mock store in mock mode, or fetches from the real backend with auto-polling.
- */
 export function useAvailabilityRecords(): InterviewerAvailabilityRecord[] {
   useEffect(() => {
-    if (isMock) return;
-
-    void refreshRealAvailability();
-
-    // Poll every 15s when visible to update the availability matrix dynamically
+    void refreshAvailability();
     const interval = setInterval(() => {
-      if (!document.hidden) {
-        void refreshRealAvailability();
-      }
+      if (!document.hidden) void refreshAvailability();
     }, 15_000);
-
     return () => clearInterval(interval);
   }, []);
 
-  const mockAvailability = useSyncExternalStore(
-    subscribeMock,
-    getAvailabilitySnapshot,
-    getAvailabilityServerSnapshot
+  return useSyncExternalStore(
+    subscribe,
+    () => globalAvailability,
+    () => EMPTY_AVAILABILITY
   );
-
-  const serverAvailability = useSyncExternalStore(
-    subscribeReal,
-    () => realAvailability,
-    () => []
-  );
-
-  return isMock ? mockAvailability : serverAvailability;
 }
 
 export function useInterviewLinks(): InterviewLinks | null {
   const [links, setLinks] = useState<InterviewLinks | null>(null);
-
   useEffect(() => {
-    let cancelled = false;
-    getInterviewSchedulingApi()
-      .getLinks()
-      .then((l) => {
-        if (!cancelled) setLinks(l);
-      })
-      .catch(() => {
-        /* links stay null; callers render fallback/placeholder */
-      });
-    return () => {
-      cancelled = true;
-    };
+    httpApi
+      .httpGetLinks()
+      .then(setLinks)
+      .catch(() => {});
   }, []);
-
   return links;
 }
 
-/** Shared pending/error wrapper for one mutation action. */
+// ==========================================
+// MUTATION ACTION HOOK (Wrapper xử lý Pending/Error)
+// ==========================================
 function useAction<A extends unknown[], R>(
   run: (...args: A) => Promise<R>,
   fallbackMessage: string
@@ -180,11 +135,9 @@ function useAction<A extends unknown[], R>(
 export function usePublishSlots() {
   const { execute, pending, error } = useAction(
     async (slots: NewInterviewSlot[]) => {
-      const createdSlots = await getInterviewSchedulingApi().publishSlots(slots);
-      if (!isMock) {
-        realSlots = createdSlots;
-        notifyRealListeners();
-      }
+      const createdSlots = await httpApi.httpPublishSlots(slots);
+      globalSlots = createdSlots;
+      notifyListeners();
       return createdSlots;
     },
     'Failed to publish slots.'
@@ -196,12 +149,12 @@ export function useUpdateSlot() {
   const { execute, pending, error } = useAction(
     async (
       id: string,
-      patch: Parameters<ReturnType<typeof getInterviewSchedulingApi>['updateSlot']>[1]
+      patch: Partial<InterviewSlot>
     ): Promise<SlotMutationResult> => {
-      const result = await getInterviewSchedulingApi().updateSlot(id, patch);
-      if (result.ok && !isMock) {
-        realSlots = result.slots;
-        notifyRealListeners();
+      const result = await httpApi.httpUpdateSlot(id, patch);
+      if (result.ok && result.slots) {
+        globalSlots = result.slots;
+        notifyListeners();
       }
       return result;
     },
@@ -210,14 +163,33 @@ export function useUpdateSlot() {
   return { update: execute, pending, error };
 }
 
+export function useUpdateSlotStatus() {
+  const { execute, pending, error } = useAction(
+    async (
+      id: string,
+      department: InterviewDepartment,
+      status: 'AVAILABLE' | 'BOOKED' | 'COMPLETED' | 'NO_SHOW'
+    ): Promise<SlotMutationResult> => {
+      const result = await httpApi.httpUpdateSlotStatus(id, department, status);
+      if (result.ok && result.slots) {
+        globalSlots = result.slots;
+        notifyListeners();
+      }
+      return result;
+    },
+    'Failed to update slot status.'
+  );
+  return { updateStatus: execute, pending, error };
+}
+
 export function useDeleteSlot() {
   const { execute, pending, error } = useAction(
     async (id: string): Promise<SlotMutationResult> => {
-      const result = await getInterviewSchedulingApi().deleteSlot(id);
-      if (result.ok && !isMock) {
-        realSlots = result.slots;
-        realAvailability = realAvailability.filter((r) => r.slotId !== id);
-        notifyRealListeners();
+      const result = await httpApi.httpDeleteSlot(id);
+      if (result.ok && result.slots) {
+        globalSlots = result.slots;
+        globalAvailability = globalAvailability.filter((r) => r.slotId !== id);
+        notifyListeners();
       }
       return result;
     },
@@ -229,10 +201,8 @@ export function useDeleteSlot() {
 export function useSubmitAvailability() {
   const { execute, pending, error } = useAction(
     async (input: SubmitAvailabilityInput) => {
-      const result = await getInterviewSchedulingApi().submitAvailability(input);
-      if (result.success && !isMock) {
-        void refreshRealAvailability();
-      }
+      const result = await httpApi.httpSubmitAvailability(input);
+      if (result.success) void refreshAvailability();
       return result;
     },
     'Failed to submit availability.'
@@ -243,10 +213,8 @@ export function useSubmitAvailability() {
 export function useConfirmBooking() {
   const { execute, pending, error } = useAction(
     async (input: ConfirmBookingInput): Promise<ConfirmBookingResult> => {
-      const result = await getInterviewSchedulingApi().confirmBooking(input);
-      if (result.ok && !isMock) {
-        void refreshRealAvailability();
-      }
+      const result = await httpApi.httpConfirmBooking(input);
+      if (result.ok) void refreshAvailability();
       return result;
     },
     'Failed to confirm booking.'

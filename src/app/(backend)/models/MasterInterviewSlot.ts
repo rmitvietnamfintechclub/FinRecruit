@@ -1,6 +1,15 @@
 import mongoose, { Schema } from 'mongoose';
-import { IMasterInterviewSlot, SLOT_STATUSES } from '@/app/(backend)/types';
+import { IMasterInterviewSlot, SLOT_STATUSES, DEPARTMENTS } from '@/app/(backend)/types';
 import { baseSchemaOptions } from './baseSchemaOptions';
+
+const SlotBookingSchema = new Schema(
+    {
+        candidateId: { type: Schema.Types.ObjectId, ref: 'Candidate', required: true },
+        department: { type: String, enum: [...DEPARTMENTS], required: true },
+        status: { type: String, enum: [...SLOT_STATUSES], default: 'BOOKED' },
+    },
+    { _id: false } 
+);
 
 const MasterInterviewSlotSchema = new Schema<IMasterInterviewSlot>(
     {
@@ -10,8 +19,12 @@ const MasterInterviewSlotSchema = new Schema<IMasterInterviewSlot>(
         startTime: { type: String, required: true },
         endTime: { type: String, required: true },
         room: { type: String, required: true },
-        status: { type: String, enum: [...SLOT_STATUSES], default: 'AVAILABLE', index: true },
-        bookedByCandidateId: { type: Schema.Types.ObjectId, ref: 'Candidate', default: null }
+        assignedDepartments: {
+            type: [String],
+            enum: [...DEPARTMENTS],
+            required: true,
+        },
+        bookings: { type: [SlotBookingSchema], default: [] }
     },
     baseSchemaOptions
 );

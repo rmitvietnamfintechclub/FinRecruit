@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { HelpCircle, AlertTriangle } from 'lucide-react'; // 1. Import icon từ lucide-react
 import { cn } from '@/lib/utils';
 
 type ConfirmDialogProps = {
@@ -49,7 +50,7 @@ export function ConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
-        className="w-full max-w-xl animate-in fade-in zoom-in-95 duration-200 rounded-3xl bg-white p-6 shadow-2xl md:p-8"
+        className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200 rounded-3xl bg-white p-6 shadow-2xl md:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col gap-5 sm:flex-row sm:gap-4">
@@ -61,15 +62,12 @@ export function ConfirmDialog({
                 : 'bg-[#F0EDFF] text-[#2C305F]'
             )}
           >
-            <i
-              className={cn(
-                'fa-solid text-xl sm:text-lg',
-                variant === 'destructive'
-                  ? 'fa-triangle-exclamation'
-                  : 'fa-circle-question'
-              )}
-              aria-hidden
-            />
+            {/* 2. Thay thế thẻ <i> Font Awesome bằng Lucide Icons */}
+            {variant === 'destructive' ? (
+              <AlertTriangle className="h-6 w-6 sm:h-5 sm:w-5" aria-hidden />
+            ) : (
+              <HelpCircle className="h-6 w-6 sm:h-5 sm:w-5" aria-hidden />
+            )}
           </div>
           <div className="mt-1 min-w-0 flex-1">
             <h3

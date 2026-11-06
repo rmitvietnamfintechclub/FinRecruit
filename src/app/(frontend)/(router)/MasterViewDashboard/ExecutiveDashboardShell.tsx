@@ -36,10 +36,10 @@ const NAV: NavItem[] = [
     ],
     subItems: [
       { label: 'Candidates', href: '/MasterViewDashboard/candidates' },
-      // {
-      //   label: 'Interview Scheduling',
-      //   href: '/MasterViewDashboard/interview-scheduling',
-      // },
+      {
+        label: 'Interview Scheduling',
+        href: '/MasterViewDashboard/interview-scheduling',
+      },
     ],
   },
   {

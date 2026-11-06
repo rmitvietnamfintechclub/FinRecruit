@@ -1,35 +1,82 @@
 'use client';
 
-import { Lock } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { AlertCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, ReactNode } from 'react';
 import { PublicPageShell } from '@/components/dashboard/PublicPageShell';
 import { SegmentedControl } from '@/components/interview-scheduling/SegmentedControl';
 import { SlotPicker } from '@/components/interview-scheduling/SlotPicker';
-import { DetailRows, TransactionalCard } from '@/components/interview-scheduling/TransactionalCard';
+import {
+  DetailRows,
+  TransactionalCard,
+} from '@/components/interview-scheduling/TransactionalCard';
 import { useConfirmBooking } from '@/hooks/use-interview-scheduling';
-import { getInterviewSchedulingApi } from '@/lib/interview-scheduling/api';
-import { DEPARTMENT_META, DEPARTMENT_ORDER } from '@/lib/interview-scheduling/departments';
-import { formatDateLong, slotDuration, slotRangeLabel } from '@/lib/interview-scheduling/format';
-import type { BookableSlot, InterviewDepartment, InterviewSlot } from '@/types/interviewScheduling';
+import { httpGetBookableSchedule } from '@/lib/interview-scheduling/http-api';
+import {
+  DEPARTMENT_META,
+  DEPARTMENT_ORDER,
+} from '@/lib/interview-scheduling/departments';
+import {
+  formatDateLong,
+  slotDuration,
+  slotRangeLabel,
+} from '@/lib/interview-scheduling/format';
+import type {
+  BookableSlot,
+  InterviewDepartment,
+  InterviewSlot,
+} from '@/types/interviewScheduling';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TooltipProvider } from '@/components/ui/Tooltip';
+import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
+import { filterSlotsByAssignedDept } from '@/lib/interview-scheduling/reducer';
 
 const CONTACT_EMAIL = 'fintechclub.sgs@rmit.edu.vn';
+
 const inputClass =
-  'border-input bg-background w-full rounded-xl border px-3 py-2.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40';
-const labelClass = 'text-muted-foreground mb-1.5 block text-[11px] font-bold tracking-wider uppercase';
-const amberBtn = 'rounded-xl bg-[#E6B656] px-5 py-2.5 text-sm font-bold text-[#010A63] hover:opacity-90 disabled:opacity-50';
+  'w-full min-w-0 rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3 text-sm font-medium text-gray-900 shadow-sm transition-all hover:border-[#0D1742]/30 focus:border-[#0D1742] focus:bg-white focus:ring-1 focus:ring-[#0D1742] focus:outline-none placeholder:text-gray-400';
+const labelClass =
+  'mb-2 block text-[11px] font-bold tracking-widest uppercase text-[#5E5E92]';
 
 type Screen =
   | { kind: 'form' }
   | { kind: 'success'; booking: InterviewSlot; email: string }
-  | { kind: 'already'; booking: InterviewSlot };
+  | { kind: 'already'; booking: InterviewSlot }
+  | {
+      kind: 'error';
+      title: string;
+      subtitle: ReactNode;
+      allowRetry?: boolean;
+      showContact?: boolean;
+    };
 
 function DeptDot({ department }: { department: InterviewDepartment }) {
   return (
     <span className="inline-flex items-center gap-2">
-      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: DEPARTMENT_META[department].strong }} />
-      {DEPARTMENT_META[department].full}
+      <span
+        className="h-2.5 w-2.5 rounded-full"
+        style={{ backgroundColor: DEPARTMENT_META[department].strong }}
+      />
+      <span className="font-bold text-gray-900">
+        {department === 'HR Department'
+          ? 'Human Resources'
+          : DEPARTMENT_META[department].full}
+      </span>
     </span>
   );
+}
+
+function getCandidateDepartment(
+  slot: InterviewSlot,
+  candidateEmail: string
+): InterviewDepartment | undefined {
+  const normalizedEmail = candidateEmail.trim().toLowerCase();
+  const studentId = normalizedEmail.split('@')[0].toUpperCase();
+  const booking = slot.bookings?.find(
+    (b) =>
+      b.candidateStudentId === studentId ||
+      b.candidateId === `cand-${normalizedEmail}`
+  );
+  return booking?.department;
 }
 
 export function IntervieweeBookingClient() {
@@ -37,19 +84,21 @@ export function IntervieweeBookingClient() {
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [department, setDepartment] = useState<InterviewDepartment>('Technology Department');
+  const [department, setDepartment] = useState<InterviewDepartment>(
+    'Technology Department'
+  );
   const [slots, setSlots] = useState<BookableSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [showUnavailable, setShowUnavailable] = useState(false);
+
   const [screen, setScreen] = useState<Screen>({ kind: 'form' });
 
   const loadSchedule = useCallback(async (dept: InterviewDepartment) => {
     setLoading(true);
     try {
-      setSlots(await getInterviewSchedulingApi().getBookableSchedule(dept));
+      setSlots(await httpGetBookableSchedule(dept));
     } catch {
       setError('Could not load interview slots. Please refresh.');
     } finally {
@@ -61,14 +110,29 @@ export function IntervieweeBookingClient() {
     void loadSchedule(department);
   }, [department, loadSchedule]);
 
-  const validEmail = /^\S+@\S+\.\S+$/.test(email.trim());
-  const selected = slots.find((s) => s.id === selectedId) ?? null;
+  const filteredSlotsForCandidate = useMemo(() => {
+    return filterSlotsByAssignedDept(slots, department) as BookableSlot[];
+  }, [slots, department]);
+
+  const selected =
+    filteredSlotsForCandidate.find((s) => s.id === selectedId) ?? null;
 
   function openConfirm() {
     setError(null);
-    if (!name.trim()) return setError('Please enter your full name.');
-    if (!validEmail) return setError('Please enter a valid student email.');
-    if (!selected) return;
+    const normalizedName = name.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedName) return setError('Please enter your full name.');
+
+    // CẬP NHẬT: Thêm cờ 'i' để không phân biệt hoa thường và check chính xác hơn
+    if (!/^s\d{7}@rmit\.edu\.vn$/i.test(normalizedEmail)) {
+      return setError(
+        'Please enter a valid RMIT student email (e.g., s1234567@rmit.edu.vn).'
+      );
+    }
+
+    if (!selected)
+      return setError('Please select a preferred interview time slot.');
     setShowConfirm(true);
   }
 
@@ -77,17 +141,88 @@ export function IntervieweeBookingClient() {
     try {
       const result = await confirm({
         name: name.trim(),
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         department,
         slotId: selected.id,
       });
       setShowConfirm(false);
+
       if (result.ok) {
-        setScreen({ kind: 'success', booking: result.booking, email: email.trim() });
+        setScreen({
+          kind: 'success',
+          booking: result.booking,
+          email: email.trim().toLowerCase(),
+        });
       } else if (result.reason === 'ALREADY_BOOKED') {
         setScreen({ kind: 'already', booking: result.existingBooking });
+      } else if (result.reason === 'CANDIDATE_NOT_FOUND') {
+        setScreen({
+          kind: 'error',
+          title: 'Email Not Found',
+          subtitle: (
+            <span className="text-gray-900 font-medium">
+              We could not find this email in our Round 1 Pass list. Please
+              ensure you are using the{' '}
+              <strong className="text-black font-black">
+                exact student email
+              </strong>{' '}
+              you registered with.
+            </span>
+          ),
+          allowRetry: true,
+          showContact: true,
+        });
+      } else if (result.reason === 'NOT_PASSED_ROUND_1') {
+        setScreen({
+          kind: 'error',
+          title: 'Not Eligible',
+          subtitle: (
+            <span className="text-gray-900 font-medium">
+              Sorry, this email is not eligible for Round 2 interview bookings
+              according to our records. Please contact us directly via our
+              email:{' '}
+              <span
+                className="font-bold text-[#DCB968] hover:text-[#b89547]"
+              >
+                {CONTACT_EMAIL}
+              </span>{' '}
+              for further assistance.
+            </span>
+          ),
+          allowRetry: false,
+          showContact: true,
+        });
+      } else if (result.reason === 'DEPARTMENT_MISMATCH') {
+        const correctDeptName = DEPARTMENT_META[result.correctDepartment].full;
+        setScreen({
+          kind: 'error',
+          title: 'Department Mismatch',
+          subtitle: (
+            <span className="text-gray-900 font-medium">
+              Our records show you are assigned to the{' '}
+              <strong className="text-black font-black">
+                {correctDeptName}
+              </strong>
+              . Please switch to the correct department tab above to book your
+              slot.
+            </span>
+          ),
+          allowRetry: true,
+          showContact: false,
+        });
       } else {
-        setShowUnavailable(true);
+        setScreen({
+          kind: 'error',
+          title: 'Slot Unavailable',
+          subtitle: (
+            <span className="text-gray-900 font-medium">
+              Another candidate just booked this time slot. Please select a
+              different time for your interview.
+            </span>
+          ),
+          allowRetry: true,
+          showContact: false,
+        });
       }
     } catch (e) {
       setShowConfirm(false);
@@ -95,45 +230,69 @@ export function IntervieweeBookingClient() {
     }
   }
 
-  const header = {
-    title: 'Register Your Interview Slot',
-    subtitle: 'Congratulations on passing Round 1! Please select a single time slot for your interview.',
+  const headerProps = {
+    title: 'Interview Booking',
+    subtitle:
+      'Congratulations! Please select a time slot for your upcoming interview.',
+    headerColor: 'navy' as const,
   };
 
   if (screen.kind === 'success') {
     const b = screen.booking;
+    const bookedDept = getCandidateDepartment(b, screen.email) ?? department;
+
     return (
-      <PublicPageShell headerColor="amber" {...header}>
+      <PublicPageShell {...headerProps} minimal>
         <TransactionalCard
           variant="success"
           title="Interview Booked"
-          subtitle="Your schedule has been successfully updated."
+          subtitle="Your interview slot has been successfully confirmed."
           actions={
-            <button type="button" onClick={() => window.location.reload()} className={`w-full ${amberBtn}`}>Done</button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="w-full rounded-xl bg-[#0D1742] px-4 py-3.5 text-sm font-bold text-[#DCB968] transition-all hover:bg-[#1a2b75] shadow-sm"
+            >
+              Done
+            </button>
           }
         >
-          <div className="space-y-4">
-            <DetailRows
-              rows={[
-                {
-                  label: 'Date & time',
-                  value: (
-                    <>
-                      {formatDateLong(b.date)}
-                      <br />
-                      <span className="text-xs font-medium text-slate-400">
+          <div className="space-y-5">
+            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+              <DetailRows
+                rows={[
+                  { label: 'Date', value: formatDateLong(b.date) },
+                  {
+                    label: 'Time',
+                    value: (
+                      <span className="tabular-nums">
                         {slotRangeLabel(b)} ({slotDuration(b)})
                       </span>
-                    </>
-                  ),
-                },
-                { label: 'Department', value: <DeptDot department={b.bookedDepartment ?? department} /> },
-                { label: 'Room', value: b.room },
-              ]}
-            />
-            <p className="rounded-xl bg-[#1B1F2E] p-3 text-xs leading-relaxed text-slate-300">
-              A calendar invitation (.ics) has been sent to your email: {screen.email}
-            </p>
+                    ),
+                  },
+                  {
+                    label: 'Department',
+                    value: <DeptDot department={bookedDept} />,
+                  },
+                  {
+                    label: 'Room',
+                    value: (
+                      <span className="font-black uppercase tracking-widest text-[#5E5E92]">
+                        {b.room}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+            <div className="flex items-start gap-3 rounded-xl bg-blue-50/50 p-4 border border-blue-100">
+              <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-[13px] leading-relaxed text-blue-800 font-medium">
+                A calendar invitation (.ics) has been sent to your email (
+                <strong className="text-blue-900">{screen.email}</strong>).
+                Please accept it to add the interview to your calendar.
+              </p>
+            </div>
           </div>
         </TransactionalCard>
       </PublicPageShell>
@@ -143,148 +302,290 @@ export function IntervieweeBookingClient() {
   if (screen.kind === 'already') {
     const b = screen.booking;
     return (
-      <PublicPageShell headerColor="amber" {...header}>
+      <PublicPageShell {...headerProps} minimal>
         <TransactionalCard
           variant="failure"
-          title="You already have a booked slot"
-          subtitle={
-            <>
-              You are currently scheduled for: {formatDateLong(b.date)}, {b.startTime} - {b.endTime}. If you need to
-              reschedule or cancel, please contact us directly via our email: {CONTACT_EMAIL}.
-            </>
-          }
+          title="Booking Exists"
+          subtitle="You already have a confirmed interview slot in our system."
           actions={
             <div className="space-y-3">
-              <a href={`mailto:${CONTACT_EMAIL}`} className={`block w-full text-center ${amberBtn}`}>Contact Us</a>
+              <a
+                href={`mailto:${CONTACT_EMAIL}`}
+                className="flex w-full items-center justify-center rounded-xl bg-[#0D1742] px-4 py-3.5 text-sm font-bold text-[#DCB968] transition-all hover:bg-[#1a2b75] shadow-sm"
+              >
+                Contact Support
+              </a>
               <button
                 type="button"
                 onClick={() => {
-                  // Back to the form; clear the email so a mistyped one can be corrected
-                  // (the same email would land here again).
                   setScreen({ kind: 'form' });
                   setEmail('');
                   setSelectedId(null);
                   setError(null);
                   void loadSchedule(department);
                 }}
-                className="w-full rounded-xl border border-[#232838] px-5 py-2.5 text-sm font-bold text-slate-300 hover:bg-white/5"
+                className="w-full rounded-xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
               >
-                Back
+                Go Back
               </button>
             </div>
           }
-        />
+        >
+          <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+            <DetailRows
+              rows={[
+                { label: 'Scheduled Date', value: formatDateLong(b.date) },
+                {
+                  label: 'Time',
+                  value: (
+                    <span className="tabular-nums">{slotRangeLabel(b)}</span>
+                  ),
+                },
+                {
+                  label: 'Room',
+                  value: (
+                    <span className="font-black uppercase tracking-widest text-[#5E5E92]">
+                      {b.room}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          </div>
+          <p className="mt-4 text-[13px] text-center text-gray-500 font-medium px-4">
+            If you need to reschedule or cancel, please contact us directly via
+            our email:{' '}
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="font-bold text-[#DCB968] hover:text-[#b89547] underline"
+            >
+              {CONTACT_EMAIL}
+            </a>
+            .
+          </p>
+        </TransactionalCard>
       </PublicPageShell>
     );
   }
 
-  return (
-    <PublicPageShell headerColor="amber" {...header}>
-      <div className="space-y-6 pb-28">
-        <section className="bg-card border-border space-y-4 rounded-2xl border p-5 shadow-sm">
-          <h2 className="text-base font-extrabold">Your Details</h2>
-          <div>
-            <label className={labelClass} htmlFor="ib-name">Full name</label>
-            <input id="ib-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Please enter your full name" className={inputClass} />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="ib-email">Student email</label>
-            <input id="ib-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Please enter your student email" className={inputClass} />
-          </div>
-          <div>
-            <p className={labelClass}>Select your applied department</p>
-            <SegmentedControl
-              ariaLabel="Applied department"
-              options={DEPARTMENT_ORDER.map((d) => ({ value: d, label: DEPARTMENT_META[d].short, color: DEPARTMENT_META[d].strong }))}
-              value={department}
-              onChange={(d) => {
-                setDepartment(d);
-                setSelectedId(null);
-              }}
-              activeClassName="bg-[#E6B656] text-[#010A63] shadow-sm"
-            />
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-extrabold">Available Slots</h2>
-            <span className="rounded-full bg-[#EAE7EF] px-3 py-1 text-xs font-bold text-slate-700">Select ONE preferred time slot</span>
-          </div>
-          {loading ? (
-            <p className="text-muted-foreground py-8 text-center text-sm">Loading slots…</p>
-          ) : (
-            <SlotPicker
-              slots={slots}
-              band={{ label: DEPARTMENT_META[department].full, department }}
-              isSelected={(s) => s.id === selectedId}
-              isDisabled={(s) => !s.bookable}
-              onToggle={(s) => setSelectedId(s.id === selectedId ? null : s.id)}
-            />
-          )}
-        </section>
-
-        <div className="bg-card border-border fixed inset-x-0 bottom-0 z-20 border-t shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-          <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3 sm:px-8">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold">
-                {selected
-                  ? `${formatDateLong(selected.date)}, ${slotRangeLabel(selected)} · Room ${selected.room}`
-                  : 'No slot selected'}
-              </p>
-              {error ? <p className="truncate text-xs font-medium text-red-600" role="alert">{error}</p> : null}
+  if (screen.kind === 'error') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <TransactionalCard
+          variant="failure"
+          title={screen.title}
+          subtitle={screen.subtitle}
+          actions={
+            <div className="space-y-3">
+              {screen.allowRetry && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScreen({ kind: 'form' });
+                    setSelectedId(null);
+                    void loadSchedule(department);
+                  }}
+                  className="w-full rounded-xl bg-[#0D1742] px-4 py-3.5 text-sm font-bold text-[#DCB968] transition-all hover:bg-[#1a2b75] shadow-sm"
+                >
+                  Try Again
+                </button>
+              )}
+              {screen.showContact && (
+                <a
+                  href={`mailto:${CONTACT_EMAIL}`}
+                  className="flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                >
+                  Contact Support
+                </a>
+              )}
+              {!screen.allowRetry && !screen.showContact && (
+                <button
+                  type="button"
+                  onClick={() => setScreen({ kind: 'form' })}
+                  className="w-full rounded-xl bg-[#0D1742] px-4 py-3.5 text-sm font-bold text-[#DCB968] transition-all hover:bg-[#1a2b75] shadow-sm"
+                >
+                  Go Back
+                </button>
+              )}
             </div>
-            <button type="button" disabled={!selected || pending} onClick={openConfirm} className={`shrink-0 ${amberBtn}`}>
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <PublicPageShell {...headerProps}>
+      <div className="mx-auto max-w-4xl space-y-8 mb-20 animate-in fade-in duration-500">
+        <Card className="rounded-[24px] border-gray-200 bg-white shadow-sm pt-0 overflow-hidden">
+          <CardHeader className="border-b border-gray-200 bg-[#0D1742] pb-4 pt-5">
+            <CardTitle className="text-[15px] font-black uppercase tracking-wider text-[#DCB968]">
+              Candidate Profile
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label className={labelClass} htmlFor="ib-name">
+                  Full Name
+                </label>
+                <input
+                  id="ib-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Please enter your full name"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="ib-email">
+                  Student Email
+                </label>
+                <input
+                  id="ib-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="sXXXXXXX@rmit.edu.vn"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <div>
+              <p className={labelClass}>Applied Department</p>
+              <SegmentedControl
+                ariaLabel="Applied department"
+                options={DEPARTMENT_ORDER.map((d) => ({
+                  value: d,
+                  label:
+                    d === 'HR Department'
+                      ? 'Human Resources'
+                      : DEPARTMENT_META[d].abbr || DEPARTMENT_META[d].short,
+                }))}
+                value={department}
+                onChange={(d) => {
+                  setDepartment(d);
+                  setSelectedId(null);
+                }}
+                activeClassName="bg-[#0D1742] text-[#DCB968] shadow-sm"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[24px] border-gray-200 bg-white shadow-sm pt-0 overflow-hidden">
+          <CardHeader className="border-b border-gray-200 bg-[#0D1742] pb-4 pt-5">
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-[15px] font-black uppercase tracking-wider text-[#DCB968]">
+                Available Slots
+              </CardTitle>
+              <span className="inline-flex items-center rounded-lg bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#DCB968] backdrop-blur-sm shadow-sm">
+                Select One
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="py-2 px-0">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <i className="fa-solid fa-spinner fa-spin text-3xl text-gray-300 mb-4" />
+                <p className="text-sm font-bold text-gray-500">
+                  Loading interview schedule...
+                </p>
+              </div>
+            ) : (
+              <TooltipProvider>
+                <SlotPicker
+                  slots={filteredSlotsForCandidate}
+                  chipTitle={(s) =>
+                    !s.bookable ? 'This session is not available.' : undefined
+                  }
+                  isSelected={(s) => s.id === selectedId}
+                  isDisabled={(s) => !s.bookable}
+                  onToggle={(s) =>
+                    setSelectedId(s.id === selectedId ? null : s.id)
+                  }
+                />
+              </TooltipProvider>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Sticky Bottom Bar */}
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/85 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.06)] transition-all">
+          <div className="mx-auto flex max-w-4xl flex-row items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
+            <div className="min-w-0 flex-1 flex flex-col justify-center">
+              <p className="text-[13px] sm:text-[15px] font-black text-[#0D1742] truncate">
+                {selected ? (
+                  <>
+                    {formatDateLong(selected.date)},{' '}
+                    <span className="text-gray-500 font-bold">
+                      {slotRangeLabel(selected)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-gray-400">No slot selected</span>
+                )}
+              </p>
+              {error && (
+                <div className="flex items-center gap-1 mt-0.5 text-red-600">
+                  <AlertCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
+                  <p
+                    className="truncate text-[10px] sm:text-[11px] font-bold tracking-wide uppercase"
+                    title={error}
+                    role="alert"
+                  >
+                    {error}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              disabled={!selected || pending}
+              onClick={openConfirm}
+              className="shrink-0 rounded-xl bg-[#0D1742] px-5 py-2.5 sm:px-8 sm:py-3.5 text-xs sm:text-sm font-bold text-[#DCB968] transition-all hover:bg-[#1a2b75] focus:outline-none focus:ring-2 focus:ring-[#0D1742]/50 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
               Confirm Booking
             </button>
           </div>
         </div>
       </div>
 
-      {showConfirm && selected ? (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-2xl border-2 border-[#FFA200] bg-white p-6 text-slate-900 shadow-2xl">
-            <h3 id="confirm-title" className="text-xl font-extrabold">Confirm Your Booking?</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              You are about to lock in your interview for {formatDateLong(selected.date)}, {selected.startTime} - {selected.endTime}.
-            </p>
-            <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm font-medium text-amber-800">
-              This action cannot be undone. You will not be able to change this slot once confirmed.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" disabled={pending} onClick={() => setShowConfirm(false)} className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
-                Cancel
-              </button>
-              <button type="button" disabled={pending} onClick={handleConfirm} className={`inline-flex items-center gap-2 ${amberBtn}`}>
-                <Lock className="h-4 w-4" aria-hidden /> {pending ? 'Locking…' : 'Confirm & Lock'}
-              </button>
+      {/* Confirmation Modal */}
+      {selected && (
+        <ConfirmDialog
+          open={showConfirm}
+          title="Confirm Booking"
+          description={
+            <div className="space-y-4">
+              <p>
+                You are about to lock in your interview for{' '}
+                <strong>{formatDateLong(selected.date)}</strong> from{' '}
+                <strong>
+                  {selected.startTime} - {selected.endTime}
+                </strong>
+                .
+              </p>
+              <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-4">
+                <p className="text-[11px] font-bold tracking-wide text-amber-800 uppercase flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" /> This action cannot be
+                  undone
+                </p>
+                <p className="mt-1 text-xs text-amber-700/80 font-medium">
+                  You will not be able to change this slot once confirmed.
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showUnavailable ? (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
-          <TransactionalCard
-            variant="failure"
-            title="Slot Unavailable"
-            subtitle="Another candidate just booked this time slot. Please select a different time for your interview."
-            actions={
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUnavailable(false);
-                  setSelectedId(null);
-                  void loadSchedule(department);
-                }}
-                className={`w-full ${amberBtn}`}
-              >
-                Choose Another Slot
-              </button>
-            }
-          />
-        </div>
-      ) : null}
+          }
+          confirmLabel="Confirm & Lock"
+          cancelLabel="Cancel"
+          onConfirm={handleConfirm}
+          onCancel={() => setShowConfirm(false)}
+          loading={pending}
+          variant="default"
+        />
+      )}
     </PublicPageShell>
   );
 }

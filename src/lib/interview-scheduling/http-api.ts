@@ -22,15 +22,22 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export async function httpListSlots(): Promise<InterviewSlot[]> {
-  const json = await request<{ slots?: InterviewSlot[] }>('/api/executive/interview-slots');
+  const json = await request<{ slots?: InterviewSlot[] }>(
+    '/api/executive/interview-slots'
+  );
   return json.slots ?? [];
 }
 
-export async function httpPublishSlots(slots: NewInterviewSlot[]): Promise<InterviewSlot[]> {
-  const json = await request<{ slots?: InterviewSlot[] }>('/api/executive/interview-slots', {
-    method: 'POST',
-    body: JSON.stringify({ slots }),
-  });
+export async function httpPublishSlots(
+  slots: NewInterviewSlot[]
+): Promise<InterviewSlot[]> {
+  const json = await request<{ slots?: InterviewSlot[] }>(
+    '/api/executive/interview-slots',
+    {
+      method: 'POST',
+      body: JSON.stringify({ slots }),
+    }
+  );
   return json.slots ?? [];
 }
 
@@ -38,13 +45,19 @@ export async function httpUpdateSlot(
   id: string,
   patch: Partial<Pick<InterviewSlot, 'date' | 'startTime' | 'endTime' | 'room'>>
 ): Promise<SlotMutationResult> {
-  const res = await fetch(`/api/executive/interview-slots/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(patch),
-  });
-  const json = (await res.json()) as { slots?: InterviewSlot[]; message?: string };
+  const res = await fetch(
+    `/api/executive/interview-slots/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(patch),
+    }
+  );
+  const json = (await res.json()) as {
+    slots?: InterviewSlot[];
+    message?: string;
+  };
   if (!res.ok) {
     return {
       ok: false,
@@ -55,12 +68,47 @@ export async function httpUpdateSlot(
   return { ok: true, slots: json.slots ?? [] };
 }
 
+export async function httpUpdateSlotStatus(
+  id: string,
+  department: InterviewDepartment, // BỔ SUNG THAM SỐ NÀY
+  status: 'AVAILABLE' | 'BOOKED' | 'COMPLETED' | 'NO_SHOW'
+): Promise<SlotMutationResult> {
+  const res = await fetch(
+    `/api/executive/interview-slots/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'include',
+      // TRUYỀN CẢ department VÀ status LÊN BACKEND[cite: 1]
+      body: JSON.stringify({ department, status }), 
+    }
+  );
+  const json = (await res.json()) as {
+    slots?: InterviewSlot[];
+    message?: string;
+  };
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: 'SLOT_NOT_FOUND',
+      message: json.message ?? `Request failed (${res.status})`,
+    };
+  }
+  return { ok: true, slots: json.slots ?? [] };
+}
+
 export async function httpDeleteSlot(id: string): Promise<SlotMutationResult> {
-  const res = await fetch(`/api/executive/interview-slots/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  const json = (await res.json()) as { slots?: InterviewSlot[]; message?: string };
+  const res = await fetch(
+    `/api/executive/interview-slots/${encodeURIComponent(id)}`,
+    {
+      method: 'DELETE',
+      credentials: 'include',
+    }
+  );
+  const json = (await res.json()) as {
+    slots?: InterviewSlot[];
+    message?: string;
+  };
   if (!res.ok) {
     return {
       ok: false,
@@ -82,15 +130,21 @@ export async function httpGetAvailabilityMonitor(): Promise<{
   return request('/api/executive/interview-availability');
 }
 
-export async function httpGetBookingsMonitor(department: InterviewDepartment | 'all'): Promise<{
+export async function httpGetBookingsMonitor(
+  department: InterviewDepartment | 'all'
+): Promise<{
   slots: InterviewSlot[];
   availability: InterviewerAvailabilityRecord[];
 }> {
-  return request(`/api/executive/interview-bookings?department=${encodeURIComponent(department)}`);
+  return request(
+    `/api/executive/interview-bookings?department=${encodeURIComponent(department)}`
+  );
 }
 
 export async function httpGetPublicAvailability(): Promise<InterviewSlot[]> {
-  const json = await request<{ slots?: InterviewSlot[] }>('/api/public/interview-availability');
+  const json = await request<{ slots?: InterviewSlot[] }>(
+    '/api/public/interview-availability'
+  );
   return json.slots ?? [];
 }
 
@@ -105,45 +159,73 @@ export async function httpSubmitAvailability(
   });
   const json = (await res.json()) as { success?: boolean; message?: string };
   if (!res.ok || !json.success) {
-    return { success: false, message: json.message ?? `Request failed (${res.status})` };
+    return {
+      success: false,
+      message: json.message ?? `Request failed (${res.status})`,
+    };
   }
   return { success: true };
 }
 
-export async function httpGetBookableSchedule(department: InterviewDepartment): Promise<BookableSlot[]> {
+export async function httpGetBookableSchedule(
+  department: InterviewDepartment
+): Promise<BookableSlot[]> {
   const json = await request<{ slots?: BookableSlot[] }>(
     `/api/public/interview-booking?department=${encodeURIComponent(department)}`
   );
   return json.slots ?? [];
 }
 
-export async function httpFindExistingBooking(email: string): Promise<InterviewSlot | null> {
+export async function httpFindExistingBooking(
+  email: string
+): Promise<InterviewSlot | null> {
   const json = await request<{ booking?: InterviewSlot | null }>(
     `/api/public/interview-booking?email=${encodeURIComponent(email)}`
   );
   return json.booking ?? null;
 }
 
-export async function httpConfirmBooking(input: ConfirmBookingInput): Promise<ConfirmBookingResult> {
+export async function httpConfirmBooking(
+  input: ConfirmBookingInput
+): Promise<ConfirmBookingResult> {
   const res = await fetch('/api/public/interview-booking', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(input),
   });
-  // 200 -> { booking }; 409 -> { reason, existingBooking? }
+  
   const json = (await res.json()) as {
     booking?: InterviewSlot;
-    reason?: 'SLOT_NO_LONGER_AVAILABLE' | 'ALREADY_BOOKED' | 'SLOT_NOT_FOUND';
+    reason?: 'SLOT_NO_LONGER_AVAILABLE' | 'ALREADY_BOOKED' | 'SLOT_NOT_FOUND' | 'CANDIDATE_NOT_FOUND' | 'NOT_PASSED_ROUND_1' | 'DEPARTMENT_MISMATCH';
     existingBooking?: InterviewSlot;
+    correctDepartment?: InterviewDepartment;
   };
-  if (res.ok && json.booking) return { ok: true, booking: json.booking, slots: [] };
+  
+  if (res.ok && json.booking)
+    return { ok: true, booking: json.booking, slots: [] };
+    
   if (json.reason === 'ALREADY_BOOKED' && json.existingBooking) {
     return { ok: false, reason: 'ALREADY_BOOKED', existingBooking: json.existingBooking };
   }
-  if (json.reason === 'SLOT_NOT_FOUND') return { ok: false, reason: 'SLOT_NOT_FOUND' };
-  if (json.reason === 'SLOT_NO_LONGER_AVAILABLE') {
-    return { ok: false, reason: 'SLOT_NO_LONGER_AVAILABLE' };
+  
+  // BẮT CÁC LỖI MỚI TỪ BACKEND
+  if (json.reason === 'DEPARTMENT_MISMATCH' && json.correctDepartment) {
+    return { ok: false, reason: 'DEPARTMENT_MISMATCH', correctDepartment: json.correctDepartment };
   }
+  if (json.reason === 'CANDIDATE_NOT_FOUND') return { ok: false, reason: 'CANDIDATE_NOT_FOUND' };
+  if (json.reason === 'NOT_PASSED_ROUND_1') return { ok: false, reason: 'NOT_PASSED_ROUND_1' };
+  if (json.reason === 'SLOT_NOT_FOUND') return { ok: false, reason: 'SLOT_NOT_FOUND' };
+  if (json.reason === 'SLOT_NO_LONGER_AVAILABLE') return { ok: false, reason: 'SLOT_NO_LONGER_AVAILABLE' };
+  
   throw new Error(`Request failed (${res.status})`);
+}
+
+export async function httpGetInterviewerHistory(
+  email: string
+): Promise<InterviewerAvailabilityRecord[]> {
+  const json = await request<{ availability?: InterviewerAvailabilityRecord[] }>(
+    `/api/public/interview-availability?email=${encodeURIComponent(email)}`
+  );
+  return json.availability ?? [];
 }

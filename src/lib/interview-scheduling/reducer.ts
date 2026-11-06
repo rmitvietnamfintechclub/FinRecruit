@@ -1,73 +1,9 @@
 import type {
-  BookingCandidate,
   CellState,
-  ConfirmBookingResult,
   InterviewDepartment,
   InterviewSlot,
   InterviewerAvailabilityRecord,
-  InterviewerIdentity,
-  NewInterviewSlot,
-  SlotMutationResult,
 } from '@/types/interviewScheduling';
-import { seedAvailability, seedSlots } from '@/lib/interview-scheduling/seed';
-
-export function createInitialSlots(): InterviewSlot[] {
-  return seedSlots();
-}
-
-export function createInitialAvailability(): InterviewerAvailabilityRecord[] {
-  return seedAvailability();
-}
-
-let idCounter = 0;
-function newId(prefix: string): string {
-  idCounter += 1;
-  return `${prefix}-${Date.now().toString(36)}-${idCounter}`;
-}
-
-export function addSlots(
-  slots: InterviewSlot[],
-  newSlots: NewInterviewSlot[]
-): InterviewSlot[] {
-  const added: InterviewSlot[] = newSlots.map((s) => ({
-    ...s,
-    id: newId('slot'),
-    status: 'AVAILABLE',
-    bookedByCandidateId: null,
-  }));
-  return [...slots, ...added];
-}
-
-export function updateSlot(
-  slots: InterviewSlot[],
-  id: string,
-  patch: Partial<Pick<InterviewSlot, 'date' | 'startTime' | 'endTime' | 'room'>>
-): SlotMutationResult {
-  const target = slots.find((s) => s.id === id);
-  if (!target) return { ok: false, reason: 'SLOT_NOT_FOUND', message: 'Slot not found.' };
-  if (target.status === 'BOOKED') {
-    return { ok: false, reason: 'SLOT_BOOKED', message: 'This slot is already booked and cannot be edited.' };
-  }
-  return { ok: true, slots: slots.map((s) => (s.id === id ? { ...s, ...patch } : s)) };
-}
-
-export function removeSlot(slots: InterviewSlot[], id: string): SlotMutationResult {
-  const target = slots.find((s) => s.id === id);
-  if (!target) return { ok: false, reason: 'SLOT_NOT_FOUND', message: 'Slot not found.' };
-  if (target.status === 'BOOKED') {
-    return { ok: false, reason: 'SLOT_BOOKED', message: 'This slot is already booked and cannot be deleted.' };
-  }
-  return { ok: true, slots: slots.filter((s) => s.id !== id) };
-}
-
-/** Availability for a removed slot is meaningless; drop it. */
-export function pruneAvailability(
-  availability: InterviewerAvailabilityRecord[],
-  slots: InterviewSlot[]
-): InterviewerAvailabilityRecord[] {
-  const ids = new Set(slots.map((s) => s.id));
-  return availability.filter((r) => ids.has(r.slotId));
-}
 
 export function hasHeadAvailable(
   availability: InterviewerAvailabilityRecord[],
@@ -84,7 +20,15 @@ export function isBookable(
   availability: InterviewerAvailabilityRecord[],
   department: InterviewDepartment
 ): boolean {
-  return slot.status === 'AVAILABLE' && hasHeadAvailable(availability, slot.id, department);
+  // 1. Nếu ca này không cấp cho Dept này -> Chặn
+  if (!slot.assignedDepartments?.includes(department)) return false;
+
+  // 2. Nếu Dept này ĐÃ CÓ ứng viên book ở slot này -> Chặn
+  const isDeptBooked = slot.bookings?.some((b) => b.department === department);
+  if (isDeptBooked) return false;
+
+  // 3. Nếu chưa ai book, kiểm tra xem Head có rảnh không
+  return hasHeadAvailable(availability, slot.id, department);
 }
 
 export function cellState(
@@ -92,97 +36,46 @@ export function cellState(
   availability: InterviewerAvailabilityRecord[],
   department: InterviewDepartment
 ): CellState {
-  if (slot.status === 'BOOKED') {
-    return slot.bookedDepartment === department ? 'booked' : 'blocked';
-  }
-  return hasHeadAvailable(availability, slot.id, department) ? 'open' : 'blocked';
-}
+  if (!slot.assignedDepartments?.includes(department)) return 'blocked';
 
-function identityKey(email: string | undefined, name: string): string {
-  return (email?.trim() || name.trim()).toLowerCase();
-}
+  // Check xem phòng ban này đã có ứng viên book chưa
+  const deptBooking = slot.bookings?.find((b) => b.department === department);
+  if (deptBooking) return 'booked';
 
-/**
- * Full replace on resubmit: pull every record previously submitted by this
- * identity (same email, or same name when no email), then push fresh ones.
- */
-export function replaceAvailability(
-  availability: InterviewerAvailabilityRecord[],
-  selections: Array<{ department: InterviewDepartment; slotIds: string[] }>,
-  identity: InterviewerIdentity
-): InterviewerAvailabilityRecord[] {
-  const key = identityKey(identity.interviewerEmail, identity.interviewerName);
-  const kept = availability.filter(
-    (r) => identityKey(r.interviewerEmail, r.interviewerName) !== key
-  );
-  const pushed: InterviewerAvailabilityRecord[] = [];
-  const seen = new Set<string>();
-  for (const { department, slotIds } of selections) {
-    for (const slotId of slotIds) {
-      const dedupe = `${department}|${slotId}`;
-      if (seen.has(dedupe)) continue;
-      seen.add(dedupe);
-      pushed.push({
-        id: newId('avail'),
-        slotId,
-        department,
-        interviewerName: identity.interviewerName.trim(),
-        isHead: identity.isHead,
-        interviewerEmail: identity.interviewerEmail?.trim(),
-        interviewerRole: identity.interviewerRole,
-      });
-    }
-  }
-  return [...kept, ...pushed];
+  return hasHeadAvailable(availability, slot.id, department)
+    ? 'open'
+    : 'blocked';
 }
 
 export function candidateIdFromEmail(email: string): string {
   return `cand-${email.trim().toLowerCase()}`;
 }
 
-export function confirmBooking(
-  slots: InterviewSlot[],
-  slotId: string,
-  candidate: BookingCandidate
-): ConfirmBookingResult {
-  const existing = slots.find((s) => s.bookedByCandidateId === candidate.id);
-  if (existing) return { ok: false, reason: 'ALREADY_BOOKED', existingBooking: existing };
-  const target = slots.find((s) => s.id === slotId);
-  if (!target) return { ok: false, reason: 'SLOT_NOT_FOUND' };
-  if (target.status === 'BOOKED') return { ok: false, reason: 'SLOT_NO_LONGER_AVAILABLE' };
-  const booking: InterviewSlot = {
-    ...target,
-    status: 'BOOKED',
-    bookedByCandidateId: candidate.id,
-    bookedCandidateName: candidate.name,
-    bookedCandidateStudentId: candidate.studentId,
-    bookedCandidateEmail: candidate.email,
-    bookedDepartment: candidate.department,
-  };
-  return {
-    ok: true,
-    booking,
-    slots: slots.map((s) => (s.id === slotId ? booking : s)),
-  };
-}
-
+// ĐÃ CẬP NHẬT: Quét qua mảng bookings thay vì slot gốc
 export function findBookingByEmail(
   slots: InterviewSlot[],
   email: string
 ): InterviewSlot | undefined {
-  const id = candidateIdFromEmail(email);
   const lower = email.trim().toLowerCase();
-  return slots.find(
-    (s) =>
-      s.bookedByCandidateId === id ||
-      s.bookedCandidateEmail?.toLowerCase() === lower
+  const legacyId = candidateIdFromEmail(lower);
+  const studentId = lower.split('@')[0].toUpperCase();
+
+  return slots.find((s) =>
+    s.bookings?.some(
+      (b) => b.candidateId === legacyId || b.candidateStudentId === studentId
+    )
   );
 }
 
-export function groupSlotsByDate(slots: InterviewSlot[]): Map<string, InterviewSlot[]> {
+export function groupSlotsByDate(
+  slots: InterviewSlot[]
+): Map<string, InterviewSlot[]> {
   const map = new Map<string, InterviewSlot[]>();
   const sorted = [...slots].sort(
-    (a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime) || a.room.localeCompare(b.room)
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.startTime.localeCompare(b.startTime) ||
+      a.room.localeCompare(b.room)
   );
   for (const s of sorted) {
     const list = map.get(s.date);
@@ -192,7 +85,9 @@ export function groupSlotsByDate(slots: InterviewSlot[]): Map<string, InterviewS
   return map;
 }
 
-export function groupSlotsByRoom<T extends { room: string }>(slots: T[]): Map<string, T[]> {
+export function groupSlotsByRoom<T extends { room: string }>(
+  slots: T[]
+): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const s of slots) {
     const list = map.get(s.room);
@@ -208,11 +103,15 @@ export function availabilityForSlot(
   slotId: string,
   department: InterviewDepartment
 ) {
-  const rows = availability.filter((r) => r.slotId === slotId && r.department === department);
+  const rows = availability.filter(
+    (r) => r.slotId === slotId && r.department === department
+  );
   return {
     executiveBoard: rows.filter((r) => r.interviewerRole === 'Executive Board'),
     heads: rows.filter((r) => r.isHead),
-    interviewers: rows.filter((r) => r.interviewerRole === 'Member' || (!r.isHead && !r.interviewerRole)),
+    interviewers: rows.filter(
+      (r) => r.interviewerRole === 'Member' || (!r.isHead && !r.interviewerRole)
+    ),
   };
 }
 
@@ -220,28 +119,50 @@ export type MonitorRow =
   | { type: 'slot'; slot: InterviewSlot; session: number }
   | { type: 'lunch'; key: string };
 
-const LUNCH_GAP_MINUTES = 30;
-
 function toMin(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
   return h * 60 + m;
 }
 
-/** Rows for one date (already time-sorted): "Session N" per distinct start time, LUNCH BREAK on a schedule gap. */
 export function buildMonitorRows(daySlots: InterviewSlot[]): MonitorRow[] {
   const rows: MonitorRow[] = [];
   const sessionByStart = new Map<string, number>();
-  let prevEnd: number | null = null;
+
+  let hasInsertedLunch = false;
+  let hasSeenMorning = false;
+
   for (const slot of daySlots) {
+    const slotMinutes = toMin(slot.startTime);
+    const isAfternoon = slotMinutes >= 720; 
+
+    if (!isAfternoon) {
+      hasSeenMorning = true;
+    }
+
     if (!sessionByStart.has(slot.startTime)) {
-      if (prevEnd !== null && toMin(slot.startTime) - prevEnd >= LUNCH_GAP_MINUTES) {
+      if (hasSeenMorning && isAfternoon && !hasInsertedLunch) {
         rows.push({ type: 'lunch', key: `lunch-${slot.id}` });
+        hasInsertedLunch = true;
       }
+
       sessionByStart.set(slot.startTime, sessionByStart.size + 1);
     }
-    rows.push({ type: 'slot', slot, session: sessionByStart.get(slot.startTime)! });
-    const end = toMin(slot.endTime);
-    if (prevEnd === null || end > prevEnd) prevEnd = end;
+
+    rows.push({
+      type: 'slot',
+      slot,
+      session: sessionByStart.get(slot.startTime)!,
+    });
   }
   return rows;
+}
+
+export function filterSlotsByAssignedDept(
+  slots: InterviewSlot[],
+  department: InterviewDepartment
+): InterviewSlot[] {
+  return slots.filter(
+    (slot) =>
+      slot.assignedDepartments && slot.assignedDepartments.includes(department)
+  );
 }

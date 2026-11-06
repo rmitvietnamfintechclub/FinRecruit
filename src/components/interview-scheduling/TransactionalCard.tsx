@@ -1,7 +1,8 @@
 'use client';
 
-import { Check, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 type TransactionalCardProps = {
   variant: 'success' | 'failure';
@@ -11,36 +12,69 @@ type TransactionalCardProps = {
   actions: ReactNode;
 };
 
-/** Dark result card used by the public flows (success / failure). */
-export function TransactionalCard({ variant, title, subtitle, children, actions }: TransactionalCardProps) {
-  const success = variant === 'success';
+/** Card hiển thị kết quả (Thành công / Thất bại) đồng nhất với Brand UI và Responsive 100% */
+export function TransactionalCard({
+  variant,
+  title,
+  subtitle,
+  children,
+  actions,
+}: TransactionalCardProps) {
+  const isSuccess = variant === 'success';
+
   return (
-    <div className="mx-auto w-full max-w-md rounded-[18px] border border-[#232838] bg-[#12151F] p-8 text-center shadow-2xl">
+    <div className="mx-auto w-full md:max-w-xl rounded-[24px] border border-gray-200 bg-white p-5 sm:p-8 text-center shadow-xl">
       <div
-        className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
-        style={{ backgroundColor: success ? '#0D2416' : 'rgba(255,161,0,0.27)' }}
+        className={cn(
+          'mx-auto flex size-14 sm:size-16 items-center justify-center rounded-2xl border shadow-sm',
+          isSuccess
+            ? 'border-emerald-100 bg-emerald-50 text-emerald-600'
+            : 'border-red-100 bg-red-50 text-red-600'
+        )}
       >
-        {success ? (
-          <Check className="h-8 w-8" style={{ color: '#22C55E' }} aria-hidden />
+        {isSuccess ? (
+          <CheckCircle2 className="h-7 w-7 sm:h-8 sm:w-8" aria-hidden />
         ) : (
-          <TriangleAlert className="h-8 w-8" style={{ color: '#FFA200' }} aria-hidden />
+          <AlertCircle className="h-7 w-7 sm:h-8 sm:w-8" aria-hidden />
         )}
       </div>
-      <h2 className="mt-5 text-2xl font-extrabold" style={{ color: '#DEE1F7' }}>{title}</h2>
-      {subtitle ? <p className="mt-2 text-sm leading-relaxed text-slate-400">{subtitle}</p> : null}
-      {children ? <div className="mt-6 text-left">{children}</div> : null}
-      <div className="mt-6">{actions}</div>
+
+      <h2 className="mt-4 sm:mt-5 text-xl sm:text-2xl font-black tracking-tight text-[#0D1742]">
+        {title}
+      </h2>
+
+      {subtitle && (
+        <p className="mt-2 text-xs sm:text-[14px] font-medium leading-relaxed text-[#5E5E92]">
+          {subtitle}
+        </p>
+      )}
+
+      {children && <div className="mt-6 sm:mt-8 text-left">{children}</div>}
+
+      <div className="mt-6 sm:mt-8">{actions}</div>
     </div>
   );
 }
 
-export function DetailRows({ rows }: { rows: Array<{ label: string; value: ReactNode }> }) {
+export function DetailRows({
+  rows,
+}: {
+  rows: Array<{ label: string; value: ReactNode }>;
+}) {
   return (
-    <dl className="divide-y divide-[#232838] rounded-xl border border-[#232838] bg-[#171A26]">
+    <dl className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm divide-y divide-gray-100">
       {rows.map((r) => (
-        <div key={r.label} className="flex items-center justify-between gap-4 px-4 py-3">
-          <dt className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">{r.label}</dt>
-          <dd className="text-right text-sm font-semibold" style={{ color: '#DEE1F7' }}>{r.value}</dd>
+        <div
+          key={r.label}
+          // Responsive Flex: Dọc trên Mobile, Ngang trên Desktop
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4 px-3.5 py-3 sm:px-4 sm:py-3.5 bg-gray-50/50 transition-colors hover:bg-gray-50"
+        >
+          <dt className="text-[10px] sm:text-[11px] font-bold tracking-widest uppercase text-[#5E5E92]">
+            {r.label}
+          </dt>
+          <dd className="text-left sm:text-right text-xs sm:text-[13px] font-bold text-[#0D1742]">
+            {r.value}
+          </dd>
         </div>
       ))}
     </dl>

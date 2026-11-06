@@ -21,7 +21,7 @@ export const CANDIDATE_CHOICES = [
 
 export const STATUSES = ['Pending', 'Pass', 'Fail'] as const;
 export const ROUND2_DECISIONS = ['Pass', 'Fail', 'No Show'] as const;
-export const SLOT_STATUSES = ['AVAILABLE', 'BOOKED'] as const;
+export const SLOT_STATUSES = ['AVAILABLE', 'BOOKED', 'COMPLETED', 'NO_SHOW'] as const;
 
 export const AUDIT_LOG_LEVELS = ['info', 'warning', 'error'] as const;
 export const AUDIT_LOG_CATEGORIES = [
@@ -83,6 +83,13 @@ export interface IDepartmentConfig extends Document {
     updatedAt: Date;
 }
 
+// BỔ SUNG MỚI: Interface cho từng Booking trong mảng
+export interface ISlotBooking {
+    candidateId: Types.ObjectId;
+    department: DepartmentType;
+    status: SlotStatusType;
+}
+
 // Interview Scheduling Interfaces
 export interface IMasterInterviewSlot extends Document {
     _id: Types.ObjectId;
@@ -93,8 +100,9 @@ export interface IMasterInterviewSlot extends Document {
     startTime: string; // e.g., "08:00 AM"
     endTime: string;   // e.g., "08:40 AM"
     room: string;
-    status: SlotStatusType;
-    bookedByCandidateId?: Types.ObjectId | null;
+    assignedDepartments: DepartmentType[];
+    // CẬP NHẬT: Thay status và bookedByCandidateId bằng mảng bookings
+    bookings: ISlotBooking[]; 
     createdAt: Date;
     updatedAt: Date;
 }

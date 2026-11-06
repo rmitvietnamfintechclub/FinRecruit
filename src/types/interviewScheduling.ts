@@ -5,27 +5,30 @@ export type SlotStatus = SlotStatusType;
 export type InterviewDepartment = HeadDepartment;
 export type InterviewerRole = 'Executive Board' | 'Department Head' | 'Member';
 
+export type SlotBooking = {
+  candidateId: string;
+  candidateName: string;
+  candidateStudentId: string;
+  department: InterviewDepartment;
+  status: SlotStatus;
+};
+
 // Mirrors src/app/(backend)/models/MasterInterviewSlot.ts
 export interface InterviewSlot {
   id: string;
   generation: string;
   semester: string;
-  date: string; // 'YYYY-MM-DD' in the mock; real model stores a Date
+  date: string; // 'YYYY-MM-DD'
   startTime: string; // 'HH:mm' 24h
   endTime: string;
   room: string;
-  status: SlotStatus;
-  bookedByCandidateId: string | null;
-  // mock-only fields, not on the real model yet
-  bookedCandidateName?: string;
-  bookedCandidateStudentId?: string;
-  bookedCandidateEmail?: string;
-  bookedDepartment?: InterviewDepartment;
+  bookings: SlotBooking[]; // MẢNG BOOKINGS
+  assignedDepartments: InterviewDepartment[];
 }
 
 export type NewInterviewSlot = Pick<
   InterviewSlot,
-  'generation' | 'semester' | 'date' | 'startTime' | 'endTime' | 'room'
+  'date' | 'startTime' | 'endTime' | 'room' | 'assignedDepartments'
 >;
 
 // Mirrors src/app/(backend)/models/InterviewerAvailability.ts
@@ -35,7 +38,6 @@ export interface InterviewerAvailabilityRecord {
   department: InterviewDepartment;
   interviewerName: string;
   isHead: boolean;
-  // mock-only fields, not on the real model yet
   interviewerEmail?: string;
   interviewerRole?: InterviewerRole;
 }
@@ -58,10 +60,13 @@ export type BookingCandidate = {
 };
 
 export type ConfirmBookingResult =
-  | { ok: true; slots: InterviewSlot[]; booking: InterviewSlot }
+  | { ok: true; slots?: InterviewSlot[]; booking: InterviewSlot }
   | { ok: false; reason: 'SLOT_NO_LONGER_AVAILABLE' }
   | { ok: false; reason: 'SLOT_NOT_FOUND' }
-  | { ok: false; reason: 'ALREADY_BOOKED'; existingBooking: InterviewSlot };
+  | { ok: false; reason: 'ALREADY_BOOKED'; existingBooking: InterviewSlot }
+  | { ok: false; reason: 'CANDIDATE_NOT_FOUND' }
+  | { ok: false; reason: 'NOT_PASSED_ROUND_1' }
+  | { ok: false; reason: 'DEPARTMENT_MISMATCH'; correctDepartment: InterviewDepartment };
 
 export type SlotMutationResult =
   | { ok: true; slots: InterviewSlot[] }
