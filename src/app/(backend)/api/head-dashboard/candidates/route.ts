@@ -17,6 +17,7 @@ import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import Candidate from '@/app/(backend)/models/Candidate';
+import MasterInterviewSlot from '@/app/(backend)/models/MasterInterviewSlot';
 
 export const runtime = 'nodejs';
 
@@ -44,6 +45,10 @@ type CandidateListAggregationResult = {
     round2Evaluation?: {
       score?: number | null;
     };
+    interviewDate?: Date | string | null;      
+    interviewStartTime?: string | null;        
+    interviewEndTime?: string | null;
+    interviewAttendance?: string | null;
   }>;
 };
 
@@ -85,6 +90,12 @@ export const GET = withRBAC(
 
     await dbConnect();
 
+    // Ensure the MasterInterviewSlot model is registered before running aggregate
+    // This prevents errors if Mongoose hasn't initialized the schema yet.
+    if (!MasterInterviewSlot) {
+      console.warn('MasterInterviewSlot model not found');
+    }
+
     // Implicit cohort scoping: only candidates from the active SystemConfig cohort.
     const active = await getActiveConfig();
     const cohort = {
@@ -113,6 +124,53 @@ export const GET = withRBAC(
             { $sort: sortStage },
             { $skip: skip },
             { $limit: limit },
+
+            {
+              $lookup: {
+                from: 'masterinterviewslots',
+                localField: 'interviewSlotId',
+                foreignField: '_id',
+                as: 'slotInfo',
+              },
+            },
+            {
+              $addFields: {
+                firstSlot: { $arrayElemAt: ['$slotInfo', 0] },
+              },
+            },
+            {
+              $addFields: {
+                interviewDate: '$firstSlot.date',
+                interviewStartTime: '$firstSlot.startTime',
+                interviewEndTime: '$firstSlot.endTime',
+                
+                interviewAttendance: {
+                  $let: {
+                    vars: {
+                      matchedBooking: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: { $ifNull: ['$firstSlot.bookings', []] },
+                              as: 'booking',
+                              cond: {
+                                $eq: [
+                                  '$$booking.department',
+                                  assignedDepartment,
+                                ],
+                              },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                    },
+                    in: '$$matchedBooking.status', 
+                  },
+                },
+              },
+            },
+
             {
               $project: {
                 customAnswers: 0,
@@ -121,6 +179,9 @@ export const GET = withRBAC(
                 'round2Evaluation.templateAnswers': 0,
                 'round2Evaluation.adHocQuestions': 0,
                 'round2Evaluation.notes': 0,
+                // Dọn dẹp dữ liệu rác sau khi lookup
+                slotInfo: 0,
+                firstSlot: 0,
               },
             },
           ],
@@ -131,14 +192,19 @@ export const GET = withRBAC(
     const aggregationResult = aggregateResults[0];
 
     const total = aggregationResult?.metadata?.[0]?.total ?? 0;
+
     const items =
-      aggregationResult?.items?.map((candidate) =>
-        serializeCandidateListItem({
+      aggregationResult?.items?.map((candidate) => ({
+        ...serializeCandidateListItem({
           ...candidate,
           _id: candidate._id,
           choice2: candidate.choice2 ?? null,
-        })
-      ) ?? [];
+        }),
+        interviewDate: candidate.interviewDate ?? null,
+        interviewStartTime: candidate.interviewStartTime ?? null,
+        interviewEndTime: candidate.interviewEndTime ?? null,
+        interviewAttendance: candidate.interviewAttendance ?? null,
+      })) ?? [];
 
     const hasNoDepartmentCandidates = total === 0 && !search && !status;
     const hasNoFilteredResults = total === 0 && !hasNoDepartmentCandidates;

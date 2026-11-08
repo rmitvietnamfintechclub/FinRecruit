@@ -29,7 +29,10 @@ export type PatchResult =
 export async function patchCandidateStatus(
   candidateId: string,
   status: DashboardStatus,
-  options?: { confirmReroute?: boolean }
+  options?: { 
+    confirmReroute?: boolean;
+    targetRound?: 1 | 2; // <--- Chỉ thị cập nhật vòng 1 hay vòng 2
+  }
 ): Promise<PatchResult> {
   const res = await fetch(
     `/api/head-dashboard/candidates/${candidateId}/status`,
@@ -40,6 +43,7 @@ export async function patchCandidateStatus(
       body: JSON.stringify({
         status,
         ...(options?.confirmReroute ? { confirmReroute: true } : {}),
+        targetRound: options?.targetRound || 1, // Mặc định là Round 1
       }),
     }
   );

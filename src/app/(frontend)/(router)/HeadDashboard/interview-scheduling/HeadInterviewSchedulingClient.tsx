@@ -114,8 +114,9 @@ export function HeadInterviewSchedulingClient({
 }: {
   department: InterviewDepartment;
 }) {
-  const slots = useInterviewSlots();
-  const availability = useAvailabilityRecords();
+  const interviewSlots = useInterviewSlots();
+  const slots = useMemo(() => interviewSlots ?? [], [interviewSlots]);
+  const availability = useAvailabilityRecords() ?? [];
   const links = useInterviewLinks();
   const { updateStatus, pending: isUpdating } = useUpdateSlotStatus();
 
@@ -262,29 +263,38 @@ export function HeadInterviewSchedulingClient({
           </p>
         </div>
 
-        <div className="flex w-full xl:w-auto items-center gap-2">
-          <div className="relative flex-1 xl:w-120">
-            <input
-              type="text"
-              readOnly
-              value={links?.internalUrl ?? 'Loading link...'}
-              className="w-full truncate rounded-xl border border-white/20 bg-white/10 py-2.5 pl-3.5 pr-4 text-[13px] font-medium text-white focus:border-[#DCB968] focus:outline-none focus:ring-1 focus:ring-[#DCB968] selection:bg-[#DCB968] selection:text-[#0D1742]"
-              onClick={(e) => (e.target as HTMLInputElement).select()}
-            />
+        {!links ? (
+          <div className="flex w-full xl:w-auto items-center gap-2 animate-pulse">
+            {/* Skeleton cho Input */}
+            <div className="h-10.5 flex-1 xl:w-120 rounded-xl bg-white/10 border border-white/10"></div>
+            {/* Skeleton cho Button */}
+            <div className="h-10.5 w-22 shrink-0 rounded-xl bg-[#DCB968]/40"></div>
           </div>
-          <button
-            type="button"
-            onClick={copyToClipboard}
-            className="shrink-0 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[13px] font-bold transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 bg-[#DCB968] text-[#0D1742] hover:bg-[#c9a657] focus:ring-[#DCB968] shadow-sm"
-          >
-            {copied ? (
-              <Check className="h-4 w-4" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
+        ) : (
+          <div className="flex w-full xl:w-auto items-center gap-2">
+            <div className="relative flex-1 xl:w-120">
+              <input
+                type="text"
+                readOnly
+                value={links?.internalUrl ?? ''}
+                className="w-full truncate rounded-xl border border-white/20 bg-white/10 py-2.5 pl-3.5 pr-4 text-[13px] font-medium text-white focus:border-[#DCB968] focus:outline-none focus:ring-1 focus:ring-[#DCB968] selection:bg-[#DCB968] selection:text-[#0D1742]"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={copyToClipboard}
+              className="shrink-0 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[13px] font-bold transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 bg-[#DCB968] text-[#0D1742] hover:bg-[#c9a657] focus:ring-[#DCB968] shadow-sm"
+            >
+              {copied ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -378,7 +388,7 @@ export function HeadInterviewSchedulingClient({
                             (x) => x.department === department
                           );
                           const assignedStaff = availabilityForSlot(
-                            availability,
+                            availability ?? [],
                             s.id,
                             department
                           );

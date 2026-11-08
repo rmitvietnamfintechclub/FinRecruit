@@ -1,35 +1,52 @@
 'use client';
 
 import { useState } from 'react';
-import type { DepartmentType } from '@/app/(backend)/types';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import { AppNotice } from '@/components/feedback/AppNotice';
-import type { LockRound1Result } from '@/types/roundTransition';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipProvider } from '@/components/ui/Tooltip'; // <-- Thêm Tooltip
+import { Tooltip, TooltipProvider } from '@/components/ui/Tooltip';
 
-type RoundTransitionBarProps = {
-  department: DepartmentType | null;
+export type LockResult = { success: boolean; message?: string };
+
+export type RoundTransitionBarProps = {
+  roundName: 'Round 1' | 'Round 2';
   evaluated: number;
   total: number;
-  pending: number;
   isLocked: boolean;
   locking: boolean;
-  isRecruitmentActive?: boolean; // <-- Thêm prop mới
-  onLock: () => Promise<LockRound1Result>;
-  onGoToRound2?: () => void;
+
+  canLock: boolean;
+  isPendingLock: boolean;
+  lockDisabledReason: string | null;
+
+  lockedTitle: string;
+  lockedDescription: string;
+  lockedSuccessMessage: string;
+
+  // --- THÊM PROP NÀY ---
+  lockConfirmDescription: React.ReactNode;
+
+  onLock: () => Promise<LockResult>;
+  onGoToNextRound?: () => void;
+  nextRoundLabel?: string;
 };
 
 export function RoundTransitionBar({
-  department,
+  roundName,
   evaluated,
   total,
-  pending,
   isLocked,
   locking,
-  isRecruitmentActive = false, // <-- Giá trị mặc định
+  canLock,
+  isPendingLock,
+  lockDisabledReason,
+  lockedTitle,
+  lockedDescription,
+  lockedSuccessMessage,
+  lockConfirmDescription, // <--- Nhận prop
   onLock,
-  onGoToRound2,
+  onGoToNextRound,
+  nextRoundLabel,
 }: RoundTransitionBarProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [notice, setNotice] = useState<{
@@ -39,57 +56,41 @@ export function RoundTransitionBar({
 
   const percentage = total > 0 ? Math.round((evaluated / total) * 100) : 0;
 
-  // ĐIỀU KIỆN KHÓA VÒNG MỚI: Phải thỏa mãn isRecruitmentActive là FALSE
-  const canLock =
-    department !== null &&
-    !isRecruitmentActive &&
-    pending === 0 &&
-    total > 0 &&
-    !isLocked;
-
-  // Xác định trạng thái UI cho Badge
-  const isPendingLock = !isRecruitmentActive && percentage === 100 && !isLocked;
-
-  // 1. GIAO DIỆN KHI ĐÃ KHÓA VÒNG 1
   if (isLocked) {
     return (
       <section
-        aria-label="Round 1 evaluation status"
+        aria-label={`${roundName} evaluation status`}
         className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600">
-          <i className="fa-solid fa-check" /> Round 1 Locked
+          <i className="fa-solid fa-check" /> {roundName} Locked
         </span>
-        <h2 className="text-xl font-black text-[#0D1742]">
-          Round 1 Evaluation closed
-        </h2>
-        <p className="text-sm font-medium text-gray-500">
-          Results are final. Passed candidates are in the Round 2 interview
-          pool.
-        </p>
+        <h2 className="text-xl font-black text-[#0D1742]">{lockedTitle}</h2>
+        <p className="text-sm font-medium text-gray-500">{lockedDescription}</p>
 
-        {/* HIỆN THÔNG BÁO CUSTOM VỚI NÚT GO TO ROUND 2 TẠI ĐÂY */}
         {notice ? (
           <div className="mt-2 w-full">
             <AppNotice
               variant={notice.variant}
               title={
                 notice.variant === 'info'
-                  ? 'Round 1 Locked Successfully'
+                  ? `${roundName} Locked Successfully`
                   : undefined
               }
               onDismiss={() => setNotice(null)}
               action={
-                notice.variant === 'info' && onGoToRound2 ? (
+                notice.variant === 'info' &&
+                onGoToNextRound &&
+                nextRoundLabel ? (
                   <button
                     type="button"
                     onClick={() => {
-                      onGoToRound2();
+                      onGoToNextRound();
                       setNotice(null);
                     }}
                     className="flex items-center gap-2 rounded-lg bg-[#0D1742] px-4 py-2 text-sm font-bold text-[#DCB968] shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
                   >
-                    Go to Round 2 <i className="fa-solid fa-arrow-right" />
+                    {nextRoundLabel} <i className="fa-solid fa-arrow-right" />
                   </button>
                 ) : undefined
               }
@@ -102,21 +103,19 @@ export function RoundTransitionBar({
     );
   }
 
-  // 2. GIAO DIỆN KHI ĐANG TRONG QUÁ TRÌNH CHẤM HOẶC CHỜ KHÓA
   return (
     <TooltipProvider delayDuration={300}>
       <section
-        aria-label="Round 1 evaluation status"
+        aria-label={`${roundName} evaluation status`}
         className="flex flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="w-full sm:max-w-md">
             <div className="mb-2 flex w-full items-center justify-between">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
-                Round 1 Evaluation
+                {roundName} Evaluation
               </p>
 
-              {/* BADGE TRẠNG THÁI LINH HOẠT */}
               <span
                 className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${
                   isPendingLock
@@ -146,7 +145,7 @@ export function RoundTransitionBar({
               aria-valuemin={0}
               aria-valuemax={total}
               aria-valuenow={evaluated}
-              aria-label="Round 1 evaluation progress"
+              aria-label={`${roundName} evaluation progress`}
             >
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
@@ -159,14 +158,6 @@ export function RoundTransitionBar({
 
           <div className="flex flex-col items-start gap-2 sm:items-end">
             {(() => {
-              // 1. Xác định nội dung Tooltip (nếu null thì không render Tooltip)
-              const tooltipContent = isRecruitmentActive
-                ? 'Cannot lock while the public recruitment form is still open.'
-                : pending > 0
-                  ? `Resolve ${pending} pending application${pending > 1 ? 's' : ''} to lock.`
-                  : null;
-
-              // 2. Định nghĩa cấu trúc Nút (Button)
               const actionButton = (
                 <span
                   className={
@@ -194,15 +185,15 @@ export function RoundTransitionBar({
                     ) : (
                       <>
                         {!canLock && <i className="fa-solid fa-lock" />}
-                        Confirm & Lock Round 1
+                        Confirm & Lock {roundName}
                       </>
                     )}
                   </button>
                 </span>
               );
 
-              return tooltipContent ? (
-                <Tooltip content={tooltipContent}>{actionButton}</Tooltip>
+              return lockDisabledReason ? (
+                <Tooltip content={lockDisabledReason}>{actionButton}</Tooltip>
               ) : (
                 actionButton
               );
@@ -210,12 +201,10 @@ export function RoundTransitionBar({
           </div>
         </div>
 
-        {/* THÔNG BÁO PENDING DÀNH RIÊNG KHI FORM ĐÃ ĐÓNG NHƯNG CHƯA CHẤM XONG */}
-        {!isRecruitmentActive && pending > 0 && (
+        {lockDisabledReason && lockDisabledReason.includes('Resolve') && (
           <p className="mt-4 flex items-center rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
             <i className="fa-solid fa-circle-info mr-2 opacity-80" />
-            You still have {pending} pending application
-            {pending !== 1 ? 's' : ''}. Resolve all to enable locking.
+            {lockDisabledReason}
           </p>
         )}
 
@@ -232,25 +221,10 @@ export function RoundTransitionBar({
 
         <ConfirmDialog
           open={confirmOpen}
-          title="Finalize Round 1?"
+          title={`Finalize ${roundName}?`}
           variant="default"
-          description={
-            <div className="flex flex-col gap-4">
-              <p className="text-gray-600">
-                All <span className="font-bold text-emerald-600">Passed</span>{' '}
-                candidates will be moved to the Round 2 interview pool, and this
-                evaluation round will become{' '}
-                <span className="font-bold text-gray-900">read-only</span>.
-              </p>
-
-              <div className="rounded-lg border border-[#F7D27F] bg-[#FFEFCA] p-3 text-xs font-semibold text-[#A28436]">
-                <i className="fa-solid fa-triangle-exclamation mr-1.5" />
-                This action cannot be undone from the dashboard. Make sure all
-                results are accurate.
-              </div>
-            </div>
-          }
-          confirmLabel="Yes, Lock Round 1"
+          description={lockConfirmDescription} // <--- Gọi prop ở đây
+          confirmLabel={`Yes, Lock ${roundName}`}
           loading={locking}
           onCancel={() => setConfirmOpen(false)}
           onConfirm={async () => {
@@ -258,12 +232,12 @@ export function RoundTransitionBar({
             setConfirmOpen(false);
             if (result.success) {
               setNotice({
-                text: 'All evaluations for Round 1 have been finalized. The interview pool is now unlocked and ready for Round 2.',
+                text: lockedSuccessMessage,
                 variant: 'info',
               });
             } else {
               setNotice({
-                text: result.message ?? 'Failed to lock Round 1.',
+                text: result.message ?? `Failed to lock ${roundName}.`,
                 variant: 'error',
               });
             }

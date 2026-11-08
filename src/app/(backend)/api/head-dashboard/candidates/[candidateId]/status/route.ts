@@ -23,6 +23,7 @@ type CandidateStatusRouteContext = {
 type CandidateStatusUpdatePayload = {
   status?: string;
   confirmReroute?: boolean;
+  targetRound?: 1 | 2; // <-- Cờ báo hiệu đang update cho Round 1 hay Round 2
 };
 
 export const PATCH = withRBAC<CandidateStatusRouteContext>(
@@ -68,6 +69,7 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
     }
 
     const requestedStatus = parseDashboardStatus(body.status ?? null);
+    const isRound2 = body.targetRound === 2;
 
     if (!requestedStatus) {
       return NextResponse.json(
@@ -81,13 +83,14 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
 
     await dbConnect();
 
-    const candidate = await Candidate.findOne({
-      _id: candidateId,
-      ...departmentHeadCandidateVisibilityFilter(assignedDepartment),
-      status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
-    })
+    // Đối với Round 2, chúng ta không cần gò bó điều kiện status phải nằm trong mảng của Round 1
+    const candidateQuery = isRound2 
+      ? { _id: candidateId, ...departmentHeadCandidateVisibilityFilter(assignedDepartment) }
+      : { _id: candidateId, ...departmentHeadCandidateVisibilityFilter(assignedDepartment), status: { $in: [...DASHBOARD_STATUS_OPTIONS] } };
+
+    const candidate = await Candidate.findOne(candidateQuery)
       .select(
-        'fullName email phone dob cvLink choice1 choice2 department status customAnswers generation semester appliedAt createdAt updatedAt'
+        'fullName email phone dob cvLink choice1 choice2 department status round2Status customAnswers generation semester appliedAt createdAt updatedAt'
       )
       .lean()
       .exec();
@@ -96,73 +99,91 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
       return NextResponse.json(
         {
           success: false,
-          message: 'Candidate not found.',
+          message: 'Candidate not found or not accessible in this round.',
         },
         { status: 404 }
       );
     }
 
-    const decision = resolveCandidateStatusChange(
-      {
-        choice1: candidate.choice1,
-        choice2: candidate.choice2 ?? null,
-        department: candidate.department,
-      },
-      requestedStatus,
-      Boolean(body.confirmReroute)
-    );
+    let updatePayload: {
+      status?: string;
+      round2Status?: string;
+      department?: string;
+    } = {};
+    let codeStr = 'status_updated';
+    let msgStr = 'Status updated successfully.';
 
-    if (decision.kind === 'reroute-confirmation-required') {
-      return NextResponse.json(
+    // ==========================================
+    // LOGIC CHO ROUND 2
+    // ==========================================
+    if (isRound2) {
+      // Vòng 2: Pass là Pass, Fail là Fail, không rẽ nhánh.
+      updatePayload = { round2Status: requestedStatus };
+    } 
+    // ==========================================
+    // LOGIC CHO ROUND 1 (Giữ nguyên)
+    // ==========================================
+    else {
+      const decision = resolveCandidateStatusChange(
         {
-          success: false,
-          code: decision.code,
-          message: decision.message,
-          requiresConfirmation: true,
-          reroutePreview: {
-            targetDepartment: decision.targetDepartment,
-            resultingStatus: 'Pending',
-          },
-          candidate: serializeCandidateListItem({
-            ...candidate,
-            _id: candidate._id as mongoose.Types.ObjectId,
-            choice2: candidate.choice2 ?? null,
-          }),
+          choice1: candidate.choice1,
+          choice2: candidate.choice2 ?? null,
+          department: candidate.department,
         },
-        { status: 409 }
+        requestedStatus,
+        Boolean(body.confirmReroute)
       );
+
+      if (decision.kind === 'reroute-confirmation-required') {
+        return NextResponse.json(
+          {
+            success: false,
+            code: decision.code,
+            message: decision.message,
+            requiresConfirmation: true,
+            reroutePreview: {
+              targetDepartment: decision.targetDepartment,
+              resultingStatus: 'Pending',
+            },
+            candidate: serializeCandidateListItem({
+              ...candidate,
+              _id: candidate._id as mongoose.Types.ObjectId,
+              choice2: candidate.choice2 ?? null,
+            }),
+          },
+          { status: 409 }
+        );
+      }
+
+      updatePayload =
+        decision.kind === 'reroute'
+          ? {
+              status: decision.nextStatus,
+              department: decision.targetDepartment,
+            }
+          : {
+              status: decision.nextStatus,
+              ...(decision.nextStatus === 'Pass' &&
+              candidate.department === 'Unassigned'
+                ? { department: assignedDepartment }
+                : {}),
+            };
+            
+      codeStr = decision.code;
+      msgStr = decision.message;
     }
 
-    const updatePayload =
-      decision.kind === 'reroute'
-        ? {
-            status: decision.nextStatus,
-            department: decision.targetDepartment,
-          }
-        : {
-            status: decision.nextStatus,
-            ...(decision.nextStatus === 'Pass' &&
-            candidate.department === 'Unassigned'
-              ? { department: assignedDepartment }
-              : {}),
-          };
-
+    // Thực hiện Update
     const updatedCandidate = await Candidate.findOneAndUpdate(
-      {
-        _id: candidateId,
-        ...departmentHeadCandidateVisibilityFilter(assignedDepartment),
-        status: { $in: [...DASHBOARD_STATUS_OPTIONS] },
-      },
-      {
-        $set: updatePayload,
-      },
+      candidateQuery,
+      { $set: updatePayload },
       {
         returnDocument: 'after',
         runValidators: true,
       }
     )
       .select(
-        'fullName email phone dob cvLink choice1 choice2 department status customAnswers generation semester appliedAt createdAt updatedAt'
+        'fullName email phone dob cvLink choice1 choice2 department status round2Status customAnswers generation semester appliedAt createdAt updatedAt'
       )
       .lean()
       .exec();
@@ -171,8 +192,7 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
       return NextResponse.json(
         {
           success: false,
-          message:
-            'Candidate could not be updated because their routing state changed. Please refresh and try again.',
+          message: 'Candidate could not be updated because their routing state changed. Please refresh and try again.',
         },
         { status: 409 }
       );
@@ -181,8 +201,8 @@ export const PATCH = withRBAC<CandidateStatusRouteContext>(
     return NextResponse.json(
       {
         success: true,
-        code: decision.code,
-        message: decision.message,
+        code: codeStr,
+        message: msgStr,
         candidate: serializeCandidateListItem({
           ...updatedCandidate,
           _id: updatedCandidate._id as mongoose.Types.ObjectId,

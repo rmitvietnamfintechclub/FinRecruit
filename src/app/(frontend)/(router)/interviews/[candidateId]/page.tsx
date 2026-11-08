@@ -165,7 +165,7 @@ export default function InterviewCockpitPage() {
   return (
     <main className="min-h-screen bg-[#f5f6f8] text-slate-950">
       <header className="border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-8">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
+        <div className="mx-auto flex max-w-360 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <Image src="/ftc_logo.png" alt="FinTech Club" width={34} height={34} className="size-8 rounded-md" />
             <h1 className="truncate text-base font-black text-blue-950 sm:text-lg">Interview Cockpit</h1>
@@ -186,7 +186,7 @@ export default function InterviewCockpitPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-4 p-4 sm:p-6">
+      <div className="mx-auto flex max-w-360 flex-col gap-4 p-4 sm:p-6">
         <Link href="/HeadDashboard" className="w-fit rounded-lg bg-white px-3 py-2 text-xs font-bold text-blue-700 shadow-sm hover:bg-blue-50">
           <i className="fa-solid fa-arrow-left mr-2" /> Back to Recruitment Dashboard
         </Link>

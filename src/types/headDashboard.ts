@@ -26,6 +26,22 @@ export type HeadDashboardListCandidate = {
   createdAt: string;
   updatedAt: string;
   routing: CandidateRoutingInfo;
+
+  // --- Phase 2 / Round 2 Fields ---
+  round2Status?: StatusType;
+  interviewSlotId?: string | null;
+
+  interviewDate?: string | null;
+  interviewStartTime?: string | null;
+  interviewEndTime?: string | null;
+  
+  // Extracted Signal Field from Lookup (trạng thái điểm danh)
+  interviewAttendance?: string | null;
+  
+  // Thông tin chấm điểm (nếu có sử dụng)
+  round2Evaluation?: {
+    score?: number | null;
+  };
 };
 
 /**

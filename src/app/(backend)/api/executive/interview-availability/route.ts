@@ -4,7 +4,7 @@ import { getAvailabilityMonitorData } from '@/app/(backend)/libs/interview-sched
 
 export const runtime = 'nodejs';
 
-export const GET = withActiveRBAC(['Executive Board', 'Department Head'], async () => {
+export const GET = withActiveRBAC(['Executive Board', 'Department Head', 'Member'], async () => {
     try {
         const data = await getAvailabilityMonitorData();
         return NextResponse.json({ success: true, ...data });

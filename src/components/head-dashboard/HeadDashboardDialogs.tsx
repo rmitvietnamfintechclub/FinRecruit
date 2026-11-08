@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import type { DashboardStatus, ReroutePreview } from '@/app/(frontend)/(router)/HeadDashboard/patchCandidateStatus';
 
@@ -11,16 +10,10 @@ type HeadDashboardDialogsProps = {
   onConfirmStatus: () => void;
   isPatching: boolean;
 
-  // 2. Reroute Dialog
+  // 2. Reroute Dialog (Chỉ xuất hiện ở Round 1)
   rerouteConfirm: { id: string; name: string; message: string; preview?: ReroutePreview } | null;
   onCloseReroute: () => void;
   onConfirmReroute: () => void;
-
-  // 3. Round 2 Lock Dialog
-  round2ConfirmAction: 'lock' | 'unlock' | null;
-  onCloseRound2: () => void;
-  onConfirmRound2: () => void;
-  isLockingRound2: boolean;
 };
 
 export function HeadDashboardDialogs({
@@ -31,10 +24,6 @@ export function HeadDashboardDialogs({
   rerouteConfirm,
   onCloseReroute,
   onConfirmReroute,
-  round2ConfirmAction,
-  onCloseRound2,
-  onConfirmRound2,
-  isLockingRound2,
 }: HeadDashboardDialogsProps) {
   return (
     <>
@@ -99,7 +88,7 @@ export function HeadDashboardDialogs({
                 </div>
               ) : null}
 
-              {/* Khối Cảnh báo không thể hoàn tác (Mới thêm) */}
+              {/* Khối Cảnh báo không thể hoàn tác */}
               <div className="rounded-lg border border-[#B82649]/20 bg-[#B82649]/5 p-3 text-xs font-semibold text-[#B82649]">
                 <i className="fa-solid fa-triangle-exclamation mr-1.5" />
                 This action cannot be undone. The candidate will be permanently removed from your evaluation list.
@@ -113,22 +102,6 @@ export function HeadDashboardDialogs({
         onConfirm={onConfirmReroute}
         onCancel={onCloseReroute}
         loading={isPatching}
-      />
-
-      {/* 3. ROUND 2 LOCK/UNLOCK DIALOG */}
-      <ConfirmDialog
-        open={round2ConfirmAction !== null}
-        title={round2ConfirmAction === 'unlock' ? 'Unlock Round 2?' : 'Finalize Round 2?'}
-        variant={round2ConfirmAction === 'unlock' ? 'default' : 'destructive'}
-        description={
-          round2ConfirmAction === 'unlock'
-            ? 'Unlocking will allow you to modify candidate evaluation results again.'
-            : 'Locking will finalize all Round 2 results. Make sure all interviews are properly evaluated before proceeding.'
-        }
-        confirmLabel={round2ConfirmAction === 'unlock' ? 'Yes, Unlock' : 'Yes, Lock Round 2'}
-        onConfirm={onConfirmRound2}
-        onCancel={onCloseRound2}
-        loading={isLockingRound2}
       />
     </>
   );
