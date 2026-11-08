@@ -251,16 +251,18 @@ export function SortableQuestionList({
       session.started = true;
       const rect = session.row.getBoundingClientRect();
       // Copy the whole rendered card, including its current textarea value.
-      // The original card becomes a placeholder at the live insertion point.
       const preview = session.row.cloneNode(true) as HTMLDivElement;
       delete preview.dataset.questionId;
       preview.dataset.questionDragPreview = '';
       preview.setAttribute('aria-hidden', 'true');
       preview.inert = true;
+
+      // 👇 UI KHI ĐANG KÉO (DRAG PREVIEW) 👇
       preview.className = cn(
         preview.className,
-        'border-blue-500 bg-card ring-2 ring-blue-200 dark:ring-blue-900'
+        'border-[#0D1742] bg-[#F7F8FC] ring-4 ring-[#0D1742]/10 z-50'
       );
+
       Object.assign(preview.style, {
         position: 'fixed',
         left: `${rect.left}px`,
@@ -269,8 +271,11 @@ export function SortableQuestionList({
         margin: '0',
         zIndex: '60',
         pointerEvents: 'none',
-        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.22)',
+        boxShadow: '0 20px 40px -10px rgba(13, 23, 66, 0.15)',
+        transform: 'scale(1.01)', // Phóng to nhẹ để nổi bật
+        transition: 'transform 0.15s ease-out',
       });
+
       preview.querySelectorAll('[data-question-handle]').forEach((handle) => {
         handle.removeAttribute('data-question-handle');
       });
@@ -313,7 +318,7 @@ export function SortableQuestionList({
       onPointerUp={finishPointer}
       onPointerCancel={resetDrag}
       onLostPointerCapture={resetDrag}
-      className="relative space-y-3"
+      className="relative space-y-4"
     >
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
@@ -323,11 +328,13 @@ export function SortableQuestionList({
           key={question.id}
           data-question-id={question.id}
           className={cn(
-            'grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-2 rounded-2xl border border-border bg-card p-3 sm:gap-3 sm:p-4',
+            'grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-colors sm:gap-4 sm:p-5',
             drag?.id === question.id &&
-              'border-dashed border-blue-400 bg-blue-50/60 [&>*]:opacity-0 dark:bg-blue-950/20'
+              'border-dashed border-gray-400 bg-gray-50/60 *:opacity-0', // Giấu thẻ gốc khi đang kéo bản sao
+            !drag && 'hover:border-gray-300 hover:shadow-md'
           )}
         >
+          {/* DRAG HANDLE */}
           <button
             type="button"
             disabled={disabled || questions.length < 2}
@@ -348,22 +355,26 @@ export function SortableQuestionList({
               focusHandle(question.id);
             }}
             data-question-handle={question.id}
-            className="inline-flex h-9 w-8 cursor-grab touch-none select-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-9 w-8 cursor-grab touch-none select-none items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#0D1742] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D1742]/50 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30"
             aria-label={`Reorder question ${index + 1}`}
-            aria-describedby="question-reorder-help"
             title="Drag to reorder · Use Up/Down arrow keys"
           >
             <GripVertical className="h-5 w-5" aria-hidden />
           </button>
+
+          {/* NUMBER BADGE */}
           <span
             data-question-number
-            className="rounded-lg bg-blue-100 px-3 py-2 text-xs font-extrabold text-blue-700"
+            className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-[#0D1742] px-2 text-xs font-black text-[#DCB968] shadow-sm"
           >
             Q{index + 1}
           </span>
+
+          {/* TEXTAREA INPUT */}
           <Textarea
             value={question.text}
             disabled={disabled}
+            placeholder="Type your interview question here..."
             aria-label={`Question ${index + 1}`}
             onChange={(event) =>
               onChange(
@@ -374,15 +385,17 @@ export function SortableQuestionList({
                 )
               )
             }
-            className="min-h-20"
+            className="min-h-20 resize-y rounded-xl border-gray-200 bg-gray-50/50 p-3 text-sm font-medium text-gray-900 transition-colors placeholder:text-gray-400 hover:border-gray-300 focus-visible:border-[#0D1742] focus-visible:bg-white focus-visible:ring-[#0D1742]"
           />
+
+          {/* DELETE BUTTON */}
           <button
             type="button"
             disabled={disabled || drag !== null}
             onClick={() =>
               onChange(questions.filter((item) => item.id !== question.id))
             }
-            className="self-start rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950/60"
+            className="self-start rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-[#B82649]/10 hover:text-[#B82649] disabled:opacity-30"
             aria-label={`Remove question ${index + 1}`}
           >
             <Trash2 className="h-4 w-4" aria-hidden />

@@ -6,10 +6,7 @@ import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
 import Candidate from '@/app/(backend)/models/Candidate';
 import type { ActiveAppSession } from '@/app/(backend)/libs/session';
-import {
-  calculateOverallScore,
-  reconcileTemplateAnswers,
-} from '@/app/(backend)/libs/round2Evaluation';
+import { reconcileTemplateAnswers } from '@/app/(backend)/libs/round2Evaluation';
 import type { ICustomAnswer } from '@/app/(backend)/types';
 
 export const runtime = 'nodejs';
@@ -18,7 +15,6 @@ export const GET = withRBAC(
   'Department Head',
   async (_req: NextRequest, { session }: { session: ActiveAppSession }) => {
     const assignedDepartment = normalizeHeadDepartment(session.user.department);
-
     if (!assignedDepartment) {
       return NextResponse.json(
         { success: false, message: 'Invalid department assignment.' },
@@ -45,11 +41,9 @@ export const GET = withRBAC(
           generation: active.currentGeneration,
           semester: active.currentSemester,
           interviewQuestions: [],
-          isScoringEnabled: false,
         },
       });
     } catch (error) {
-      console.error('[config/GET] Error:', error);
       return NextResponse.json(
         { success: false, message: 'Could not retrieve configuration.' },
         { status: 500 }
@@ -62,7 +56,6 @@ export const PATCH = withRBAC(
   'Department Head',
   async (req: NextRequest, { session }: { session: ActiveAppSession }) => {
     const assignedDepartment = normalizeHeadDepartment(session.user.department);
-
     if (!assignedDepartment) {
       return NextResponse.json(
         { success: false, message: 'Invalid department assignment.' },
@@ -72,7 +65,7 @@ export const PATCH = withRBAC(
 
     try {
       const body = await req.json();
-      const { interviewQuestions, isScoringEnabled } = body;
+      const { interviewQuestions } = body;
 
       if (interviewQuestions && !Array.isArray(interviewQuestions)) {
         return NextResponse.json(
@@ -85,8 +78,6 @@ export const PATCH = withRBAC(
       }
 
       await dbConnect();
-
-      // Configuration is scoped to the current active recruitment cycle
       const active = await getActiveConfig();
       const normalizedQuestions = interviewQuestions
         ? interviewQuestions
@@ -95,33 +86,26 @@ export const PATCH = withRBAC(
             .filter(Boolean)
         : [];
 
-      // Upsert the configuration for this department/cohort combo
       const config = await DepartmentConfig.findOneAndUpdate(
         {
           department: assignedDepartment,
           generation: active.currentGeneration,
           semester: active.currentSemester,
         },
-        {
-          $set: {
-            interviewQuestions: normalizedQuestions,
-            isScoringEnabled: Boolean(isScoringEnabled),
-          },
-        },
+        { $set: { interviewQuestions: normalizedQuestions } },
         { new: true, upsert: true }
       )
         .lean()
         .exec();
 
+      // Đồng bộ câu hỏi vào bảng Candidate (Reconcile)
       if (interviewQuestions !== undefined) {
         const candidates = await Candidate.find({
           department: assignedDepartment,
           generation: active.currentGeneration,
           semester: active.currentSemester,
         })
-          .select(
-            '_id round2Evaluation.templateAnswers round2Evaluation.adHocQuestions'
-          )
+          .select('_id round2Evaluation.templateAnswers')
           .lean()
           .exec();
 
@@ -131,20 +115,12 @@ export const PATCH = withRBAC(
             (candidate.round2Evaluation?.templateAnswers ||
               []) as ICustomAnswer[]
           );
-          const adHocQuestions = (candidate.round2Evaluation?.adHocQuestions ||
-            []) as ICustomAnswer[];
 
           return {
             updateOne: {
               filter: { _id: candidate._id },
               update: {
-                $set: {
-                  'round2Evaluation.templateAnswers': templateAnswers,
-                  'round2Evaluation.score': calculateOverallScore(
-                    templateAnswers,
-                    adHocQuestions
-                  ),
-                },
+                $set: { 'round2Evaluation.templateAnswers': templateAnswers },
               },
             },
           };
@@ -161,7 +137,6 @@ export const PATCH = withRBAC(
         data: config,
       });
     } catch (error) {
-      console.error('[config/PATCH] Error:', error);
       return NextResponse.json(
         { success: false, message: 'Invalid request payload or server error.' },
         { status: 500 }

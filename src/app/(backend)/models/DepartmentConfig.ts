@@ -8,7 +8,6 @@ const DepartmentConfigSchema = new Schema<IDepartmentConfig>(
         generation: { type: String, required: true },
         semester: { type: String, required: true },
         interviewQuestions: { type: [String], default: [] },
-        isScoringEnabled: { type: Boolean, default: false }
     },
     baseSchemaOptions
 );

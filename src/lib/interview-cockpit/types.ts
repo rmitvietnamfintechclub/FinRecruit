@@ -1,18 +1,15 @@
 export const BACKEND_ROUND_2_STATUSES = ['Pending', 'Pass', 'Fail'] as const;
-export const ROUND_2_DECISIONS = ['Pass', 'Fail', 'No Show'] as const;
 
 export type BackendRound2Status = (typeof BACKEND_ROUND_2_STATUSES)[number];
-export type Round2Decision = (typeof ROUND_2_DECISIONS)[number];
-export type CockpitRole = 'Department Head' | 'Member';
+export type CockpitRole = 'Department Head' | 'Member' | 'Executive Board'; // Đã đồng bộ với Schema mới
 export type SaveState = 'saved' | 'saving' | 'error';
 
 export type InterviewAnswer = {
   id: string;
   question: string;
   answer: string;
-  score: number | null;
   isCustom?: boolean;
-  addedBy?: string;
+  addedBy?: string; 
 };
 
 export type CollaborativeNote = {
@@ -33,12 +30,10 @@ export type CockpitUser = {
 
 export type EvaluationSaveResult = {
   answers: InterviewAnswer[];
-  overallScore: number | null;
 };
 
-export type Round2DecisionResult = {
+export type Round2StatusResult = {
   status: BackendRound2Status;
-  decision: Round2Decision | null;
 };
 
 export type Round2CandidateSummary = {
@@ -51,12 +46,6 @@ export type Round2CandidateSummary = {
   semester: string;
   interviewSlot: string;
   status: BackendRound2Status;
-  /**
-   * The selected decision. `No Show` remains distinct here and in
-   * `round2Decision`, while the workflow `round2Status` is stored as `Fail`.
-   */
-  selectedDecision: Round2Decision | null;
-  score: number | null;
 };
 
 export type InterviewCandidate = Round2CandidateSummary & {
@@ -69,7 +58,6 @@ export type InterviewCandidate = Round2CandidateSummary & {
   evaluationAnswers: InterviewAnswer[];
   adHocQuestions: InterviewAnswer[];
   collaborativeNotes: CollaborativeNote[];
-  isScoringEnabled: boolean;
 };
 
 export type SettingsLoadSource = 'backend-config' | 'empty';
@@ -79,7 +67,6 @@ export type InterviewSettings = {
   generation: string;
   semester: string;
   questions: string[];
-  isScoringEnabled: boolean;
   loadSource: SettingsLoadSource;
 };
 
@@ -105,8 +92,8 @@ export interface InterviewCockpitRepository {
   ): Promise<EvaluationSaveResult>;
   setStatus(
     candidateId: string,
-    status: Round2Decision
-  ): Promise<Round2DecisionResult>;
+    status: BackendRound2Status 
+  ): Promise<Round2StatusResult>;
   getSettings(): Promise<InterviewSettings>;
   saveSettings(settings: InterviewSettings): Promise<InterviewSettings>;
 }

@@ -6,7 +6,6 @@ import type {
   InterviewCockpitRepository,
   InterviewSettings,
   Round2CandidateSummary,
-  Round2Decision,
 } from './types';
 
 const PAGE_SIZE = 100;
@@ -22,7 +21,6 @@ type RawFormAnswer = {
   question?: unknown;
   answer?: unknown;
   addedBy?: unknown;
-  score?: unknown;
 };
 
 type RawCollaborativeNote = {
@@ -48,13 +46,9 @@ type RawCandidateSummary = {
   email?: unknown;
   department?: unknown;
   round2Status?: unknown;
-  round2Decision?: unknown;
   generation?: unknown;
   semester?: unknown;
   interviewSlot?: RawInterviewSlot | null;
-  evaluationSummary?: {
-    score?: unknown;
-  };
 };
 
 type RawCandidateList = {
@@ -76,18 +70,14 @@ type RawInterviewDetail = {
   customAnswers?: RawFormAnswer[];
   department?: unknown;
   round2Status?: unknown;
-  round2Decision?: unknown;
   evaluation?: {
-    isScoringEnabled?: unknown;
     templateAnswers?: RawFormAnswer[];
     adHocQuestions?: RawFormAnswer[];
     collaborativeNotes?: RawCollaborativeNote[];
-    score?: unknown;
   };
 };
 
 type RawEvaluationUpdate = {
-  score?: unknown;
   templateAnswers?: RawFormAnswer[];
   adHocQuestions?: RawFormAnswer[];
   collaborativeNotes?: RawCollaborativeNote[];
@@ -95,7 +85,6 @@ type RawEvaluationUpdate = {
 
 type RawStatusUpdate = {
   round2Status?: unknown;
-  round2Decision?: unknown;
 };
 
 type RawDepartmentConfig = {
@@ -103,7 +92,6 @@ type RawDepartmentConfig = {
   generation?: unknown;
   semester?: unknown;
   interviewQuestions?: unknown;
-  isScoringEnabled?: unknown;
 };
 
 function stringValue(value: unknown) {
@@ -112,37 +100,8 @@ function stringValue(value: unknown) {
 
 function backendStatus(value: unknown): BackendRound2Status {
   if (value === 'Pass') return 'Pass';
-  if (value === 'Fail' || value === 'No Show') return 'Fail';
+  if (value === 'Fail') return 'Fail';
   return 'Pending';
-}
-
-function backendDecision(
-  value: unknown,
-  status: BackendRound2Status,
-  legacyStatus?: unknown
-): Round2Decision | null {
-  if (value === 'Pass' || value === 'Fail' || value === 'No Show') {
-    return value;
-  }
-  if (legacyStatus === 'No Show') return 'No Show';
-  if (status === 'Pass') return 'Pass';
-  if (status === 'Fail') return 'Fail';
-  return null;
-}
-
-export function decisionToBackendStatus(
-  decision: Round2Decision
-): Exclude<BackendRound2Status, 'Pending'> {
-  return decision === 'Pass' ? 'Pass' : 'Fail';
-}
-
-function questionScore(value: unknown) {
-  return typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value <= 100
-    ? value
-    : null;
 }
 
 function studentIdFromEmail(email: string) {
@@ -180,7 +139,6 @@ function mapAnswer(
     id: `${prefix}-${index + 1}`,
     question: stringValue(answer.question),
     answer: stringValue(answer.answer),
-    score: questionScore(answer.score),
     ...(isCustom ? { isCustom: true } : {}),
     ...(typeof answer.addedBy === 'string' ? { addedBy: answer.addedBy } : {}),
   };
@@ -206,10 +164,11 @@ function mapCollaborativeNotes(
       authorName:
         stringValue(note.authorName) ||
         stringValue(note.authorEmail).split('@')[0],
-      role:
-        note.role === 'Department Head'
-          ? ('Department Head' as const)
-          : ('Member' as const),
+      role: (['Department Head', 'Member', 'Executive Board'].includes(
+        note.role as string
+      )
+        ? note.role
+        : 'Member') as 'Department Head' | 'Member' | 'Executive Board',
       content: stringValue(note.content),
       updatedAt: stringValue(note.updatedAt),
     }))
@@ -218,7 +177,6 @@ function mapCollaborativeNotes(
 
 function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
   const email = stringValue(candidate.email);
-  const status = backendStatus(candidate.round2Status);
   return {
     id: stringValue(candidate.id),
     fullName: stringValue(candidate.fullName),
@@ -228,16 +186,7 @@ function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
     generation: stringValue(candidate.generation),
     semester: stringValue(candidate.semester),
     interviewSlot: formatInterviewSlot(candidate.interviewSlot),
-    status,
-    selectedDecision: backendDecision(
-      candidate.round2Decision,
-      status,
-      candidate.round2Status
-    ),
-    score:
-      typeof candidate.evaluationSummary?.score === 'number'
-        ? candidate.evaluationSummary.score
-        : null,
+    status: backendStatus(candidate.round2Status),
   };
 }
 
@@ -247,7 +196,6 @@ function mapCandidate(
 ): InterviewCandidate {
   const email = stringValue(candidate.email);
   const evaluation = candidate.evaluation;
-  const status = backendStatus(candidate.round2Status);
 
   return {
     id: stringValue(candidate.id),
@@ -258,13 +206,7 @@ function mapCandidate(
     generation: summary?.generation ?? '',
     semester: summary?.semester ?? '',
     interviewSlot: summary?.interviewSlot ?? 'Not scheduled',
-    status,
-    selectedDecision: backendDecision(
-      candidate.round2Decision ?? summary?.selectedDecision,
-      status,
-      candidate.round2Status
-    ),
-    score: typeof evaluation?.score === 'number' ? evaluation.score : null,
+    status: backendStatus(candidate.round2Status),
     majorAndYear: stringValue(candidate.majorAndYear),
     phone: stringValue(candidate.phone),
     facebookLink: stringValue(candidate.facebookLink) || undefined,
@@ -274,15 +216,13 @@ function mapCandidate(
     evaluationAnswers: mapAnswers(evaluation?.templateAnswers, 'template'),
     adHocQuestions: mapAnswers(evaluation?.adHocQuestions, 'ad-hoc', true),
     collaborativeNotes: mapCollaborativeNotes(evaluation?.collaborativeNotes),
-    isScoringEnabled: evaluation?.isScoringEnabled === true,
   };
 }
 
 function toRawAnswers(answers: InterviewAnswer[]): RawFormAnswer[] {
-  return answers.map(({ question, answer, addedBy, score }) => ({
+  return answers.map(({ question, answer, addedBy }) => ({
     question,
     answer,
-    score,
     ...(addedBy ? { addedBy } : {}),
   }));
 }
@@ -361,7 +301,6 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
     );
     return {
       answers: mapAnswers(result.templateAnswers, 'template'),
-      overallScore: typeof result.score === 'number' ? result.score : null,
     };
   }
 
@@ -404,30 +343,21 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
     );
     return {
       answers: mapAnswers(result.adHocQuestions, 'ad-hoc', true),
-      overallScore: typeof result.score === 'number' ? result.score : null,
     };
   }
 
-  async setStatus(candidateId: string, decision: Round2Decision) {
-    const round2Status = decisionToBackendStatus(decision);
+  async setStatus(candidateId: string, status: BackendRound2Status) {
     const result = await this.request<RawStatusUpdate>(
       `/api/interviews/${candidateId}/status`,
       {
         method: 'PATCH',
         body: JSON.stringify({
-          round2Status,
-          round2Decision: decision,
+          round2Status: status,
         }),
       }
     );
-    const status = backendStatus(result.round2Status);
     return {
-      status,
-      decision: backendDecision(
-        result.round2Decision,
-        status,
-        result.round2Status
-      ),
+      status: backendStatus(result.round2Status),
     };
   }
 
@@ -444,7 +374,6 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
             (question): question is string => typeof question === 'string'
           )
         : [],
-      isScoringEnabled: result.isScoringEnabled === true,
       loadSource: 'backend-config',
     };
   }
@@ -456,7 +385,6 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
         method: 'PATCH',
         body: JSON.stringify({
           interviewQuestions: settings.questions,
-          isScoringEnabled: settings.isScoringEnabled,
         }),
       }
     );
@@ -470,7 +398,6 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
       generation: stringValue(result.generation) || settings.generation,
       semester: stringValue(result.semester) || settings.semester,
       questions,
-      isScoringEnabled: result.isScoringEnabled === true,
       loadSource: 'backend-config' as const,
     };
   }

@@ -1,5 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
-import { ICandidate, CANDIDATE_CHOICES, DEPARTMENTS, ROUND2_DECISIONS, STATUSES } from '@/app/(backend)/types';
+import { ICandidate, CANDIDATE_CHOICES, DEPARTMENTS, STATUSES } from '@/app/(backend)/types';
 import { baseSchemaOptions } from './baseSchemaOptions';
 
 const FormAnswerSchema = new Schema(
@@ -7,16 +7,6 @@ const FormAnswerSchema = new Schema(
         question: { type: String, required: true },
         answer: { type: String, default: '' },
         addedBy: { type: String },
-        score: {
-            type: Number,
-            default: null,
-            validate: {
-                validator: (value: number | null) =>
-                    value === null ||
-                    (Number.isInteger(value) && value >= 0 && value <= 100),
-                message: 'Question score must be a whole number from 0 to 100.'
-            }
-        }
     },
     { _id: false }
 );
@@ -28,7 +18,7 @@ const CollaborativeNoteSchema = new Schema(
         authorName: { type: String, required: true },
         role: {
             type: String,
-            enum: ['Department Head', 'Member'],
+            enum: ['Member', 'Department Head', 'Executive Board'],
             required: true
         },
         content: { type: String, default: '' },
@@ -47,7 +37,7 @@ const CandidateSchema = new Schema<ICandidate>(
         majorAndYear: { type: String, required: true },
         facebookLink: { type: String, required: true },
         cvLink: { type: String, required: true },
-        generalAnswers: { type: [FormAnswerSchema], default: [] }, // 5 general questions
+        generalAnswers: { type: [FormAnswerSchema], default: [] },
 
         // Round 1
         choice1: { type: String, required: true, enum: [...CANDIDATE_CHOICES] },
@@ -63,24 +53,13 @@ const CandidateSchema = new Schema<ICandidate>(
         // Round 2
         interviewSlotId: { type: Schema.Types.ObjectId, ref: 'MasterInterviewSlot', default: null },
         round2Status: { type: String, enum: [...STATUSES], default: 'Pending' },
-        round2Decision: {
-            type: String,
-            enum: [...ROUND2_DECISIONS],
-            default: null
-        },
         round2Evaluation: {
             templateAnswers: { type: [FormAnswerSchema], default: [] },
             adHocQuestions: { type: [FormAnswerSchema], default: [] },
-            notes: {
-                note1: { type: String, default: '' },
-                note2: { type: String, default: '' },
-                note3: { type: String, default: '' }
-            },
             collaborativeNotes: {
                 type: [CollaborativeNoteSchema],
                 default: []
             },
-            score: { type: Number, default: null }
         },
 
         // Meta data

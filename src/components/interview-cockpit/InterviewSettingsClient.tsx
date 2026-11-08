@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, CheckCircle2 } from 'lucide-react';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
 import {
   SortableQuestionList,
   type DraftInterviewQuestion,
@@ -33,6 +33,9 @@ export function InterviewSettingsClient() {
   const [error, setError] = useState<string | null>(null);
   const [isReordering, setIsReordering] = useState(false);
 
+  // State quản lý Confirm Dialog
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
   useEffect(() => {
     void interviewCockpitRepository
       .getSettings()
@@ -47,25 +50,35 @@ export function InterviewSettingsClient() {
   }, []);
 
   if (error && !settings) return <AppNotice variant="error">{error}</AppNotice>;
+
   if (!settings)
     return (
-      <p className="py-16 text-center text-sm text-muted-foreground">
-        Loading settings…
-      </p>
+      <div className="flex min-h-100 flex-col items-center justify-center space-y-4">
+        <i className="fa-solid fa-spinner fa-spin text-4xl text-[#DCB968]"></i>
+        <p className="text-sm font-bold text-[#0D1742]">
+          Loading Configuration Setup…
+        </p>
+      </div>
     );
 
-  const save = async () => {
+  const cleanQuestions = settings.questions
+    .map((q) => q.text.trim())
+    .filter(Boolean);
+
+  const handleSave = async () => {
     setSaving(true);
     setSaved(false);
     setError(null);
+    setIsConfirmOpen(false); // Đóng hộp thoại ngay khi bắt đầu lưu
+
     try {
       const result = await interviewCockpitRepository.saveSettings({
         ...settings,
-        questions: settings.questions.map((question) => question.text),
+        questions: cleanQuestions,
       });
       setSettings(toDraft(result));
       setSaved(true);
-      window.setTimeout(() => setSaved(false), 2500);
+      window.setTimeout(() => setSaved(false), 4000);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -77,128 +90,166 @@ export function InterviewSettingsClient() {
     }
   };
 
+  const handleAddQuestion = () => {
+    if (!settings) return;
+    setSettings({
+      ...settings,
+      questions: [...settings.questions, { id: crypto.randomUUID(), text: '' }],
+    });
+    setSaved(false);
+  };
+
   return (
-    <div className="space-y-6">
-      {saved && (
-        <AppNotice variant="success" title="Configuration saved">
-          Questions and scoring were saved through the Team02 department
-          configuration API.
-        </AppNotice>
-      )}
-      {error && <AppNotice variant="error">{error}</AppNotice>}
-      <div>
-        <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-purple-600">
-          Department configuration
-        </p>
-        <h1 className="mt-1 text-3xl font-black text-blue-950 dark:text-blue-300">
-          Interview Question Template
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Define standard questions and choose whether interviewers can score
-          each Round 2 question.
-        </p>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {[
-              ['Department', settings.department],
-              ['Generation', settings.generation],
-              ['Semester', settings.semester],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-xl bg-muted/50 p-3">
-                <p className="text-[10px] font-extrabold uppercase text-muted-foreground">
-                  {label}
-                </p>
-                <p className="mt-1 text-sm font-bold">
-                  {value || 'Not returned by current API'}
-                </p>
+    <>
+      <ConfirmDialog
+        open={isConfirmOpen}
+        title="Publish Interview Template?"
+        description={
+          <div className="space-y-3">
+            <p>
+              You are about to publish a standardized template containing{' '}
+              <strong className="text-gray-900">
+                {cleanQuestions.length} questions
+              </strong>
+              . This template will immediately be applied to all{' '}
+              <b>{settings.department}</b> candidates in Round 2.
+            </p>
+          </div>
+        }
+        confirmLabel="Publish Now"
+        cancelLabel="Keep Editing"
+        variant="default"
+        onConfirm={() => void handleSave()}
+        onCancel={() => setIsConfirmOpen(false)}
+        loading={saving}
+      />
+
+      <div className="mx-auto animate-in fade-in duration-500 pb-2">
+        <div className="mb-8">
+          <h1 className="text-3xl font-black tracking-tight text-[#0D1742]">
+            Question Template Builder
+          </h1>
+          <p className="mt-2 text-sm font-medium text-gray-500">
+            Design the standardized interview framework for Round 2. These
+            questions will automatically populate the Digital Cockpit for all
+            candidates.
+          </p>
+        </div>
+
+        {/* NOTIFICATIONS */}
+        <div className="mb-6 space-y-4">
+          {saved && (
+            <div className="flex animate-in slide-in-from-top-2 items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700 shadow-sm">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
               </div>
-            ))}
-          </div>
-          <div className="mt-6 space-y-3">
-            {settings.questions.length > 1 && (
-              <p
-                id="question-reorder-help"
-                className="text-xs font-semibold text-muted-foreground"
-              >
-                Drag the six-dot handle to reorder questions. When the handle is
-                focused, you can also use the Up and Down arrow keys.
-              </p>
-            )}
-            {settings.questions.length === 0 && (
-              <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
-                No interview questions are available yet.
-              </p>
-            )}
-            <SortableQuestionList
-              questions={settings.questions}
-              disabled={saving}
-              onDraggingChange={setIsReordering}
-              onChange={(questions) => {
-                setSettings({ ...settings, questions });
-                setSaved(false);
-              }}
-            />
-          </div>
-          <Button
-            type="button"
-            disabled={saving || isReordering}
-            onClick={() => {
-              setSettings({
-                ...settings,
-                questions: [
-                  ...settings.questions,
-                  { id: crypto.randomUUID(), text: '' },
-                ],
-              });
-              setSaved(false);
-            }}
-            variant="outline"
-            className="mt-4 h-10 border-blue-300 px-4 font-bold text-blue-700"
-          >
-            <Plus className="h-4 w-4" /> Add question
-          </Button>
-        </section>
-        <aside className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
-          <div className="mt-3 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-black">Optional Numeric Scoring</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                When enabled, a score field appears beside every template and
-                additional question.
+              <p>
+                Template successfully published and applied to all pending
+                candidates.
               </p>
             </div>
-            <Switch
+          )}
+          {error && (
+            <AppNotice variant="error" onDismiss={() => setError(null)}>
+              {error}
+            </AppNotice>
+          )}
+        </div>
+
+        {/* BUILDER WORKSPACE */}
+        <div className="rounded-[24px] border border-gray-200 bg-white shadow-sm overflow-hidden">
+          {/* WORKSPACE HEADER */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 bg-gray-50/80 px-6 py-5">
+            <div>
+              <h2 className="text-lg font-black text-[#0D1742] flex items-center gap-2">
+                <i className="fa-solid fa-list-check text-[#DCB968]"></i>
+                Standard Questions
+              </h2>
+              <p className="mt-1 text-xs font-semibold text-gray-500">
+                Drag the 6-dot handle to reorder. Empty fields are removed upon
+                saving.
+              </p>
+            </div>
+            <div className="rounded-xl bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-gray-400 shadow-sm border border-gray-100">
+              {settings.questions.length} Question
+              {settings.questions.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+
+          {/* QUESTION LIST */}
+          <div className="p-6">
+            {settings.questions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 py-20 text-center transition-colors hover:bg-gray-100 hover:border-gray-300">
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm ring-4 ring-gray-50">
+                  <i className="fa-regular fa-comment-dots text-3xl text-gray-300"></i>
+                </div>
+                <h3 className="text-lg font-black text-gray-900">
+                  Blank Canvas
+                </h3>
+                <p className="mt-2 text-sm font-medium text-gray-500 max-w-sm">
+                  Your interview template is currently empty. Click the button
+                  below to add your first standard question.
+                </p>
+                <Button
+                  type="button"
+                  onClick={handleAddQuestion}
+                  className="mt-6 h-11 rounded-xl bg-[#0D1742] px-6 font-bold text-[#DCB968] shadow-sm transition-all hover:bg-[#0D1742]/90"
+                >
+                  <Plus className="mr-2 h-5 w-5" /> Add First Question
+                </Button>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-2 sm:p-3">
+                <SortableQuestionList
+                  questions={settings.questions}
+                  disabled={saving}
+                  onDraggingChange={setIsReordering}
+                  onChange={(questions) => {
+                    setSettings({ ...settings, questions });
+                    setSaved(false);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* WORKSPACE FOOTER ACTIONS */}
+          <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            {settings.questions.length > 0 ? (
+              <Button
+                type="button"
+                disabled={saving || isReordering}
+                onClick={handleAddQuestion}
+                variant="outline"
+                className="h-11 rounded-xl border-dashed border-gray-300 bg-white px-5 font-bold text-[#0D1742] shadow-sm transition-all hover:border-gray-400 hover:bg-gray-50 focus:ring-2 focus:ring-[#0D1742]/20"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Add Next Question
+              </Button>
+            ) : (
+              <div /> // Spacer
+            )}
+
+            <Button
+              type="button"
+              onClick={() => setIsConfirmOpen(true)} // Mở Dialog thay vì save luôn
               disabled={saving || isReordering}
-              checked={settings.isScoringEnabled}
-              onCheckedChange={(checked) =>
-                setSettings({ ...settings, isScoringEnabled: checked })
-              }
-            />
+              className="h-11 w-full sm:w-auto rounded-xl bg-[#0D1742] px-8 font-black text-[#DCB968] shadow-md transition-all hover:bg-[#0D1742]/90 hover:shadow-lg focus:ring-4 focus:ring-[#0D1742]/20 disabled:opacity-70 disabled:hover:shadow-md"
+            >
+              {saving ? (
+                <span className="flex items-center gap-2">
+                  <i className="fa-solid fa-spinner fa-spin text-[#DCB968]"></i>{' '}
+                  Publishing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <i className="fa-solid fa-cloud-arrow-up"></i> Publish
+                  Template
+                </span>
+              )}
+            </Button>
           </div>
-          <div className="mt-5 rounded-xl bg-muted/50 p-4 text-sm">
-            <p className="font-extrabold">
-              Current state: {settings.isScoringEnabled ? 'ON' : 'OFF'}
-            </p>
-            <p className="mt-2 text-muted-foreground">
-              Each scored question accepts a whole number from 0 to 100. Overall
-              Score is calculated automatically from scored questions only;
-              unanswered score fields are excluded from the average.
-            </p>
-          </div>
-        </aside>
+        </div>
       </div>
-      <div className="flex justify-stretch sm:justify-end">
-        <Button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving || isReordering}
-          className="h-11 w-full bg-blue-900 px-6 font-extrabold text-white shadow-sm hover:bg-blue-800 sm:w-auto"
-        >
-          {saving ? 'Saving…' : 'Save & Apply'}
-        </Button>
-      </div>
-    </div>
+    </>
   );
 }
