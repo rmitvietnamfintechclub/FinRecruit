@@ -10,33 +10,35 @@ type DepartmentProgress = {
 };
 
 type RoundTransitionBarProps = {
-  department: DepartmentType | null; // null đại diện cho 'All'
+  roundName: 'Round 1' | 'Round 2';
+  department: DepartmentType | null;
   evaluated: number;
   total: number;
   isLocked: boolean;
   departmentStates?: Array<{
     department: string;
     isRound1Locked: boolean;
+    isRound2Locked: boolean;
   }>;
   departmentStats?: DepartmentProgress[];
-  isRecruitmentActive?: boolean; // <-- THÊM PROP NÀY
+  isRecruitmentActive?: boolean;
 };
 
 export function RoundTransitionBar({
+  roundName,
   department,
   evaluated,
   total,
   isLocked,
   departmentStates = [],
   departmentStats = [],
-  isRecruitmentActive = false, // <-- GIÁ TRỊ MẶC ĐỊNH
+  isRecruitmentActive = false,
 }: RoundTransitionBarProps) {
   const percentage = total > 0 ? Math.round((evaluated / total) * 100) : 0;
-  
-  // 1. NẾU ĐANG CHỌN 1 PHÒNG BAN CỤ THỂ
+
   if (department) {
-    // LOGIC CHUẨN: Chưa khóa + Form Đã Đóng + Chấm xong hết
-    const isPendingLock = !isLocked && !isRecruitmentActive && evaluated === total;
+    const isPendingLock =
+      !isLocked && !isRecruitmentActive && evaluated === total;
 
     return (
       <section
@@ -45,10 +47,8 @@ export function RoundTransitionBar({
       >
         <div className="flex items-center justify-between w-full sm:max-w-xl mb-2">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
-            Round 1 Progress • {department}
+            {roundName} Progress • {department}
           </p>
-
-          {/* BADGE TRẠNG THÁI RÕ RÀNG */}
           {isLocked ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-600">
               <i className="fa-solid fa-lock" /> Locked
@@ -95,12 +95,14 @@ export function RoundTransitionBar({
 
   const lockedCount = ROUND_TRANSITION_DEPARTMENTS.filter((dept) => {
     const state = departmentStates.find((s) => s.department === dept);
-    return state?.isRound1Locked;
+    return roundName === 'Round 1'
+      ? state?.isRound1Locked
+      : state?.isRound2Locked;
   }).length;
 
   const isAllLocked = lockedCount === ROUND_TRANSITION_DEPARTMENTS.length;
-  // LOGIC CHUẨN: Chưa khóa hết + Form đóng + Toàn bộ CLB đã chấm xong
-  const isOverallPendingLock = !isAllLocked && !isRecruitmentActive && evaluated === total;
+  const isOverallPendingLock =
+    !isAllLocked && !isRecruitmentActive && evaluated === total;
 
   return (
     <section
@@ -108,11 +110,10 @@ export function RoundTransitionBar({
       className="flex flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
     >
       <div className="flex flex-col gap-6 lg:flex-row lg:justify-between lg:items-start">
-        {/* Cột trái: Tổng quan toàn bộ CLB */}
         <div className="w-full lg:max-w-md shrink-0">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
-              Round 1 Progress • All Departments
+              {roundName} Progress • All Departments
             </p>
             {isAllLocked ? (
               <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-600">
@@ -154,7 +155,6 @@ export function RoundTransitionBar({
           </div>
         </div>
 
-        {/* Cột phải: Lưới trạng thái từng phòng ban */}
         <div className="w-full flex-1 lg:pl-10 lg:border-l lg:border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.18em]">
@@ -169,12 +169,10 @@ export function RoundTransitionBar({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {ROUND_TRANSITION_DEPARTMENTS.map((dept) => {
-              // 1. TÌM TRẠNG THÁI KHÓA AN TOÀN
               const cleanTargetDept = dept
                 .replace(' Department', '')
                 .trim()
                 .toLowerCase();
-
               const state = departmentStates.find((s) => {
                 const cleanDsDept = s.department
                   .replace(' Department', '')
@@ -182,9 +180,11 @@ export function RoundTransitionBar({
                   .toLowerCase();
                 return cleanDsDept === cleanTargetDept;
               });
-              const isDeptLocked = state?.isRound1Locked ?? false;
+              const isDeptLocked =
+                roundName === 'Round 1'
+                  ? (state?.isRound1Locked ?? false)
+                  : (state?.isRound2Locked ?? false);
 
-              // 2. TÌM SỐ LIỆU PROGRESS
               const deptStat = departmentStats.find((s) => {
                 const cleanStatDept = s.department
                   .replace(' Department', '')
@@ -197,8 +197,10 @@ export function RoundTransitionBar({
               const deptTotal = deptStat?.total ?? 0;
               const isEmpty = deptTotal === 0;
 
-              // LOGIC CHUẨN: Chưa khóa + Form đóng + Đã chấm hết 
-              const isDeptPendingLock = !isDeptLocked && !isRecruitmentActive && deptEvaluated === deptTotal;
+              const isDeptPendingLock =
+                !isDeptLocked &&
+                !isRecruitmentActive &&
+                deptEvaluated === deptTotal;
 
               return (
                 <div
@@ -238,7 +240,6 @@ export function RoundTransitionBar({
                       {isEmpty ? '0' : `${deptEvaluated} / ${deptTotal}`}
                     </span>
 
-                    {/* BADGES CHO TỪNG CARD PHÒNG BAN */}
                     {isDeptLocked ? (
                       <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100/50">
                         <i className="fa-solid fa-lock" /> Locked

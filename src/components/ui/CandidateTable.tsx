@@ -82,11 +82,14 @@ export default function CandidateTable({
     }
   };
 
-  const renderTimeAndSignal = (candidate: HeadDashboardListCandidate, isListView: boolean) => {
+  const renderTimeAndSignal = (
+    candidate: HeadDashboardListCandidate,
+    isListView: boolean
+  ) => {
     if (round === 2) {
       const hasSlot = !!candidate.interviewSlotId;
       const attendanceSignal = candidate.interviewAttendance;
-      
+
       if (!hasSlot) {
         return (
           <span className="truncate text-sm font-bold text-gray-400">
@@ -95,51 +98,65 @@ export default function CandidateTable({
         );
       }
 
-      // Xử lý các case có tín hiệu điểm danh rõ ràng (Badge to, rõ như thiết kế mới)
+      // Xử lý các case có tín hiệu điểm danh rõ ràng
       if (attendanceSignal === 'COMPLETED') {
-         return (
-           <span className="inline-flex w-fit items-center gap-1.5 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-black uppercase tracking-wider text-emerald-600 shadow-sm">
-              <i className="fa-solid fa-check" /> COMPLETED
-           </span>
-         );
-      }
-      
-      if (attendanceSignal === 'NO_SHOW') {
-         return (
-           <span className="inline-flex w-fit items-center gap-1.5 rounded border border-[#B82649]/30 bg-[#B82649]/10 px-2 py-1 text-[11px] font-black uppercase tracking-wider text-[#B82649] shadow-sm">
-              <i className="fa-solid fa-user-slash" /> NO SHOW
-           </span>
-         );
+        return (
+          <span className="inline-flex w-fit items-center gap-1.5 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-black uppercase tracking-wider text-emerald-600 shadow-sm">
+            <i className="fa-solid fa-check" /> COMPLETED
+          </span>
+        );
       }
 
-      // Default: Scheduled (Chỉ hiện text thời gian)
+      if (attendanceSignal === 'NO_SHOW') {
+        return (
+          <span className="inline-flex w-fit items-center gap-1.5 rounded border border-[#B82649]/30 bg-[#B82649]/10 px-2 py-1 text-[11px] font-black uppercase tracking-wider text-[#B82649] shadow-sm">
+            <i className="fa-solid fa-user-slash" /> NO SHOW
+          </span>
+        );
+      }
+
       const formattedDate = formatInterviewDate(candidate.interviewDate);
-      const timeString = (candidate.interviewStartTime && candidate.interviewEndTime) 
-        ? `${candidate.interviewStartTime} - ${candidate.interviewEndTime}` 
-        : '';
+      const timeString =
+        candidate.interviewStartTime && candidate.interviewEndTime
+          ? `${candidate.interviewStartTime} - ${candidate.interviewEndTime}`
+          : '';
 
       return (
-        <div className={`flex flex-col leading-tight ${isListView ? 'justify-center' : ''}`}>
+        <div
+          className={`flex flex-col gap-1 leading-tight ${isListView ? 'justify-center' : ''}`}
+        >
           {formattedDate ? (
             <>
-              <span className="text-[13px] font-black text-gray-900 truncate">
+              {/* Dòng 1: Ngày phỏng vấn */}
+              <span className="truncate text-[13px] font-black text-gray-900">
                 {formattedDate}
               </span>
+
+              {/* Dòng 2: Khung giờ */}
               {timeString && (
-                <span className="text-[12px] font-bold text-gray-700 truncate">
+                <span className="inline-flex items-center gap-1 truncate text-[11px] font-bold text-gray-600">
+                  <i className="fa-regular fa-clock text-[10px] text-gray-400" />
                   {timeString}
+                </span>
+              )}
+
+              {/* Dòng 3: Phòng phỏng vấn */}
+              {candidate.interviewRoom && (
+                <span className="inline-flex items-center gap-1 truncate text-[11px] font-bold text-blue-600">
+                  <i className="fa-solid fa-location-dot text-[10px] text-blue-400" />
+                  {candidate.interviewRoom}
                 </span>
               )}
             </>
           ) : (
-             <span className="truncate text-[13px] font-black text-gray-400">
-                Data syncing...
-             </span>
+            <span className="truncate text-[13px] font-black text-gray-400">
+              Data syncing...
+            </span>
           )}
         </div>
       );
     }
-    
+
     // Logic của Round 1
     const appliedAt = candidate.createdAt ?? candidate.appliedAt;
     return (
@@ -204,7 +221,8 @@ export default function CandidateTable({
                     {candidate.department}
                   </p>
 
-                  {round === 1 && candidate.routing.currentStage === 'choice2' ? (
+                  {round === 1 &&
+                  candidate.routing.currentStage === 'choice2' ? (
                     <Tooltip content={secondChoiceTooltip(candidate.choice1)}>
                       <span className="mt-1.5 inline-flex cursor-help items-center gap-1 rounded-full border border-[#E0D8FF] bg-[#F0EDFF] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#2C305F] shadow-sm">
                         <i className="fa-solid fa-share" aria-hidden />
@@ -222,9 +240,23 @@ export default function CandidateTable({
                 </div>
 
                 <div className="flex items-center h-full">
-                  <span className={statusBadgeClass(round === 1 ? candidate.status : (candidate.round2Status ?? 'Pending'))}>
-                    <i className={statusIconClass(round === 1 ? candidate.status : (candidate.round2Status ?? 'Pending'))} />
-                    {round === 1 ? candidate.status : (candidate.round2Status ?? 'Pending')}
+                  <span
+                    className={statusBadgeClass(
+                      round === 1
+                        ? candidate.status
+                        : (candidate.round2Status ?? 'Pending')
+                    )}
+                  >
+                    <i
+                      className={statusIconClass(
+                        round === 1
+                          ? candidate.status
+                          : (candidate.round2Status ?? 'Pending')
+                      )}
+                    />
+                    {round === 1
+                      ? candidate.status
+                      : (candidate.round2Status ?? 'Pending')}
                   </span>
                 </div>
 
@@ -280,9 +312,23 @@ export default function CandidateTable({
                     {emailLocalPart(candidate.email)}
                   </p>
                 </div>
-                <span className={statusBadgeClass(round === 1 ? candidate.status : (candidate.round2Status ?? 'Pending'))}>
-                  <i className={statusIconClass(round === 1 ? candidate.status : (candidate.round2Status ?? 'Pending'))}></i>
-                  {round === 1 ? candidate.status : (candidate.round2Status ?? 'Pending')}
+                <span
+                  className={statusBadgeClass(
+                    round === 1
+                      ? candidate.status
+                      : (candidate.round2Status ?? 'Pending')
+                  )}
+                >
+                  <i
+                    className={statusIconClass(
+                      round === 1
+                        ? candidate.status
+                        : (candidate.round2Status ?? 'Pending')
+                    )}
+                  ></i>
+                  {round === 1
+                    ? candidate.status
+                    : (candidate.round2Status ?? 'Pending')}
                 </span>
               </div>
 
@@ -298,23 +344,29 @@ export default function CandidateTable({
                     <p className="truncate text-sm font-bold text-gray-900">
                       {candidate.department}
                     </p>
-                    {round === 1 && candidate.routing.currentStage === 'choice2' && (
-                      <Tooltip content={secondChoiceTooltip(candidate.choice1)}>
-                        <span className="mt-1.5 inline-flex cursor-help items-center gap-1.5 rounded-full border border-[#E0D8FF] bg-[#F0EDFF] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#2C305F] shadow-sm">
-                          <i className="fa-solid fa-share shrink-0" aria-hidden />
-                          {SECOND_CHOICE_BADGE_LABEL}
-                        </span>
-                      </Tooltip>
-                    )}
+                    {round === 1 &&
+                      candidate.routing.currentStage === 'choice2' && (
+                        <Tooltip
+                          content={secondChoiceTooltip(candidate.choice1)}
+                        >
+                          <span className="mt-1.5 inline-flex cursor-help items-center gap-1.5 rounded-full border border-[#E0D8FF] bg-[#F0EDFF] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#2C305F] shadow-sm">
+                            <i
+                              className="fa-solid fa-share shrink-0"
+                              aria-hidden
+                            />
+                            {SECOND_CHOICE_BADGE_LABEL}
+                          </span>
+                        </Tooltip>
+                      )}
                   </div>
                 </div>
 
                 <div className="flex items-start gap-4">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600 shadow-sm">
-                    <i className={round === 1 ? "fa-regular fa-calendar-check" : "fa-regular fa-calendar-days"}></i>
+                    <i className="fa-regular fa-calendar-days"></i>
                   </div>
-                  <div className="flex flex-1 flex-col items-start justify-center min-w-0 min-h-10">
-                    <p className="mb-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                  <div className="flex flex-1 flex-col items-start justify-center min-w-0">
+                    <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-gray-400">
                       {timeLabelText}
                     </p>
                     {renderTimeAndSignal(candidate, false)}

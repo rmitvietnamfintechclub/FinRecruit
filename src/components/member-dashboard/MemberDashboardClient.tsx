@@ -1,9 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import CandidateTable, {
-  type CandidateViewMode,
-} from '@/components/ui/CandidateTable';
+import type { CandidateViewMode } from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { CohortBanner } from '@/components/feedback/CohortBanner';
@@ -14,34 +12,14 @@ import {
   ROUND_TRANSITION_DEPARTMENTS,
 } from '@/lib/round-transition/reducer';
 import { useDepartmentStates } from '@/hooks/use-round-transition';
-import {
-  RoundModeTabs,
-  type RoundMode,
-} from '@/components/member-dashboard/RoundModeTabs';
-import { Tooltip, TooltipProvider } from '@/components/ui/Tooltip';
+import { RoundModeTabs, type RoundMode } from '@/components/member-dashboard/RoundModeTabs';
+import { TooltipProvider } from '@/components/ui/Tooltip';
 import { useSessionExpired } from '@/components/providers/SessionExpiredProvider';
 
-// IMPORT COMPONENT VỪA TẠO VÀO ĐÂY
-import { RoundTransitionBar } from '@/components/member-dashboard/RoundTransitionBar';
+import { MemberRound1View } from './MemberRound1View';
+import { MemberRound2View } from './MemberRound2View';
 
 const PAGE_SIZE = 12;
-
-const AnimatedNumber = ({ value }: { value: number }) => {
-  return (
-    <>
-      <style>{`
-        @keyframes slideInUpFade {
-          0% { opacity: 0; transform: translateY(15px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        .animate-number-up { animation: slideInUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-      `}</style>
-      <span key={value} className="inline-block animate-number-up">
-        {value}
-      </span>
-    </>
-  );
-};
 
 type ActiveCohort = {
   generation: string;
@@ -65,55 +43,51 @@ type ListApiResponse = {
 };
 
 export default function MemberDashboardClient() {
-  const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>(
-    []
-  );
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [listEmptyHint, setListEmptyHint] = useState<string | null>(null);
+  // === STATE CHUNG ===
   const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
-  const [assignedDepartment, setAssignedDepartment] = useState<string | null>(
-    null
-  );
-
+  const [assignedDepartment, setAssignedDepartment] = useState<string | null>(null);
   const [mode, setMode] = useState<RoundMode>('round1');
   const [viewMode, setViewMode] = useState<CandidateViewMode>('list');
   const [newCandidateNotice, setNewCandidateNotice] = useState(false);
+  
+  const { triggerSessionExpired } = useSessionExpired();
+  const departmentStates = useDepartmentStates();
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // === ROUND 1 STATE ===
+  const [candidates, setCandidates] = useState<HeadDashboardListCandidate[]>([]);
+  const [statusFilterR1, setStatusFilterR1] = useState('All');
+  const [pageR1, setPageR1] = useState(1);
+  const [hasMoreR1, setHasMoreR1] = useState(false);
+  const [loadingMoreR1, setLoadingMoreR1] = useState(false);
+  const [listEmptyHintR1, setListEmptyHintR1] = useState<string | null>(null);
+  const [statsR1, setStatsR1] = useState({ total: 0, pending: 0, passed: 0, failed: 0 });
   const prevListTotalRef = useRef<number | null>(null);
-  const observerTarget = useRef<HTMLDivElement>(null);
   const pageRef = useRef(1);
 
-  const departmentStates = useDepartmentStates();
-  const { triggerSessionExpired } = useSessionExpired();
+  // === ROUND 2 STATE ===
+  const [round2Candidates, setRound2Candidates] = useState<HeadDashboardListCandidate[]>([]);
+  const [loadingR2, setLoadingR2] = useState(false);
+  const [errorR2, setErrorR2] = useState<string | null>(null);
 
   useEffect(() => {
-    pageRef.current = page;
-  }, [page]);
+    pageRef.current = pageR1;
+  }, [pageR1]);
 
   const headDepartment: DepartmentType | null =
-    assignedDepartment &&
-    ROUND_TRANSITION_DEPARTMENTS.includes(assignedDepartment as DepartmentType)
+    assignedDepartment && ROUND_TRANSITION_DEPARTMENTS.includes(assignedDepartment as DepartmentType)
       ? (assignedDepartment as DepartmentType)
       : null;
 
-  // Lấy trạng thái khóa Vòng 1 từ Head
   const isRound1Locked = headDepartment
-    ? (findDepartmentState(departmentStates, headDepartment)?.isRound1Locked ??
-      false)
+    ? (findDepartmentState(departmentStates, headDepartment)?.isRound1Locked ?? false)
     : false;
 
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    passed: 0,
-    failed: 0,
-  });
+  const isRound2Locked = headDepartment
+    ? (findDepartmentState(departmentStates, headDepartment)?.isRound2Locked ?? false)
+    : false;
 
   const refreshStats = useCallback(async () => {
     const base = '/api/member-dashboard/candidates';
@@ -125,13 +99,11 @@ export default function MemberDashboardClient() {
         fetch(`${base}?status=Fail&limit=1`, { credentials: 'include' }),
       ]);
       const [jAll, jP, jPa, jF] = (await Promise.all([
-        rAll.json(),
-        rP.json(),
-        rPa.json(),
-        rF.json(),
+        rAll.json(), rP.json(), rPa.json(), rF.json(),
       ])) as ListApiResponse[];
+
       if (!rAll.ok || !jAll.success) return;
-      setStats({
+      setStatsR1({
         total: jAll.meta?.total ?? 0,
         pending: rP.ok && jP.success ? (jP.meta?.total ?? 0) : 0,
         passed: rPa.ok && jPa.success ? (jPa.meta?.total ?? 0) : 0,
@@ -140,41 +112,28 @@ export default function MemberDashboardClient() {
     } catch {}
   }, []);
 
-  const loadList = useCallback(
-    async (
-      pageNum: number,
-      append: boolean,
-      options?: { isPoll?: boolean }
-    ) => {
+  const loadListR1 = useCallback(
+    async (pageNum: number, append: boolean, options?: { isPoll?: boolean }) => {
       if (pageNum === 1 && !append && !options?.isPoll) setLoading(true);
-      else if (pageNum > 1) setLoadingMore(true);
+      else if (pageNum > 1) setLoadingMoreR1(true);
       setError(null);
 
       try {
         const params = new URLSearchParams();
-        const fetchLimit = options?.isPoll
-          ? pageRef.current * PAGE_SIZE
-          : PAGE_SIZE;
+        const fetchLimit = options?.isPoll ? pageRef.current * PAGE_SIZE : PAGE_SIZE;
         const fetchPage = options?.isPoll ? 1 : pageNum;
 
         params.set('limit', String(fetchLimit));
         params.set('page', String(fetchPage));
-        if (statusFilter !== 'All') params.set('status', statusFilter);
-        const q = searchQuery.trim();
-        if (q) params.set('search', q);
+        if (statusFilterR1 !== 'All') params.set('status', statusFilterR1);
 
-        const res = await fetch(`/api/member-dashboard/candidates?${params}`, {
-          credentials: 'include',
-        });
+        const res = await fetch(`/api/member-dashboard/candidates?${params}`, { credentials: 'include' });
         const json = (await res.json()) as ListApiResponse;
 
         if (!res.ok || !json.success) {
           if (!options?.isPoll) {
             setError(json.message ?? `Request failed (${res.status})`);
-            if (!append) {
-              setCandidates([]);
-              setListEmptyHint(null);
-            }
+            if (!append) setCandidates([]);
           }
           return;
         }
@@ -183,45 +142,32 @@ export default function MemberDashboardClient() {
         const total = json.meta?.total ?? 0;
 
         if (options?.isPoll) {
-          if (
-            prevListTotalRef.current !== null &&
-            total > prevListTotalRef.current
-          ) {
+          if (prevListTotalRef.current !== null && total > prevListTotalRef.current) {
             setNewCandidateNotice(true);
           }
           prevListTotalRef.current = total;
           setCandidates(rows);
-          setListEmptyHint(
-            rows.length === 0 ? (json.meta?.emptyState ?? null) : null
-          );
         } else if (pageNum === 1 && !append) {
           prevListTotalRef.current = total;
           setCandidates(rows);
-          setPage(1);
-          setHasMore((json.meta?.totalPages ?? 0) > 1);
-          setListEmptyHint(
-            rows.length === 0 ? (json.meta?.emptyState ?? null) : null
-          );
+          setPageR1(1);
+          setHasMoreR1((json.meta?.totalPages ?? 0) > 1);
         } else if (append && pageNum > 1) {
           setCandidates((prev) => {
             const existingIds = new Set(prev.map((c) => c.id));
             const newRows = rows.filter((r) => !existingIds.has(r.id));
             return [...prev, ...newRows];
           });
-          setHasMore(pageNum < (json.meta?.totalPages ?? 0));
-          setPage(pageNum);
+          setHasMoreR1(pageNum < (json.meta?.totalPages ?? 0));
+          setPageR1(pageNum);
         }
 
         if (json.meta?.activeCohort) setActiveCohort(json.meta.activeCohort);
-        if (json.meta?.filters?.department)
-          setAssignedDepartment(json.meta.filters.department);
+        if (json.meta?.filters?.department) setAssignedDepartment(json.meta.filters.department);
+        setListEmptyHintR1(rows.length === 0 ? (json.meta?.emptyState ?? null) : null);
       } catch (e) {
-        const errorMessage =
-          e instanceof Error ? e.message : 'Failed to load candidates.';
-        if (
-          errorMessage.toLowerCase().includes('authentication required') ||
-          errorMessage.includes('401')
-        ) {
+        const errorMessage = e instanceof Error ? e.message : 'Failed to load candidates.';
+        if (errorMessage.toLowerCase().includes('authentication required') || errorMessage.includes('401')) {
           triggerSessionExpired();
           return;
         }
@@ -232,331 +178,101 @@ export default function MemberDashboardClient() {
       } finally {
         if (!options?.isPoll) {
           setLoading(false);
-          setLoadingMore(false);
+          setLoadingMoreR1(false);
         }
       }
     },
-    [statusFilter, searchQuery, triggerSessionExpired]
+    [statusFilterR1, triggerSessionExpired]
   );
 
-  useEffect(() => {
-    void loadList(1, false);
-  }, [loadList]);
+  const loadListR2 = useCallback(async (options?: { isPoll?: boolean }) => {
+    if (!options?.isPoll) {
+      setLoadingR2(true);
+      setErrorR2(null);
+    }
+    try {
+      const params = new URLSearchParams({ status: 'Pass', page: '1', limit: '500', populateInterview: 'true' });
+      const res = await fetch(`/api/member-dashboard/candidates?${params}`, { credentials: 'include' });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        if (!options?.isPoll) setErrorR2(json.message ?? `Request failed (${res.status})`);
+        return;
+      }
+      setRound2Candidates(json.candidates ?? []);
+    } catch (e) {
+      if (!options?.isPoll) setErrorR2(e instanceof Error ? e.message : 'Failed to load Round 2 data.');
+    } finally {
+      if (!options?.isPoll) setLoadingR2(false);
+    }
+  }, []);
 
-  useEffect(() => {
-    void refreshStats();
-  }, [refreshStats]);
+  useEffect(() => { void loadListR1(1, false); }, [loadListR1]);
+  useEffect(() => { void refreshStats(); }, [refreshStats]);
+  useEffect(() => { if (isRound1Locked && mode === 'round2') void loadListR2(); }, [isRound1Locked, mode, loadListR2]);
 
   const pollDashboard = useCallback(() => {
-    void loadList(1, false, { isPoll: true });
-    void refreshStats();
-  }, [loadList, refreshStats]);
+    if (mode === 'round1') {
+      void loadListR1(1, false, { isPoll: true });
+      void refreshStats();
+    } else {
+      void loadListR2({ isPoll: true });
+    }
+  }, [mode, loadListR1, refreshStats, loadListR2]);
 
-  useIntervalWhenVisible(pollDashboard, { enabled: !loading && !loadingMore });
-
-  // Xử lý Infinite Scroll
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          hasMore &&
-          !loadingMore &&
-          !loading &&
-          mode === 'round1'
-        ) {
-          void loadList(page + 1, true);
-        }
-      },
-      { threshold: 1.0 }
-    );
-    if (observerTarget.current) observer.observe(observerTarget.current);
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore, loading, page, loadList, mode]);
-
-  const filterOptions = ['All', 'Pending', 'Pass', 'Fail'];
-
-  const evaluatedCount = Math.max(stats.total - stats.pending, 0);
+  useIntervalWhenVisible(pollDashboard, { enabled: !loading && !loadingMoreR1 });
 
   return (
     <TooltipProvider delayDuration={300}>
       <div className="relative space-y-6">
-        {error && (
-          <AppNotice
-            variant="error"
-            title="Could not load data"
-            onDismiss={() => setError(null)}
-            action={
-              <button
-                type="button"
-                onClick={() => void loadList(1, false)}
-                className="rounded-lg bg-[#B82649]/10 px-3 py-1.5 text-sm font-semibold text-[#B82649] hover:bg-[#B82649]/20"
-              >
-                Retry
-              </button>
-            }
-          >
-            {error}
-          </AppNotice>
-        )}
-
         {newCandidateNotice && (
-          <AppNotice
-            variant="info"
-            title="New application received"
-            onDismiss={() => setNewCandidateNotice(false)}
-          >
+          <AppNotice variant="info" title="New application received" onDismiss={() => setNewCandidateNotice(false)}>
             A new candidate has been added to your list.
           </AppNotice>
         )}
 
-        {/* 1. Round Toggle */}
-        {headDepartment || loading ? (
-          <RoundModeTabs
-            mode={mode}
-            isLocked={isRound1Locked}
-            isLoading={!headDepartment && loading}
-            onChange={setMode}
-          />
-        ) : null}
+        {(headDepartment || loading) && (
+          <RoundModeTabs mode={mode} isLocked={isRound1Locked} isLoading={!headDepartment && loading} onChange={setMode} />
+        )}
 
-        {/* 2. Cohort Banner */}
         <CohortBanner
           cohort={activeCohort}
           variant="default"
           scopeLabel={assignedDepartment ? `${assignedDepartment}` : undefined}
           mode={mode}
           isRound1Locked={isRound1Locked}
+          isRound2Locked={isRound2Locked}
         />
 
-        {/* 3. Stats Grid */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#F0EDFF] text-[#2C305F]">
-              <i className="fa-solid fa-user-group text-2xl" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#2C305F]">
-                Total
-              </p>
-              <p className="text-3xl font-black text-[#0D1742]">
-                <AnimatedNumber value={stats.total} />
-              </p>
-              <p className="text-xs font-semibold text-[#5E5E92]">Applicants</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFEFCA] text-[#A28436]">
-              <i className="fa-regular fa-clock text-2xl" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#A28436]">
-                Pending
-              </p>
-              <p className="text-3xl font-black text-[#A28436]">
-                <AnimatedNumber value={stats.pending} />
-              </p>
-              <p className="text-xs font-semibold text-[#A28436]/70">
-                In Review
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-              <i className="fa-solid fa-check text-2xl" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                Passed
-              </p>
-              <p className="text-3xl font-black text-emerald-600">
-                <AnimatedNumber value={stats.passed} />
-              </p>
-              <p className="text-xs font-semibold text-emerald-600/70">
-                Qualified
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#B82649]/10 text-[#B82649]">
-              <i className="fa-solid fa-xmark text-2xl" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#B82649]">
-                Failed
-              </p>
-              <p className="text-3xl font-black text-[#B82649]">
-                <AnimatedNumber value={stats.failed} />
-              </p>
-              <p className="text-xs font-semibold text-[#B82649]/70">
-                Rejected
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* KHÔNG RENDER VÒNG 1 KHI ĐANG Ở TAB VÒNG 2 */}
-        {mode === 'round1' && (
-          <>
-            {/* 4. Filter / Action Bar */}
-            <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex w-full overflow-x-auto rounded-xl bg-gray-100 p-1 sm:w-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {filterOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => {
-                      setStatusFilter(option);
-                      setPage(1);
-                    }}
-                    className={`shrink-0 rounded-lg px-6 py-2 text-sm font-bold transition-all ${
-                      statusFilter === option
-                        ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
-                        : 'text-gray-500 hover:text-[#0D1742]'
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="relative w-full shrink-0 sm:w-72 lg:w-64 xl:w-72">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-                    <i className="fa-solid fa-magnifying-glass text-gray-400"></i>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Search by sID or name..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setPage(1);
-                    }}
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pr-4 pl-11 text-sm font-medium text-gray-900 shadow-sm transition-all hover:border-[#0D1742]/50 focus:border-[#0D1742] focus:ring-1 focus:ring-[#0D1742] focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex rounded-xl bg-gray-100 p-1 shrink-0">
-                  <Tooltip content="Grid View">
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`flex size-9 items-center justify-center rounded-lg transition-colors ${
-                        viewMode === 'grid'
-                          ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
-                          : 'text-gray-500 hover:text-[#0D1742]'
-                      }`}
-                    >
-                      <i className="fa-solid fa-grip" />
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="List View">
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`flex size-9 items-center justify-center rounded-lg transition-colors ${
-                        viewMode === 'list'
-                          ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
-                          : 'text-gray-500 hover:text-[#0D1742]'
-                      }`}
-                    >
-                      <i className="fa-solid fa-list" />
-                    </button>
-                  </Tooltip>
-                </div>
-              </div>
-            </div>
-
-            {/* 5. Read-Only Progress Bar TÁCH COMPONENT MỚI */}
-            <div className="relative mt-4">
-              {(headDepartment || loading) && (
-                <RoundTransitionBar
-                  department={headDepartment ?? 'Loading...'}
-                  evaluated={evaluatedCount}
-                  total={stats.total}
-                  isLocked={isRound1Locked}
-                  isRecruitmentActive={
-                    activeCohort?.isRecruitmentActive ?? false
-                  }
-                  isLoading={loading} 
-                />
-              )}
-
-              {/* 6. Candidate Table */}
-              {loading && !error && candidates.length === 0 ? (
-                <div className="flex min-h-75 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white text-center shadow-sm py-20">
-                  <i className="fa-solid fa-spinner fa-spin text-3xl text-[#DCB968]" />
-                  <p className="mt-4 text-sm font-bold text-[#0D1742]">
-                    Loading candidates…
-                  </p>
-                </div>
-              ) : (
-                <div className="transition-opacity duration-300 opacity-100">
-                  {candidates.length > 0 ? (
-                    <>
-                      <CandidateTable
-                        candidates={candidates}
-                        onUpdateStatus={() => {}}
-                        viewMode={viewMode}
-                        readOnly={true}
-                        detailApi="member-dashboard"
-                      />
-
-                      {hasMore && (
-                        <div
-                          ref={observerTarget}
-                          className="mt-6 flex justify-center py-6"
-                        >
-                          {loadingMore ? (
-                            <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-5 py-2.5 shadow-sm">
-                              <i className="fa-solid fa-spinner fa-spin text-[#DCB968]" />
-                              <span className="text-xs font-bold text-[#0D1742]">
-                                Loading more candidates...
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="h-4 w-full" aria-hidden="true" />
-                          )}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white py-20 text-center shadow-sm">
-                      <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-gray-50">
-                        <i className="fa-solid fa-folder-open text-3xl text-gray-400" />
-                      </div>
-                      <p className="text-xl font-black text-[#0D1742]">
-                        No candidates found
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-gray-500">
-                        {listEmptyHint ??
-                          'Try adjusting your search or filter settings.'}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* KHU VỰC VÒNG 2 */}
-        {mode === 'round2' && (
-          <div className="mt-4 animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex min-h-75 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white py-20 text-center shadow-sm">
-              <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-blue-50">
-                <i className="fa-solid fa-person-chalkboard text-3xl text-blue-500" />
-              </div>
-              <p className="text-xl font-black text-[#0D1742]">
-                Round 2 Interview Area
-              </p>
-              <p className="mt-2 max-w-sm text-sm font-medium text-gray-500">
-                The interview assessment tools for Members are coming soon.
-              </p>
-            </div>
-          </div>
+        {mode === 'round1' ? (
+          <MemberRound1View
+            department={headDepartment}
+            candidates={candidates}
+            loading={loading}
+            loadingMore={loadingMoreR1}
+            hasMore={hasMoreR1}
+            error={error}
+            listEmptyHint={listEmptyHintR1}
+            page={pageR1}
+            stats={statsR1}
+            statusFilter={statusFilterR1}
+            viewMode={viewMode}
+            isLocked={isRound1Locked}
+            isRecruitmentActive={activeCohort?.isRecruitmentActive ?? false}
+            onSetStatusFilter={(s) => { setStatusFilterR1(s); setPageR1(1); }}
+            onSetViewMode={setViewMode}
+            onLoadMore={(p) => loadListR1(p, true)}
+            onRetry={() => loadListR1(1, false)}
+          />
+        ) : (
+          <MemberRound2View
+            department={headDepartment}
+            candidates={round2Candidates}
+            loading={loadingR2}
+            error={errorR2}
+            viewMode={viewMode}
+            isLocked={isRound2Locked}
+            onSetViewMode={setViewMode}
+          />
         )}
       </div>
     </TooltipProvider>

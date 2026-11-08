@@ -34,6 +34,7 @@ export type HeadDashboardListCandidate = {
   interviewDate?: string | null;
   interviewStartTime?: string | null;
   interviewEndTime?: string | null;
+  interviewRoom?: string;
   
   // Extracted Signal Field from Lookup (trạng thái điểm danh)
   interviewAttendance?: string | null;

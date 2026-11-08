@@ -1,6 +1,7 @@
 'use client';
 
 interface RoundTransitionBarProps {
+  roundName: 'Round 1' | 'Round 2'; // <-- THÊM PROP NÀY
   department: string;
   evaluated: number;
   total: number;
@@ -10,6 +11,7 @@ interface RoundTransitionBarProps {
 }
 
 export function RoundTransitionBar({
+  roundName, // <-- KHAI BÁO Ở ĐÂY
   department,
   evaluated,
   total,
@@ -42,12 +44,12 @@ export function RoundTransitionBar({
 
   return (
     <section
-      aria-label="Round 1 evaluation status"
+      aria-label={`${roundName} evaluation status`}
       className="mb-6 flex flex-col rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
     >
       <div className="mb-2 flex w-full sm:max-w-xl items-center justify-between">
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
-          Round 1 Progress • {department}
+          {roundName} Progress • {department}
         </p>
 
         {/* BADGE TRẠNG THÁI */}

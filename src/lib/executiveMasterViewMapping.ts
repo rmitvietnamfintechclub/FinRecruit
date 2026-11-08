@@ -18,6 +18,7 @@ import type {
   HeadDashboardCandidateDetailApi,
   HeadDashboardListCandidate,
 } from '@/types/headDashboard';
+import type { DashboardStatus } from '@/app/(frontend)/(router)/HeadDashboard/patchCandidateStatus';
 
 /** UI dropdown labels in MasterView → API `department` query / statistics keys */
 export const MASTER_VIEW_DEPT_OPTIONS = [
@@ -98,6 +99,7 @@ export type ExecutiveListRow = {
   dob?: string;
   department: DepartmentType;
   status: StatusType;
+  round2Status?: DashboardStatus; // <-- Bổ sung trường này
   choice1: CandidateChoiceType;
   choice2?: string;
   generation: string;
@@ -105,6 +107,16 @@ export type ExecutiveListRow = {
   appliedAt: string;
   createdAt?: string;
   updatedAt?: string;
+  
+  // <-- Bổ sung object interviewSlot để map dữ liệu phỏng vấn
+  interviewSlot?: {
+    id: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    room: string;
+    attendanceStatus?: 'COMPLETED' | 'NO_SHOW' | null;
+  };
 };
 
 export function mapExecutiveListItemToHeadRow(
@@ -128,12 +140,20 @@ export function mapExecutiveListItemToHeadRow(
     choice1,
     choice2,
     status: raw.status,
+    round2Status: raw.round2Status, // Map R2 Status
     generation: raw.generation,
     semester: raw.semester,
     appliedAt: toIsoString(raw.appliedAt),
     createdAt: toIsoString(raw.createdAt ?? raw.appliedAt),
     updatedAt: toIsoString(raw.updatedAt),
     routing: routingFromChoices({ department, choice1, choice2 }),
+    
+    interviewDate: raw.interviewSlot?.date,
+    interviewStartTime: raw.interviewSlot?.startTime,
+    interviewEndTime: raw.interviewSlot?.endTime,
+    interviewRoom: raw.interviewSlot?.room,
+    interviewAttendance: raw.interviewSlot?.attendanceStatus,
+    interviewSlotId: raw.interviewSlot?.id,
   };
 }
 
@@ -148,6 +168,9 @@ export function mapExecutiveDetailToHeadDetail(
       ? (choice2Raw as CandidateChoiceType)
       : null;
 
+  // Lấy ra interviewSlot nếu có
+  const interviewSlotRaw = raw.interviewSlot as ExecutiveListRow['interviewSlot'];
+
   const listBase = mapExecutiveListItemToHeadRow({
     _id: String(raw._id ?? ''),
     fullName: String(raw.fullName ?? ''),
@@ -156,6 +179,7 @@ export function mapExecutiveDetailToHeadDetail(
     dob: String(raw.dob ?? ''),
     department,
     status: raw.status as StatusType,
+    round2Status: raw.round2Status as DashboardStatus | undefined,
     choice1,
     choice2: choice2 ?? undefined,
     generation: String(raw.generation ?? ''),
@@ -163,6 +187,7 @@ export function mapExecutiveDetailToHeadDetail(
     appliedAt: toIsoString(raw.appliedAt),
     createdAt: toIsoString(raw.createdAt),
     updatedAt: toIsoString(raw.updatedAt),
+    interviewSlot: interviewSlotRaw,
   });
 
   const customAnswers = normalizeCustomAnswers({

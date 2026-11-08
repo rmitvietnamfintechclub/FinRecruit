@@ -42,11 +42,10 @@ export function RoundModeTabs({
         className={cn(
           'flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all duration-300 disabled:pointer-events-none',
           mode === 'round2'
-            ? 'bg-[#0D1742] text-[#DCB968] shadow-md'
-            : 'text-gray-500',
-          !isLocked
-            ? 'opacity-50 hover:bg-transparent'
-            : 'hover:bg-gray-100 hover:text-[#0D1742]'
+            ? 'bg-[#0D1742] text-[#DCB968] shadow-md' // Brand Colors cho trạng thái Active (Không hover xám)
+            : !isLocked
+              ? 'text-gray-500 opacity-50 hover:bg-transparent' // Trạng thái Bị Khóa
+              : 'text-gray-500 hover:bg-gray-100 hover:text-[#0D1742]' // Trạng thái Unlocked & Inactive
         )}
       >
         {!isLocked && (
@@ -78,7 +77,6 @@ export function RoundModeTabs({
         Application Form (Round 1)
       </button>
 
-      {/* CHỈ BỌC TOOLTIP KHI CHƯA KHÓA XONG ROUND 1 */}
       {!isLocked ? (
         <Tooltip content="Finalize Round 1 evaluations to unlock the interview pool.">
           {round2Button}

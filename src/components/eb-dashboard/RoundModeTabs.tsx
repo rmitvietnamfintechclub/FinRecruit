@@ -30,7 +30,6 @@ export function RoundModeTabs({
     );
   }
 
-  // Tách riêng cục button Round 2 ra để tái sử dụng
   const round2Button = (
     <span className={cn('flex flex-1', !isLocked && 'cursor-not-allowed')}>
       <button
@@ -43,10 +42,9 @@ export function RoundModeTabs({
           'flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all duration-300 disabled:pointer-events-none',
           mode === 'round2'
             ? 'bg-[#0D1742] text-[#DCB968] shadow-md'
-            : 'text-gray-500',
-          !isLocked
-            ? 'opacity-50 hover:bg-transparent'
-            : 'hover:bg-gray-100 hover:text-[#0D1742]'
+            : !isLocked
+              ? 'text-gray-500 opacity-50 hover:bg-transparent' 
+              : 'text-gray-500 hover:bg-gray-100 hover:text-[#0D1742]' 
         )}
       >
         {!isLocked && (
@@ -71,14 +69,13 @@ export function RoundModeTabs({
         className={cn(
           'flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all duration-300',
           mode === 'round1'
-            ? 'bg-[#0D1742] text-[#DCB968] shadow-md' // Brand Colors cho trạng thái Active
+            ? 'bg-[#0D1742] text-[#DCB968] shadow-md'
             : 'text-gray-500 hover:bg-gray-100 hover:text-[#0D1742]'
         )}
       >
         Application Form (Round 1)
       </button>
 
-      {/* CHỈ RENDER TOOLTIP KHI CHƯA KHÓA XONG ROUND 1 */}
       {!isLocked ? (
         <Tooltip content="Round 2 interview pool is locked. All Department Heads must finalize Round 1 evaluations first.">
           {round2Button}

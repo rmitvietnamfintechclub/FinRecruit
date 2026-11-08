@@ -159,56 +159,6 @@ export function Round1Evaluation({
         </AppNotice>
       )}
 
-      {headDepartment && (
-        <RoundTransitionBar
-          roundName="Round 1"
-          evaluated={Math.max(stats.total - stats.pending, 0)}
-          total={stats.total}
-          isLocked={isRound1Locked}
-          locking={locking}
-          canLock={
-            !isRecruitmentActive &&
-            stats.pending === 0 &&
-            stats.total > 0 &&
-            !isRound1Locked
-          }
-          isPendingLock={
-            !isRecruitmentActive &&
-            stats.total > 0 &&
-            stats.pending === 0 &&
-            !isRound1Locked
-          }
-          lockDisabledReason={
-            isRecruitmentActive
-              ? 'Cannot lock while the public recruitment form is still open.'
-              : stats.pending > 0
-                ? `Resolve ${stats.pending} pending application${stats.pending > 1 ? 's' : ''} to lock.`
-                : null
-          }
-          lockedTitle="Round 1 Evaluation closed"
-          lockedDescription="Results are final. Passed candidates are in the Round 2 interview pool."
-          lockedSuccessMessage="All evaluations for Round 1 have been finalized. The interview pool is now unlocked and ready for Round 2."
-          lockConfirmDescription={
-            <div className="flex flex-col gap-4">
-              <p className="text-gray-600">
-                All <span className="font-bold text-emerald-600">Passed</span>{' '}
-                candidates will be moved to the Round 2 interview pool, and this
-                evaluation round will become{' '}
-                <span className="font-bold text-gray-900">read-only</span>.
-              </p>
-              <div className="rounded-lg border border-[#F7D27F] bg-[#FFEFCA] p-3 text-xs font-semibold text-[#A28436]">
-                <i className="fa-solid fa-triangle-exclamation mr-1.5" />
-                This action cannot be undone from the dashboard. Make sure all
-                results are accurate.
-              </div>
-            </div>
-          }
-          onLock={onLockRound1}
-          onGoToNextRound={onGoToRound2}
-          nextRoundLabel="Go to Round 2"
-        />
-      )}
-
       {/* STATS GRID */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-transform hover:-translate-y-1">
@@ -382,6 +332,56 @@ export function Round1Evaluation({
           </div>
         </div>
       </div>
+
+      {headDepartment && (
+        <RoundTransitionBar
+          roundName="Round 1"
+          evaluated={Math.max(stats.total - stats.pending, 0)}
+          total={stats.total}
+          isLocked={isRound1Locked}
+          locking={locking}
+          canLock={
+            !isRecruitmentActive &&
+            stats.pending === 0 &&
+            stats.total > 0 &&
+            !isRound1Locked
+          }
+          isPendingLock={
+            !isRecruitmentActive &&
+            stats.total > 0 &&
+            stats.pending === 0 &&
+            !isRound1Locked
+          }
+          lockDisabledReason={
+            isRecruitmentActive
+              ? 'Cannot lock while the public recruitment form is still open.'
+              : stats.pending > 0
+                ? `Resolve ${stats.pending} pending application${stats.pending > 1 ? 's' : ''} to lock.`
+                : null
+          }
+          lockedTitle="Round 1 Evaluation closed"
+          lockedDescription="Results are final. Passed candidates are in the Round 2 interview pool."
+          lockedSuccessMessage="All evaluations for Round 1 have been finalized. The interview pool is now unlocked and ready for Round 2."
+          lockConfirmDescription={
+            <div className="flex flex-col gap-4">
+              <p className="text-gray-600">
+                All <span className="font-bold text-emerald-600">Passed</span>{' '}
+                candidates will be moved to the Round 2 interview pool, and this
+                evaluation round will become{' '}
+                <span className="font-bold text-gray-900">read-only</span>.
+              </p>
+              <div className="rounded-lg border border-[#F7D27F] bg-[#FFEFCA] p-3 text-xs font-semibold text-[#A28436]">
+                <i className="fa-solid fa-triangle-exclamation mr-1.5" />
+                This action cannot be undone from the dashboard. Make sure all
+                results are accurate.
+              </div>
+            </div>
+          }
+          onLock={onLockRound1}
+          onGoToNextRound={onGoToRound2}
+          nextRoundLabel="Go to Round 2"
+        />
+      )}
 
       {loading && !error ? (
         <div className="flex min-h-100 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white py-20 text-center shadow-sm">

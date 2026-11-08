@@ -48,6 +48,7 @@ type CandidateListAggregationResult = {
     interviewDate?: Date | string | null;      
     interviewStartTime?: string | null;        
     interviewEndTime?: string | null;
+    interviewRoom?: string | null;
     interviewAttendance?: string | null;
   }>;
 };
@@ -143,6 +144,7 @@ export const GET = withRBAC(
                 interviewDate: '$firstSlot.date',
                 interviewStartTime: '$firstSlot.startTime',
                 interviewEndTime: '$firstSlot.endTime',
+                interviewRoom: '$firstSlot.room',
                 
                 interviewAttendance: {
                   $let: {
@@ -203,6 +205,7 @@ export const GET = withRBAC(
         interviewDate: candidate.interviewDate ?? null,
         interviewStartTime: candidate.interviewStartTime ?? null,
         interviewEndTime: candidate.interviewEndTime ?? null,
+        interviewRoom: candidate.interviewRoom ?? null,
         interviewAttendance: candidate.interviewAttendance ?? null,
       })) ?? [];
 
