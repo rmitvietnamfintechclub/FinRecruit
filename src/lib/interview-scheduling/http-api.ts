@@ -127,7 +127,7 @@ export async function httpGetAvailabilityMonitor(): Promise<{
   slots: InterviewSlot[];
   availability: InterviewerAvailabilityRecord[];
 }> {
-  return request('/api/executive/interview-availability');
+  return request('/api/public/interview-availability');
 }
 
 export async function httpGetBookingsMonitor(

@@ -9,10 +9,13 @@ import {
   DetailRows,
   TransactionalCard,
 } from '@/components/interview-scheduling/TransactionalCard';
-import { useSubmitAvailability } from '@/hooks/use-interview-scheduling';
+import {
+  useSubmitAvailability,
+  useAvailabilityRecords,
+} from '@/hooks/use-interview-scheduling';
 import {
   httpGetPublicAvailability,
-  httpGetInterviewerHistory, // Hàm mới lấy lịch sử
+  httpGetInterviewerHistory,
 } from '@/lib/interview-scheduling/http-api';
 import {
   DEPARTMENT_META,
@@ -25,8 +28,10 @@ import type {
 } from '@/types/interviewScheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TooltipProvider } from '@/components/ui/Tooltip';
-import { filterSlotsByAssignedDept } from '@/lib/interview-scheduling/reducer';
-
+import {
+  filterSlotsByAssignedDept,
+  hasHeadAvailable,
+} from '@/lib/interview-scheduling/reducer';
 const ROLES: InterviewerRole[] = [
   'Executive Board',
   'Department Head',
@@ -49,6 +54,7 @@ export function InterviewerAvailabilityClient() {
   const { submit, pending } = useSubmitAvailability();
 
   const [slots, setSlots] = useState<InterviewSlot[]>([]);
+  const availability = useAvailabilityRecords();
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -426,16 +432,12 @@ export function InterviewerAvailabilityClient() {
               ) : (
                 <TooltipProvider>
                   <div className="space-y-8">
-                    {' '}
-                    {/* THÊM pt-6 CHO CÂN BẰNG */}
                     {activeDepartments.map((d) => {
-                      // BƯỚC LỌC QUAN TRỌNG: Chỉ lấy những ca được EB gán cho department 'd'
                       const deptSlots = filterSlotsByAssignedDept(slots, d);
 
                       return (
                         <SlotPicker
                           key={d}
-                          // Thay vì truyền 'slots' gốc, giờ ta truyền 'deptSlots' đã lọc
                           slots={deptSlots}
                           band={{
                             label: DEPARTMENT_META[d].full,
@@ -443,20 +445,38 @@ export function InterviewerAvailabilityClient() {
                           }}
                           isSelected={(s) =>
                             picks[d].has(s.id) || lockedForHead(s, d)
-                          } // Nếu bị khóa thì LUÔN HIỂN THỊ LÀ ĐƯỢC CHỌN
-                          isDisabled={(s) =>
-                            Boolean(lockedBy(s, d)) || lockedForHead(s, d)
-                          } // Disable khi bị khóa
+                          }
+                          isDisabled={(s) => {
+                            // 1. Kiểm tra các điều kiện khóa cũ (đã book hoặc head lock)
+                            if (Boolean(lockedBy(s, d)) || lockedForHead(s, d))
+                              return true;
+
+                            // 2. Áp dụng cho CẢ MEMBER VÀ EXECUTIVE BOARD
+                            // Bất kể role nào, nếu Head của phòng ban 'd' chưa available ở slot này -> Disable ngay lập tức
+                            const isHeadFree = hasHeadAvailable(
+                              availability,
+                              s.id,
+                              d
+                            );
+                            if (!isHeadFree) return true;
+
+                            return false;
+                          }}
                           chipTitle={(s) => {
                             const owner = lockedBy(s, d);
                             if (owner)
                               return `You have already registered this slot for ${DEPARTMENT_META[owner].full}.`;
-                            // THÊM TOOLTIP CHO HEAD
+
                             if (lockedForHead(s, d))
                               return 'Locked: A candidate is scheduled for this slot. Please contact the Executive Board to make changes.';
+
+                            if (!hasHeadAvailable(availability, s.id, d)) {
+                              return `This slot is unavailable because Head of ${DEPARTMENT_META[d].full} has not registered for it yet.`;
+                            }
+
                             return undefined;
                           }}
-                          onToggle={(s) => toggle(d, s)} // Truyền nguyên object s vào thay vì s.id
+                          onToggle={(s) => toggle(d, s)}
                         />
                       );
                     })}
