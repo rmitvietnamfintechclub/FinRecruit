@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/utils';
 import type {
   InterviewDepartment,
+  InterviewerAvailabilityRecord,
   InterviewSlot,
 } from '@/types/interviewScheduling';
 
@@ -29,6 +30,7 @@ type SlotPickerProps<T extends InterviewSlot> = {
   onToggle: (slot: T) => void;
   /** Department-themed band: primary-colored toggle header + support-colored content. Omit for a plain grid. */
   band?: { label: string; department: InterviewDepartment };
+  availability?: InterviewerAvailabilityRecord[];
 };
 
 /** Date -> room -> chips grid, optionally under a collapsible colored department band. */
@@ -39,6 +41,7 @@ export function SlotPicker<T extends InterviewSlot>({
   chipTitle,
   onToggle,
   band,
+  availability,
 }: SlotPickerProps<T>) {
   const [open, setOpen] = useState(true);
   const byDate = useMemo(
@@ -89,6 +92,24 @@ export function SlotPicker<T extends InterviewSlot>({
                       const selected = isSelected(s);
                       const titleMsg = chipTitle?.(s);
 
+                      const deptName = band?.department;
+                      const maxLimit = deptName
+                        ? (s.maxMembersPerDept?.[deptName] ?? 4)
+                        : 4;
+
+                      // ĐẾM SỐ LƯỢNG MEMBER THỰC TẾ ĐÃ ĐĂNG KÝ CHO SLOT NÀY VÀ DEPARTMENT NÀY
+                      const currentCount =
+                        deptName && availability
+                          ? availability.filter(
+                              (r: InterviewerAvailabilityRecord) =>
+                                r.slotId === s.id &&
+                                r.department === deptName &&
+                                r.interviewerRole === 'Member'
+                            ).length
+                          : 0;
+
+                      const isFull = currentCount >= maxLimit;
+
                       const chipElement = (
                         <button
                           type="button"
@@ -123,6 +144,21 @@ export function SlotPicker<T extends InterviewSlot>({
                           >
                             {slotDuration(s)}
                           </span>
+
+                          {deptName && (!disabled || isFull) && (
+                            <span
+                              className={cn(
+                                'mt-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-black tracking-wider uppercase',
+                                selected
+                                  ? 'bg-white/20 text-[#DCB968]'
+                                  : isFull
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-emerald-50 text-emerald-700'
+                              )}
+                            >
+                              {currentCount}/{maxLimit} Members
+                            </span>
+                          )}
 
                           {/* Icon cảnh báo nhỏ nếu bị disabled */}
                           {disabled && (

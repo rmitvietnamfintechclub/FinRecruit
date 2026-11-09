@@ -113,6 +113,7 @@ export interface IMasterInterviewSlot extends Document {
   room: string;
   assignedDepartments: DepartmentType[];
   bookings: ISlotBooking[];
+  maxMembersPerDept: Record<DepartmentType, number>;
   createdAt: Date;
   updatedAt: Date;
 }

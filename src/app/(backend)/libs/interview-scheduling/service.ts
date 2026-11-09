@@ -35,6 +35,7 @@ export interface SerializedInterviewSlot {
   room: string;
   assignedDepartments: DepartmentType[];
   bookings: SerializedSlotBooking[];
+  maxMembersPerDept: Record<DepartmentType, number>;
 }
 
 export interface SerializedAvailabilityRecord {
@@ -74,10 +75,18 @@ export type ConfirmBookingResult =
   | { ok: true; booking: SerializedInterviewSlot }
   | { ok: false; reason: 'SLOT_NO_LONGER_AVAILABLE' }
   | { ok: false; reason: 'SLOT_NOT_FOUND' }
-  | { ok: false; reason: 'ALREADY_BOOKED'; existingBooking: SerializedInterviewSlot }
+  | {
+      ok: false;
+      reason: 'ALREADY_BOOKED';
+      existingBooking: SerializedInterviewSlot;
+    }
   | { ok: false; reason: 'CANDIDATE_NOT_FOUND' }
   | { ok: false; reason: 'NOT_PASSED_ROUND_1' }
-  | { ok: false; reason: 'DEPARTMENT_MISMATCH'; correctDepartment: DepartmentType };
+  | {
+      ok: false;
+      reason: 'DEPARTMENT_MISMATCH';
+      correctDepartment: DepartmentType;
+    };
 
 export interface LeanMasterSlot {
   _id: Types.ObjectId;
@@ -156,6 +165,7 @@ type SlotForSerialization = {
   endTime: string;
   room: string;
   assignedDepartments?: DepartmentType[];
+  maxMembersPerDept: Record<DepartmentType, number>;
   bookings?: Array<{
     candidateId:
       | Types.ObjectId
@@ -170,7 +180,9 @@ type SlotForSerialization = {
   }>;
 };
 
-export function serializeSlot(slot: SlotForSerialization): SerializedInterviewSlot {
+export function serializeSlot(
+  slot: SlotForSerialization
+): SerializedInterviewSlot {
   const serializedBookings: SerializedSlotBooking[] = (slot.bookings || []).map(
     (b) => {
       let candName = 'Unknown';
@@ -188,7 +200,9 @@ export function serializeSlot(slot: SlotForSerialization): SerializedInterviewSl
       return {
         candidateId: candIdStr,
         candidateName: candName,
-        candidateStudentId: candEmail ? deriveStudentIdFromEmail(candEmail) : '',
+        candidateStudentId: candEmail
+          ? deriveStudentIdFromEmail(candEmail)
+          : '',
         department: b.department,
         status: b.status,
       };
@@ -204,6 +218,12 @@ export function serializeSlot(slot: SlotForSerialization): SerializedInterviewSl
     endTime: slot.endTime,
     room: slot.room,
     assignedDepartments: slot.assignedDepartments ?? [],
+    maxMembersPerDept: slot.maxMembersPerDept ?? {
+      'Technology Department': 4,
+      'Business Department': 4,
+      'Marketing Department': 4,
+      'HR Department': 4,
+    },
     bookings: serializedBookings,
   };
 }
@@ -222,7 +242,9 @@ export function serializeAvailability(
   };
 }
 
-export async function getActiveCohortSlots(): Promise<SerializedInterviewSlot[]> {
+export async function getActiveCohortSlots(): Promise<
+  SerializedInterviewSlot[]
+> {
   await dbConnect();
   const active = await getActiveConfig();
 
@@ -281,7 +303,11 @@ export async function publishMasterSlots(
 export async function deleteMasterSlot(
   slotId: string,
   actor?: IAuditLogActor
-): Promise<{ ok: boolean; message?: string; slots: SerializedInterviewSlot[] }> {
+): Promise<{
+  ok: boolean;
+  message?: string;
+  slots: SerializedInterviewSlot[];
+}> {
   await dbConnect();
 
   if (!Types.ObjectId.isValid(slotId)) {
@@ -356,6 +382,41 @@ export async function submitInterviewerAvailability(
   }
 
   const isHead = input.interviewerRole === 'Department Head';
+  const isMember = input.interviewerRole === 'Member';
+
+  // KIỂM TRA SỨC CHỨA (CAPACITY CHECK) CHO MEMBER THEO TỪNG PHÒNG BAN
+  if (isMember) {
+    for (const sel of input.selections) {
+      for (const sId of sel.slotIds) {
+        if (!Types.ObjectId.isValid(sId)) continue;
+
+        const slotDoc = await MasterInterviewSlot.findById(sId).lean();
+        if (!slotDoc) continue;
+
+        // Lấy giới hạn max members của phòng ban này (mặc định là 4 nếu chưa cấu hình)
+        const maxLimit =
+          (slotDoc.maxMembersPerDept as Record<string, number>)?.[
+            sel.department
+          ] ?? 4;
+
+        // Đếm số lượng member hiện tại đã đăng ký vào slot này cho phòng ban này (trừ chính user đang update)
+        const existingMembersCount =
+          await InterviewerAvailability.countDocuments({
+            slotId: slotDoc._id,
+            department: sel.department,
+            interviewerRole: 'Member',
+            interviewerEmail: { $ne: email },
+          });
+
+        if (existingMembersCount >= maxLimit) {
+          throw new Error(
+            `${sel.department} has reached its maximum capacity of ${maxLimit} members for the slot on ${formatDateToYYYYMMDD(slotDoc.date)} at ${slotDoc.startTime}.`
+          );
+        }
+      }
+    }
+  }
+
   const lockedSlotsByDept = new Map<string, Set<string>>();
 
   if (isHead) {
@@ -378,7 +439,9 @@ export async function submitInterviewerAvailability(
   const finalSelections = [...input.selections];
 
   if (isHead) {
-    const oldHistory = await InterviewerAvailability.find({ interviewerEmail: email }).lean();
+    const oldHistory = await InterviewerAvailability.find({
+      interviewerEmail: email,
+    }).lean();
 
     finalSelections.forEach((sel) => {
       const lockedSlotIds = lockedSlotsByDept.get(sel.department);
@@ -388,7 +451,8 @@ export async function submitInterviewerAvailability(
         lockedSlotIds.forEach((lockedId) => {
           const didRegisterBefore = oldHistory.some(
             (h) =>
-              h.slotId.toString() === lockedId && h.department === sel.department
+              h.slotId.toString() === lockedId &&
+              h.department === sel.department
           );
 
           if (didRegisterBefore) {
@@ -403,7 +467,9 @@ export async function submitInterviewerAvailability(
   await InterviewerAvailability.deleteMany({
     $or: [
       { interviewerEmail: email },
-      { interviewerName: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } },
+      {
+        interviewerName: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+      },
     ],
   });
 
@@ -429,7 +495,9 @@ export async function submitInterviewerAvailability(
   }
 
   if (recordsToInsert.length > 0) {
-    await InterviewerAvailability.insertMany(recordsToInsert, { ordered: false });
+    await InterviewerAvailability.insertMany(recordsToInsert, {
+      ordered: false,
+    });
   }
 
   void logSystemEvent({
@@ -438,7 +506,10 @@ export async function submitInterviewerAvailability(
     action: 'interview-scheduling.availability_submitted',
     message: `${name} (${input.interviewerRole}) declared availability for ${recordsToInsert.length} shift(s).`,
     performedBy: { email, role: input.interviewerRole as RoleType },
-    metadata: { shiftsCount: recordsToInsert.length, role: input.interviewerRole },
+    metadata: {
+      shiftsCount: recordsToInsert.length,
+      role: input.interviewerRole,
+    },
     ipAddress: clientInfo?.ip,
     userAgent: clientInfo?.userAgent,
   });
@@ -524,7 +595,11 @@ export async function confirmCandidateBooking(
   }
 
   if (candidate.department !== input.department) {
-    return { ok: false, reason: 'DEPARTMENT_MISMATCH', correctDepartment: candidate.department };
+    return {
+      ok: false,
+      reason: 'DEPARTMENT_MISMATCH',
+      correctDepartment: candidate.department,
+    };
   }
 
   const existingSlot = await MasterInterviewSlot.findOne({

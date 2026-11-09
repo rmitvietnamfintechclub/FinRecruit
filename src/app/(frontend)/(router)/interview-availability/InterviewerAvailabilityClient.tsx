@@ -439,6 +439,7 @@ export function InterviewerAvailabilityClient() {
                         <SlotPicker
                           key={d}
                           slots={deptSlots}
+                          availability={availability}
                           band={{
                             label: DEPARTMENT_META[d].full,
                             department: d,
@@ -451,14 +452,34 @@ export function InterviewerAvailabilityClient() {
                             if (Boolean(lockedBy(s, d)) || lockedForHead(s, d))
                               return true;
 
-                            // 2. Áp dụng cho CẢ MEMBER VÀ EXECUTIVE BOARD
-                            // Bất kể role nào, nếu Head của phòng ban 'd' chưa available ở slot này -> Disable ngay lập tức
+                            // 2. Kiểm tra Head của phòng ban 'd' đã available chưa
                             const isHeadFree = hasHeadAvailable(
                               availability,
                               s.id,
                               d
                             );
                             if (!isHeadFree) return true;
+
+                            // 3. LOGIC MỚI: Kiểm tra giới hạn số lượng Member (Chỉ áp dụng khi user chọn role là 'Member')
+                            if (role === 'Member') {
+                              const maxLimit = s.maxMembersPerDept?.[d] ?? 4; // Mặc định tối đa 4 nếu chưa cấu hình
+
+                              // Đếm số lượng member hiện tại đã đăng ký vào slot này của phòng ban 'd'
+                              const currentMembersCount = availability.filter(
+                                (r) =>
+                                  r.slotId === s.id &&
+                                  r.department === d &&
+                                  r.interviewerRole === 'Member'
+                              ).length;
+
+                              // Nếu đã đạt giới hạn và user này chưa từng chọn ca đó trước đó -> Disable
+                              if (
+                                currentMembersCount >= maxLimit &&
+                                !picks[d].has(s.id)
+                              ) {
+                                return true;
+                              }
+                            }
 
                             return false;
                           }}
@@ -472,6 +493,23 @@ export function InterviewerAvailabilityClient() {
 
                             if (!hasHeadAvailable(availability, s.id, d)) {
                               return `This slot is unavailable because Head of ${DEPARTMENT_META[d].full} has not registered for it yet.`;
+                            }
+
+                            // Tooltip thông báo khi ca đã kín chỗ cho Member
+                            if (role === 'Member') {
+                              const maxLimit = s.maxMembersPerDept?.[d] ?? 4;
+                              const currentMembersCount = availability.filter(
+                                (r) =>
+                                  r.slotId === s.id &&
+                                  r.department === d &&
+                                  r.interviewerRole === 'Member'
+                              ).length;
+                              if (
+                                currentMembersCount >= maxLimit &&
+                                !picks[d].has(s.id)
+                              ) {
+                                return `This slot has reached its maximum capacity of ${maxLimit} members for ${DEPARTMENT_META[d].full}.`;
+                              }
                             }
 
                             return undefined;

@@ -24,7 +24,17 @@ const MasterInterviewSlotSchema = new Schema<IMasterInterviewSlot>(
             enum: [...DEPARTMENTS],
             required: true,
         },
-        bookings: { type: [SlotBookingSchema], default: [] }
+        bookings: { type: [SlotBookingSchema], default: [] },
+        maxMembersPerDept: {
+            type: Object,
+            default: () => ({
+                'Technology Department': 4,
+                'Business Department': 4,
+                'Marketing Department': 4,
+                'HR Department': 4,
+            }),
+            required: true,
+        },
     },
     baseSchemaOptions
 );

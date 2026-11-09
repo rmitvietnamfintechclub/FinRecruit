@@ -22,13 +22,14 @@ export interface InterviewSlot {
   startTime: string; // 'HH:mm' 24h
   endTime: string;
   room: string;
-  bookings: SlotBooking[]; // MẢNG BOOKINGS
+  bookings: SlotBooking[]; 
+  maxMembersPerDept: Record<InterviewDepartment, number>;
   assignedDepartments: InterviewDepartment[];
 }
 
 export type NewInterviewSlot = Pick<
   InterviewSlot,
-  'date' | 'startTime' | 'endTime' | 'room' | 'assignedDepartments'
+  'date' | 'startTime' | 'endTime' | 'room' | 'assignedDepartments' | 'maxMembersPerDept'
 >;
 
 // Mirrors src/app/(backend)/models/InterviewerAvailability.ts
