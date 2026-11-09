@@ -59,7 +59,6 @@ export function DashboardAppShell({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Tự động đóng Dropdown khi click ra ngoài
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -157,7 +156,7 @@ export function DashboardAppShell({
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="mx-auto w-full max-w-7xl">{children}</div>
       </main>
     </div>

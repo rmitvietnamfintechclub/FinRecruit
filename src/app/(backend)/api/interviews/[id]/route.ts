@@ -4,29 +4,33 @@ import dbConnect from '@/app/(backend)/libs/dbConnect';
 import Candidate from '@/app/(backend)/models/Candidate';
 import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
 import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
-import '@/app/(backend)/models/MasterInterviewSlot';
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
-import {
-  calculateOverallScore,
-  reconcileTemplateAnswers,
-} from '@/app/(backend)/libs/round2Evaluation';
+import { reconcileTemplateAnswers } from '@/app/(backend)/libs/round2Evaluation';
 import type { ICollaborativeNote, ICustomAnswer } from '@/app/(backend)/types';
 
 type InterviewRouteContext = {
   params: Promise<{ id: string }>;
 };
 
+// Hàm helper để sort notes từ cũ đến mới (chuẩn UI Chat)
+const sortNotes = (notes?: ICollaborativeNote[]) =>
+  (notes || []).sort(
+    (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+  );
+
 export const GET = withRBAC<InterviewRouteContext>(
-  ['Department Head', 'Member'],
+  ['Department Head', 'Member', 'Executive Board'],
   async (_req: NextRequest, { session, params }) => {
     try {
       await dbConnect();
       const { id: candidateId } = await params;
+
+      const isExecutive = session.user.role === 'Executive Board';
       const assignedDepartment = normalizeHeadDepartment(
         session.user.department
       );
 
-      if (!assignedDepartment) {
+      if (!isExecutive && !assignedDepartment) {
         return NextResponse.json(
           {
             success: false,
@@ -49,11 +53,17 @@ export const GET = withRBAC<InterviewRouteContext>(
         );
       }
 
-      const candidate = await Candidate.findOne({
+      const query: Record<string, unknown> = {
         _id: candidateId,
-        department: assignedDepartment,
         status: 'Pass',
-      });
+      };
+
+      if (!isExecutive) {
+        query.department = assignedDepartment;
+      }
+
+      const candidate = await Candidate.findOne(query).lean().exec();
+
       if (!candidate) {
         return NextResponse.json(
           {
@@ -65,44 +75,86 @@ export const GET = withRBAC<InterviewRouteContext>(
         );
       }
 
-      // Fetch department question template & scoring toggle
+      // TRA CỨU TRẠNG THÁI SLOT THỰC TẾ TỪ MASTER INTERVIEW SLOT
+      let slotStatus = null;
+      if (candidate.interviewSlotId) {
+        const MasterSlot =
+          mongoose.models.MasterInterviewSlot ||
+          mongoose.model('MasterInterviewSlot');
+        const masterSlot = await MasterSlot.findById(candidate.interviewSlotId)
+          .lean()
+          .exec();
+
+        if (masterSlot && Array.isArray(masterSlot.bookings)) {
+          const booking = masterSlot.bookings.find(
+            (b: {
+              candidateId?: { toString: () => string } | string;
+              department?: string;
+              status?: string;
+            }) =>
+              b.candidateId &&
+              b.candidateId.toString() === candidate._id.toString() &&
+              b.department === candidate.department
+          );
+          if (booking) {
+            slotStatus = booking.status;
+          }
+        }
+      }
+
       const deptConfig = await DepartmentConfig.findOne({
         department: candidate.department,
         generation: candidate.generation,
         semester: candidate.semester,
       });
 
-      const isScoringEnabled = deptConfig?.isScoringEnabled ?? false;
       const storedTemplateAnswers = (candidate.round2Evaluation
         ?.templateAnswers || []) as ICustomAnswer[];
-      let templateAnswers = storedTemplateAnswers;
 
-      // A saved DepartmentConfig is the source of truth for the current
-      // template. Reuse answers for unchanged questions, add blank answers for
-      // new questions, and omit questions removed by Save & Apply.
+      const deletedTemplates = (candidate.round2Evaluation
+        ?.deletedTemplateQuestions || []) as string[];
+
+      let templateAnswers = storedTemplateAnswers;
       if (deptConfig) {
-        templateAnswers = reconcileTemplateAnswers(
+        const reconciled = reconcileTemplateAnswers(
           deptConfig.interviewQuestions || [],
           storedTemplateAnswers
         );
+
+        templateAnswers = reconciled.filter(
+          (q) => !deletedTemplates.includes(q.question)
+        );
       }
 
-      const adHocQuestions = (candidate.round2Evaluation?.adHocQuestions ||
+      // Ép kiểu thuần túy (Deep Clone) để ngắt tham chiếu với Mongoose Document
+      const formattedTemplateAnswers = templateAnswers.map((q) => {
+        const rawNotes = Array.isArray(q.collaborativeNotes)
+          ? q.collaborativeNotes
+          : [];
+        return {
+          question: q.question,
+          collaborativeNotes: sortNotes(rawNotes as ICollaborativeNote[]),
+        };
+      });
+
+      // Xử lý chuẩn hóa và sort notes cho Ad-hoc Questions
+      const rawAdHoc = (candidate.round2Evaluation?.adHocQuestions ||
         []) as ICustomAnswer[];
-      const overallScore = calculateOverallScore(
-        templateAnswers,
-        adHocQuestions
+      const formattedAdHocQuestions = rawAdHoc.map((q) => ({
+        question: q.question,
+        addedBy: q.addedBy,
+        collaborativeNotes: sortNotes(
+          q.collaborativeNotes as ICollaborativeNote[]
+        ),
+      }));
+
+      // Lấy toàn bộ General Notes của TẤT CẢ mọi người và sort
+      const allGeneralNotes = sortNotes(
+        candidate.round2Evaluation?.generalNotes as ICollaborativeNote[]
       );
-      const isDepartmentHead = session.user.role === 'Department Head';
-      const ownGeneralNotes = isDepartmentHead
-        ? (candidate.round2Evaluation?.collaborativeNotes || []).filter(
-            (note: ICollaborativeNote) =>
-              String(note.authorId) === session.user.id
-          )
-        : [];
 
       const payload = {
-        id: candidate.id,
+        id: candidate._id.toString(),
         fullName: candidate.fullName,
         email: candidate.email,
         phone: candidate.phone,
@@ -114,20 +166,14 @@ export const GET = withRBAC<InterviewRouteContext>(
         department: candidate.department,
         status: candidate.status,
         round2Status: candidate.round2Status,
-        round2Decision: candidate.round2Decision ?? null,
+        interviewSlotId: candidate.interviewSlotId
+          ? candidate.interviewSlotId.toString()
+          : undefined,
+        interviewSlotStatus: slotStatus, // Đã có giá trị trạng thái slot chuẩn xác
         evaluation: {
-          isScoringEnabled,
-          templateAnswers,
-          adHocQuestions,
-          notes: isDepartmentHead
-            ? candidate.round2Evaluation?.notes || {
-                note1: '',
-                note2: '',
-                note3: '',
-              }
-            : { note1: '', note2: '', note3: '' },
-          collaborativeNotes: ownGeneralNotes,
-          score: overallScore,
+          templateAnswers: formattedTemplateAnswers,
+          adHocQuestions: formattedAdHocQuestions,
+          generalNotes: allGeneralNotes,
         },
       };
 

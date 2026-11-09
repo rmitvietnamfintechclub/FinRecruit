@@ -106,7 +106,7 @@ export async function middleware(request: NextRequest) {
   ) {
     if (!isLoggedIn) return safeRedirect('/loginPage');
 
-    if (role !== 'Department Head' && role !== 'Member') {
+    if (role !== 'Department Head' && role !== 'Member' && role !== 'Executive Board') {
       return safeRedirect(homePath);
     }
     return NextResponse.next();

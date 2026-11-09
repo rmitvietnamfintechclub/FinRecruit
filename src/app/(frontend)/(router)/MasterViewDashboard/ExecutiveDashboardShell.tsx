@@ -66,6 +66,7 @@ function getDynamicTitle(pathname: string): string {
   if (pathname.includes('/user-management')) return 'User Management';
   if (pathname.includes('/system-logs')) return 'System Logs';
   if (pathname.includes('/system-config')) return 'System Configuration';
+  if (pathname.includes('/InterviewCockpit')) return 'Interview Cockpit';
 
   return 'Executive Overview';
 }

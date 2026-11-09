@@ -19,8 +19,10 @@ type HeadDashboardShellProps = {
 
 function getDynamicTitle(pathname: string): string {
   if (pathname.includes('/member-management')) return 'Member Management';
-  if (pathname.includes('/interview-scheduling') || pathname.includes('/InterviewCockpit')) return 'Interview Schedule';
+  if (pathname.includes('/interview-scheduling')) return 'Interview Schedule';
   if (pathname.includes('/interview-settings')) return 'Interview Questions';
+  if (pathname.includes('/InterviewCockpit')) return 'Interview Cockpit';
+
   
   // Default for '/HeadDashboard'
   return 'Candidate Evaluation';
@@ -44,7 +46,6 @@ export function HeadDashboardShell({
     '/HeadDashboard', 
     '/HeadDashboard/interview-scheduling', 
     '/HeadDashboard/interview-settings',
-    '/InterviewCockpit'
   ];
   
   const isRecruitment = recruitmentPaths.some(p => 
@@ -89,7 +90,7 @@ export function HeadDashboardShell({
               href="/HeadDashboard/interview-scheduling"
               className={cn(
                 'rounded-xl px-4 py-2.5 text-sm font-bold transition-colors',
-                pathname.startsWith('/HeadDashboard/interview-scheduling') || pathname.startsWith('/InterviewCockpit')
+                pathname.startsWith('/HeadDashboard/interview-scheduling')
                   ? 'bg-[#0D1742]/5 text-[#0D1742]'
                   : 'text-gray-500 hover:bg-gray-50 hover:text-[#0D1742]'
               )}

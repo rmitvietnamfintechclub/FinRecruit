@@ -1,30 +1,30 @@
 'use client';
 
-import { Check, CircleX, UserX } from 'lucide-react';
+import { Check, CircleX, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  ROUND_2_DECISIONS,
-  type Round2Decision,
-} from '@/lib/interview-cockpit/types';
+import { type BackendRound2Status } from '@/lib/interview-cockpit/types';
 
-const STYLE: Record<Round2Decision, string> = {
-  Pass: 'border-[#a7f3d0] bg-[#d0fae5] text-[#006045] hover:border-emerald-400 hover:bg-[#a7f3d0] dark:border-[#a7f3d0] dark:bg-[#d0fae5] dark:text-[#006045] dark:hover:border-emerald-400 dark:hover:bg-[#a7f3d0]',
-  Fail: 'border-[#fca5a5] bg-[#ffe2e2] text-[#e7000b] hover:border-red-400 hover:bg-[#fca5a5] dark:border-[#fca5a5] dark:bg-[#ffe2e2] dark:text-[#e7000b] dark:hover:border-red-400 dark:hover:bg-[#fca5a5]',
-  'No Show':
-    'border-[#ffb86a] bg-[#ffedd4] text-[#9f2d00] hover:border-orange-400 hover:bg-[#ffb86a] dark:border-[#ffb86a] dark:bg-[#ffedd4] dark:text-[#9f2d00] dark:hover:border-orange-400 dark:hover:bg-[#ffb86a]',
+// Đồng bộ bảng màu chuẩn với statusBadge
+const STYLE: Record<BackendRound2Status, string> = {
+  Pending:
+    'border-[#F7D27F] bg-[#FFEFCA] text-[#A28436] hover:border-amber-300',
+  Pass: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300',
+  Fail: 'border-[#B82649]/30 bg-[#B82649]/10 text-[#B82649] hover:border-[#B82649]/50',
 };
 
-const DARK_INACTIVE_STYLE: Record<Round2Decision, string> = {
-  Pass: 'dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/70 dark:hover:text-emerald-200',
-  Fail: 'dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-400 dark:hover:border-red-500 dark:hover:bg-red-900/70 dark:hover:text-red-200',
-  'No Show':
-    'dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-400 dark:hover:border-orange-500 dark:hover:bg-orange-900/70 dark:hover:text-orange-200',
+const ACTIVE_STYLE: Record<BackendRound2Status, string> = {
+  Pending:
+    'bg-[#F7D27F] text-[#0D1742] border-[#A28436] shadow-md ring-2 ring-[#A28436]/30',
+  Pass: 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-600/30',
+  Fail: 'bg-[#B82649] text-white border-[#901c37] shadow-md ring-2 ring-[#B82649]/30',
 };
+
+const INACTIVE_STYLE = 'opacity-40 grayscale-[50%]';
 
 const ICON = {
+  Pending: Clock,
   Pass: Check,
   Fail: CircleX,
-  'No Show': UserX,
 };
 
 export function DecisionBar({
@@ -33,48 +33,45 @@ export function DecisionBar({
   onChange,
   compact = false,
 }: {
-  value: Round2Decision | null;
+  value: BackendRound2Status;
   disabled?: boolean;
-  onChange: (status: Round2Decision) => void;
+  onChange: (status: BackendRound2Status) => void;
   compact?: boolean;
 }) {
-  const hasDecision = value !== null;
+  const hasDecision =
+    value === 'Pass' || value === 'Fail' || value === 'Pending';
 
   return (
     <div
       className={cn(
-        'grid grid-cols-3 gap-2',
-        compact ? '' : 'sticky bottom-0 z-20 bg-card/95 py-3 backdrop-blur'
+        'grid grid-cols-3 gap-3',
+        compact
+          ? ''
+          : 'sticky bottom-0 z-20 bg-white/90 py-4 backdrop-blur-md border-t border-gray-100 mt-4 px-6 -mx-6'
       )}
       role="group"
-      aria-label="Round 2 decision"
+      aria-label="Final candidate decision"
     >
-      {ROUND_2_DECISIONS.map((status) => {
+      {(['Pass', 'Pending', 'Fail'] as BackendRound2Status[]).map((status) => {
         const Icon = ICON[status];
         const isSelected = value === status;
+
         return (
           <button
             key={status}
             type="button"
             disabled={disabled}
             aria-pressed={isSelected}
-            title={
-              status === 'No Show' ? 'No Show is recorded as Fail' : undefined
-            }
-            aria-label={
-              status === 'No Show' ? 'No Show (recorded as Fail)' : status
-            }
             onClick={() => onChange(status)}
             className={cn(
-              'inline-flex min-h-11 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-2 text-xs font-extrabold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60 sm:gap-2 sm:text-sm',
+              'inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D1742] disabled:pointer-events-none disabled:cursor-not-allowed',
               STYLE[status],
-              hasDecision && !isSelected && DARK_INACTIVE_STYLE[status],
-              isSelected &&
-                'ring-2 ring-blue-600 ring-offset-2 ring-offset-card'
+              isSelected && ACTIVE_STYLE[status],
+              hasDecision && !isSelected && INACTIVE_STYLE
             )}
           >
-            <Icon className="h-4 w-4" aria-hidden />
-            {status}
+            <Icon className="h-5 w-5" aria-hidden />
+            {status.toUpperCase()}
           </button>
         );
       })}

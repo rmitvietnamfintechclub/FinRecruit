@@ -4,30 +4,28 @@ import dbConnect from '@/app/(backend)/libs/dbConnect';
 import Candidate from '@/app/(backend)/models/Candidate';
 import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
-import {
-  ROUND2_DECISIONS,
-  type Round2DecisionType,
-  type StatusType,
-} from '@/app/(backend)/types';
+import type { StatusType } from '@/app/(backend)/types';
 
 type InterviewStatusRouteContext = {
   params: Promise<{ id: string }>;
 };
 
+// CHỈ CÒN ĐÚNG 'Department Head' ĐƯỢC PHÉP CHỐT KẾT QUẢ
 export const PATCH = withRBAC<InterviewStatusRouteContext>(
   'Department Head',
   async (req: NextRequest, { params, session }) => {
     try {
       await dbConnect();
       const { id: candidateId } = await params;
+      const body = (await req.json()) as {
+        round2Status?: unknown;
+      };
+
       const assignedDepartment = normalizeHeadDepartment(
         session.user.department
       );
-      const body = (await req.json()) as {
-        round2Status?: unknown;
-        round2Decision?: unknown;
-      };
 
+      // 1. Kiểm tra quyền hạn phòng ban (Bắt buộc phải có ban hợp lệ)
       if (!assignedDepartment) {
         return NextResponse.json(
           {
@@ -40,6 +38,7 @@ export const PATCH = withRBAC<InterviewStatusRouteContext>(
         );
       }
 
+      // 2. Kiểm tra ID ứng viên
       if (!mongoose.Types.ObjectId.isValid(candidateId)) {
         return NextResponse.json(
           {
@@ -53,6 +52,7 @@ export const PATCH = withRBAC<InterviewStatusRouteContext>(
 
       const round2Status = body.round2Status as StatusType | undefined;
 
+      // 3. Chỉ chấp nhận Pass, Fail, Pending
       if (
         !round2Status ||
         !['Pass', 'Pending', 'Fail'].includes(round2Status)
@@ -61,67 +61,24 @@ export const PATCH = withRBAC<InterviewStatusRouteContext>(
           {
             success: false,
             code: 'INVALID_STATUS',
-            message: 'Invalid status. Must be Pass, Pending, or Fail',
+            message: 'Invalid status. Must be Pass, Pending, or Fail.',
           },
           { status: 400 }
         );
       }
 
-      const fallbackDecision: Round2DecisionType | null =
-        round2Status === 'Pass'
-          ? 'Pass'
-          : round2Status === 'Fail'
-            ? 'Fail'
-            : null;
-      const round2Decision =
-        body.round2Decision === undefined
-          ? fallbackDecision
-          : body.round2Decision;
+      // 4. Xây dựng Query bảo mật
+      const candidateQuery: Record<string, unknown> = {
+        _id: candidateId,
+        status: 'Pass', // Bắt buộc phải pass vòng 1
+        department: assignedDepartment, // Bắt buộc phải thuộc ban của Head này
+      };
 
-      if (
-        round2Decision !== null &&
-        !ROUND2_DECISIONS.includes(round2Decision as Round2DecisionType)
-      ) {
-        return NextResponse.json(
-          {
-            success: false,
-            code: 'INVALID_DECISION',
-            message: 'Decision must be Pass, Fail, No Show, or null.',
-          },
-          { status: 400 }
-        );
-      }
-
-      const expectedStatus =
-        round2Decision === 'Pass'
-          ? 'Pass'
-          : round2Decision === 'Fail' || round2Decision === 'No Show'
-            ? 'Fail'
-            : 'Pending';
-
-      if (round2Status !== expectedStatus) {
-        return NextResponse.json(
-          {
-            success: false,
-            code: 'INCONSISTENT_DECISION',
-            message:
-              'round2Status does not match round2Decision. No Show must use status Fail.',
-          },
-          { status: 400 }
-        );
-      }
-
+      // 5. Cập nhật Status duy nhất
       const updatedCandidate = await Candidate.findOneAndUpdate(
+        candidateQuery,
         {
-          _id: candidateId,
-          department: assignedDepartment,
-          status: 'Pass',
-        },
-        {
-          $set: {
-            round2Status,
-            round2Decision,
-          },
+          $set: { round2Status },
         },
         { new: true, runValidators: true }
       );
@@ -131,7 +88,8 @@ export const PATCH = withRBAC<InterviewStatusRouteContext>(
           {
             success: false,
             code: 'CANDIDATE_NOT_FOUND',
-            message: 'Candidate not found',
+            message:
+              'Candidate not found or does not belong to your department.',
           },
           { status: 404 }
         );
@@ -143,7 +101,6 @@ export const PATCH = withRBAC<InterviewStatusRouteContext>(
         data: {
           id: updatedCandidate.id,
           round2Status: updatedCandidate.round2Status,
-          round2Decision: updatedCandidate.round2Decision ?? null,
         },
       });
     } catch (error: unknown) {
@@ -154,7 +111,7 @@ export const PATCH = withRBAC<InterviewStatusRouteContext>(
           message:
             error instanceof Error
               ? error.message
-              : 'Could not update the Round 2 decision.',
+              : 'Could not update the Round 2 status.',
         },
         { status: 500 }
       );

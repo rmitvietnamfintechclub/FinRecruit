@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { DepartmentType } from '@/app/(backend)/types';
 import type { CandidateViewMode } from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
@@ -50,9 +51,10 @@ export type DepartmentStateInfo = {
 const PAGE_SIZE = 12;
 
 export default function MasterCandidatesPage() {
-  // === STATE CHUNG ===
+ const searchParams = useSearchParams();
+  const initialMode = (searchParams.get('tab') === 'round2' ? 'round2' : 'round1') as RoundMode;
   const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
-  const [mode, setMode] = useState<RoundMode>('round1');
+  const [mode, setMode] = useState<RoundMode>(initialMode);
   const [deptFilter, setDeptFilter] = useState<MasterViewDeptFilter>('All');
   const [viewMode, setViewMode] = useState<CandidateViewMode>('list');
   const { triggerSessionExpired } = useSessionExpired();

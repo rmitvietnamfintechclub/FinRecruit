@@ -17,6 +17,8 @@ type MemberDashboardShellProps = {
 
 function getDynamicTitle(pathname: string): string {
   if (pathname.includes('/interview-scheduling')) return 'Interview Schedule';
+  if (pathname.includes('/InterviewCockpit')) return 'Interview Cockpit';
+
   return 'Candidate Evaluation';
 }
 

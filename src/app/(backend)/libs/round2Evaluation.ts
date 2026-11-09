@@ -13,6 +13,10 @@ export function reconcileTemplateAnswers(
     return {
       question,
       answer: String(saved?.answer ?? ''),
+      addedBy: saved?.addedBy,
+      collaborativeNotes: Array.isArray(saved?.collaborativeNotes) 
+        ? saved.collaborativeNotes 
+        : [],
     };
   });
 }

@@ -1,470 +1,56 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ExternalLink,
-  GripVertical,
-  Lock,
-  Plus,
-  UserRound,
-} from 'lucide-react';
+import { Plus, CalendarX2, CalendarCheck, ArrowLeft } from 'lucide-react';
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { ConfirmDialog } from '@/components/feedback/ConfirmDialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { DecisionBar } from './DecisionBar';
-import { Round2StatusBadge } from './Round2StatusBadge';
 import { SaveBadge } from './SaveBadge';
-import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { interviewCockpitRepository } from '@/lib/interview-cockpit/repository';
 import type {
+  BackendRound2Status,
   CockpitUser,
-  CollaborativeNote,
   InterviewAnswer,
   InterviewCandidate,
-  Round2Decision,
   SaveState,
+  SlotStatusType,
 } from '@/lib/interview-cockpit/types';
 import { cn } from '@/lib/utils';
 
+import { ProfilePanel } from './ProfilePanel';
+import {
+  QuestionEvaluationCard,
+  GeneralNoteCard,
+  CustomQuestionComposer,
+} from './EvaluationCards';
+
 const MIN_PROFILE_PERCENT = 30;
 const MAX_PROFILE_PERCENT = 70;
-const DEFAULT_PROFILE_PERCENT = 40;
+const DEFAULT_PROFILE_PERCENT = 45;
+const POLLING_INTERVAL_MS = 10000;
+
+type QuestionDeleteResult = { answers?: InterviewAnswer[] };
+type InterviewCockpitRepositoryWithQuestionDeletion =
+  typeof interviewCockpitRepository & {
+    deleteTemplateQuestion: (
+      candidateId: string,
+      questionId: string
+    ) => Promise<QuestionDeleteResult>;
+    deleteCustomQuestion: (
+      candidateId: string,
+      questionId: string
+    ) => Promise<QuestionDeleteResult>;
+    updateCustomQuestion: (
+      candidateId: string,
+      questionId: string,
+      question: string
+    ) => Promise<QuestionDeleteResult>;
+  };
 
 function clampProfilePercent(value: number) {
   return Math.min(MAX_PROFILE_PERCENT, Math.max(MIN_PROFILE_PERCENT, value));
-}
-
-function EvaluationAnswerEditor({
-  answer,
-  disabled,
-  scoringEnabled,
-  onSaved,
-  onSaveState,
-}: {
-  answer: InterviewAnswer;
-  disabled: boolean;
-  scoringEnabled: boolean;
-  onSaved: (answer: InterviewAnswer) => Promise<void>;
-  onSaveState: (state: SaveState) => void;
-}) {
-  const [draft, setDraft] = useState({
-    answer: answer.answer,
-    score: answer.score === null ? '' : String(answer.score),
-  });
-  const [scoreError, setScoreError] = useState<string | null>(null);
-  const onSaveStateRef = useRef(onSaveState);
-
-  useEffect(() => {
-    onSaveStateRef.current = onSaveState;
-  }, [onSaveState]);
-
-  const save = useCallback(
-    async (nextDraft: { answer: string; score: string }) => {
-      await onSaved({
-        ...answer,
-        answer: nextDraft.answer,
-        score: nextDraft.score === '' ? null : Number(nextDraft.score),
-      });
-    },
-    [answer, onSaved]
-  );
-  const state = useDebouncedSave(draft, save);
-
-  useEffect(() => onSaveStateRef.current(state), [state]);
-
-  return (
-    <div
-      className={cn(
-        'mt-3 grid gap-3',
-        scoringEnabled && 'sm:grid-cols-[minmax(0,1fr)_8rem]'
-      )}
-    >
-      <Textarea
-        disabled={disabled}
-        value={draft.answer}
-        onChange={(event) =>
-          setDraft((current) => ({
-            ...current,
-            answer: event.target.value,
-          }))
-        }
-        placeholder="Record the candidate’s response…"
-        className="disabled:bg-muted/40"
-      />
-      {scoringEnabled && (
-        <div>
-          <label
-            htmlFor={`score-${answer.id}`}
-            className="text-[11px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-300"
-          >
-            Score
-          </label>
-          <Input
-            id={`score-${answer.id}`}
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            disabled={disabled}
-            value={draft.score}
-            onChange={(event) => {
-              const next = event.target.value;
-              if (
-                next === '' ||
-                (/^\d{1,3}$/.test(next) && Number(next) <= 100)
-              ) {
-                setDraft((current) => ({ ...current, score: next }));
-                setScoreError(null);
-              } else {
-                setScoreError('Use a whole number from 0 to 100.');
-              }
-            }}
-            placeholder="0–100"
-            aria-invalid={Boolean(scoreError)}
-            className="mt-1.5 border-blue-200 bg-card text-center font-extrabold"
-          />
-          {scoreError && (
-            <p className="mt-1 text-[10px] font-semibold text-red-600">
-              {scoreError}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GeneralNoteEditor({
-  candidateId,
-  currentUserId,
-  notes,
-  disabled,
-  onSaved,
-  onSaveState,
-}: {
-  candidateId: string;
-  currentUserId: string;
-  notes: CollaborativeNote[];
-  disabled: boolean;
-  onSaved: (notes: CollaborativeNote[]) => void;
-  onSaveState: (state: SaveState) => void;
-}) {
-  const ownNote = notes.find((note) => note.authorId === currentUserId);
-  const [value, setValue] = useState(ownNote?.content ?? '');
-  const onSaveStateRef = useRef(onSaveState);
-
-  useEffect(() => {
-    onSaveStateRef.current = onSaveState;
-  }, [onSaveState]);
-
-  const save = useCallback(
-    async (nextValue: string) => {
-      const savedNotes = await interviewCockpitRepository.saveCollaborativeNote(
-        candidateId,
-        nextValue
-      );
-      onSaved(savedNotes);
-    },
-    [candidateId, onSaved]
-  );
-  const state = useDebouncedSave(value, save);
-
-  useEffect(() => onSaveStateRef.current(state), [state]);
-
-  return (
-    <div className="mt-2 rounded-xl border border-border bg-background/80 p-3">
-      <div className="flex justify-end">
-        <span className="text-[10px] font-semibold text-muted-foreground">
-          {state === 'saving'
-            ? 'Saving…'
-            : state === 'error'
-              ? 'Save failed'
-              : 'All changes saved'}
-        </span>
-      </div>
-      <Textarea
-        id="general-note"
-        disabled={disabled}
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="Add any additional observations…"
-        className="mt-2 min-h-20 resize-none disabled:bg-muted/40"
-      />
-    </div>
-  );
-}
-
-function SavedCustomQuestion({
-  answer,
-  disabled,
-  scoringEnabled,
-  onSaved,
-  onSaveState,
-}: {
-  answer: InterviewAnswer;
-  disabled: boolean;
-  scoringEnabled: boolean;
-  onSaved: (answer: InterviewAnswer) => Promise<void>;
-  onSaveState: (state: SaveState) => void;
-}) {
-  return (
-    <article className="rounded-2xl border border-dashed border-purple-400 bg-purple-50/40 p-4 dark:bg-purple-950/20">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-purple-700 dark:bg-purple-950 dark:text-purple-300">
-          Custom · Candidate only
-        </span>
-        {answer.addedBy && (
-          <span className="text-xs text-muted-foreground">
-            Added by {answer.addedBy}
-          </span>
-        )}
-      </div>
-      <h3 className="mt-4 text-sm font-extrabold">{answer.question}</h3>
-      <EvaluationAnswerEditor
-        answer={answer}
-        disabled={disabled}
-        scoringEnabled={scoringEnabled}
-        onSaved={onSaved}
-        onSaveState={onSaveState}
-      />
-    </article>
-  );
-}
-
-function CustomQuestionComposer({
-  onCreate,
-  onCancel,
-}: {
-  onCreate: (question: string) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [question, setQuestion] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const save = async () => {
-    if (!question.trim()) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await onCreate(question.trim());
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'Could not create the custom question.'
-      );
-      setSaving(false);
-    }
-  };
-
-  return (
-    <article className="rounded-2xl border border-dashed border-purple-400 bg-purple-50/40 p-4 dark:bg-purple-950/20">
-      <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-purple-700 dark:bg-purple-950 dark:text-purple-300">
-        New custom question · Candidate only
-      </span>
-      <label
-        htmlFor="new-custom-question"
-        className="mt-4 block text-xs font-extrabold uppercase tracking-wider text-muted-foreground"
-      >
-        Question
-      </label>
-      <Input
-        id="new-custom-question"
-        autoFocus
-        value={question}
-        onChange={(event) => setQuestion(event.target.value)}
-        placeholder="Type the custom question…"
-        className="mt-2 h-11 border-purple-200 bg-card"
-      />
-      <p className="mt-2 text-xs text-muted-foreground">
-        After creation, this question is shared with authorized interviewers for
-        this candidate and its response can be recorded like a template
-        question.
-      </p>
-      {error && (
-        <p className="mt-2 text-sm font-semibold text-red-600">{error}</p>
-      )}
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCancel}
-          disabled={saving}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          onClick={() => void save()}
-          disabled={!question.trim() || saving}
-          className="bg-purple-600 text-white hover:bg-purple-700"
-        >
-          {saving ? 'Saving…' : 'Add question'}
-        </Button>
-      </div>
-    </article>
-  );
-}
-
-function OverallScoreSummary({
-  score,
-  answers,
-}: {
-  score: number | null;
-  answers: InterviewAnswer[];
-}) {
-  const scoredCount = answers.filter((answer) => answer.score !== null).length;
-  const displayScore =
-    score === null
-      ? 'Not scored'
-      : Number.isInteger(score)
-        ? String(score)
-        : score.toFixed(2);
-
-  return (
-    <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-800 dark:bg-blue-950/30">
-      <p className="text-xs font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-300">
-        Computed Overall Score
-      </p>
-      <p className="mt-1 text-2xl font-black text-blue-950 dark:text-blue-100">
-        {displayScore}
-        {score !== null && (
-          <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
-            {' '}
-            / 100
-          </span>
-        )}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Average of {scoredCount} scored{' '}
-        {scoredCount === 1 ? 'question' : 'questions'}. Unscored questions are
-        excluded.
-      </p>
-    </div>
-  );
-}
-
-function ProfilePanel({ candidate }: { candidate: InterviewCandidate }) {
-  const details = [
-    ['Major & year', candidate.majorAndYear],
-    ['Phone', candidate.phone],
-    ['Interview slot', candidate.interviewSlot],
-    [
-      'Cohort',
-      [candidate.semester, candidate.generation].filter(Boolean).join(' · '),
-    ],
-  ].filter(([, value]) => Boolean(value));
-
-  return (
-    <section className="h-full overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-600">
-            Candidate profile
-          </p>
-          <div className="mt-4 flex items-center gap-3">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
-              <UserRound />
-            </span>
-            <div className="min-w-0">
-              <h2 className="truncate text-xl font-black text-blue-950 dark:text-blue-300">
-                {candidate.fullName}
-              </h2>
-              <p className="truncate text-sm text-muted-foreground">
-                {[candidate.studentId, candidate.department]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {candidate.email}
-              </p>
-            </div>
-          </div>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold uppercase">
-          <Lock className="h-3 w-3" /> Read-only
-        </span>
-      </div>
-      {details.length > 0 && (
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {details.map(([label, value]) => (
-            <div key={label} className="rounded-xl bg-muted/50 p-3">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
-                {label}
-              </p>
-              <p className="mt-1 text-sm font-semibold">{value}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {(candidate.facebookLink || candidate.cvLink) && (
-        <div className="mt-4 flex flex-wrap gap-3">
-          {candidate.facebookLink && (
-            <a
-              href={candidate.facebookLink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-bold text-blue-600"
-            >
-              Facebook <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
-          {candidate.cvLink && (
-            <a
-              href={candidate.cvLink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-bold text-blue-600"
-            >
-              View CV <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
-        </div>
-      )}
-      <h3 className="mt-7 text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-        General questions
-      </h3>
-      <div className="mt-3 space-y-3">
-        {candidate.generalAnswers.length === 0 && (
-          <p className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
-            No general answers were returned by the API.
-          </p>
-        )}
-        {candidate.generalAnswers.map((item) => (
-          <div key={item.id} className="rounded-xl border border-border p-3">
-            <p className="text-sm font-bold">{item.question}</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-              {item.answer}
-            </p>
-          </div>
-        ))}
-      </div>
-      <h3 className="mt-7 text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-        Department questions
-      </h3>
-      <div className="mt-3 rounded-xl border border-border p-4">
-        <p className="text-xs text-muted-foreground">
-          Current interview: {candidate.department}
-        </p>
-        {candidate.departmentAnswers.length === 0 && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            No department answers were returned by the API.
-          </p>
-        )}
-        {candidate.departmentAnswers.map((item) => (
-          <div key={item.id} className="mt-3">
-            <p className="text-sm font-bold">{item.question}</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-              {item.answer}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
 }
 
 export function InterviewCockpitClient({
@@ -475,46 +61,73 @@ export function InterviewCockpitClient({
   currentUser: CockpitUser;
 }) {
   const [candidate, setCandidate] = useState<InterviewCandidate | null>(null);
-  const candidateRef = useRef<InterviewCandidate | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [isPolling, setIsPolling] = useState(false);
+
   const [mobileTab, setMobileTab] = useState<'profile' | 'evaluation'>(
-    'profile'
+    'evaluation'
   );
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
-  const [decision, setDecision] = useState<Round2Decision | null>(null);
+  const [decision, setDecision] = useState<BackendRound2Status | null>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showCustomComposer, setShowCustomComposer] = useState(false);
+
+  // State cho No Show / Completed Slot Management
+  const [slotAction, setSlotAction] = useState<'NO_SHOW' | 'COMPLETED' | null>(
+    null
+  );
+  const [isSlotConfirmOpen, setIsSlotConfirmOpen] = useState(false);
+  const [isUpdatingSlot, setIsUpdatingSlot] = useState(false);
+
   const [profilePercent, setProfilePercent] = useState(DEFAULT_PROFILE_PERCENT);
   const [isResizing, setIsResizing] = useState(false);
   const splitContainerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    void interviewCockpitRepository
-      .getCandidate(candidateId)
-      .then((item) => {
-        candidateRef.current = item;
+  const SLOT_LABELS: Record<'COMPLETED' | 'NO_SHOW', string> = {
+    COMPLETED: 'Completed',
+    NO_SHOW: 'No Show',
+  };
+
+  const loadData = useCallback(
+    async (background = false) => {
+      try {
+        if (background) setIsPolling(true);
+        const item = await interviewCockpitRepository.getCandidate(candidateId);
         setCandidate(item);
-      })
-      .catch((cause: unknown) =>
-        setLoadError(
-          cause instanceof Error ? cause.message : 'Could not load cockpit.'
-        )
-      );
-  }, [candidateId]);
+      } catch (cause) {
+        if (!background)
+          setLoadError(
+            cause instanceof Error ? cause.message : 'Could not load cockpit.'
+          );
+      } finally {
+        if (background) setIsPolling(false);
+      }
+    },
+    [candidateId]
+  );
 
   useEffect(() => {
-    candidateRef.current = candidate;
-  }, [candidate]);
+    void loadData();
+  }, [loadData]);
+  useEffect(() => {
+    const interval = setInterval(
+      () => void loadData(true),
+      POLLING_INTERVAL_MS
+    );
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   useEffect(() => {
     if (!isResizing) return;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     return () => {
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
     };
   }, [isResizing]);
 
@@ -527,11 +140,25 @@ export function InterviewCockpitClient({
           : 'saved',
     [saveStates]
   );
+
   const terminal = candidate?.status !== 'Pending';
   const isDepartmentHead = currentUser.role === 'Department Head';
-  const dashboardHref = isDepartmentHead
-    ? '/HeadDashboard/interviews'
-    : '/MemberDashboard';
+  const hasEditRights =
+    isDepartmentHead ||
+    currentUser.role === 'Member' ||
+    currentUser.role === 'Executive Board';
+
+  const searchParams = useSearchParams();
+  const returnTab = searchParams.get('tab') || 'round2';
+  const dashboardHref = useMemo(() => {
+    const basePath =
+      currentUser.role === 'Executive Board'
+        ? '/MasterViewDashboard/candidates'
+        : currentUser.role === 'Department Head'
+          ? '/HeadDashboard'
+          : '/MemberDashboard';
+    return `${basePath}?tab=${returnTab}`;
+  }, [currentUser.role, returnTab]);
 
   const updateState = useCallback(
     (key: string, state: SaveState) =>
@@ -541,60 +168,38 @@ export function InterviewCockpitClient({
 
   const saveTemplateAnswer = useCallback(
     async (answer: InterviewAnswer) => {
-      const current = candidateRef.current;
-      if (!current) return;
-      const nextAnswers = current.evaluationAnswers.map((item) =>
+      if (!candidate) return;
+      const nextAnswers = candidate.evaluationAnswers.map((item) =>
         item.id === answer.id ? answer : item
       );
-      const optimistic = { ...current, evaluationAnswers: nextAnswers };
-      candidateRef.current = optimistic;
-      setCandidate(optimistic);
-
+      setCandidate({ ...candidate, evaluationAnswers: nextAnswers });
       const result = await interviewCockpitRepository.saveTemplateAnswers(
         candidateId,
         nextAnswers
       );
-      setCandidate((latest) => {
-        if (!latest) return latest;
-        const updated = {
-          ...latest,
-          evaluationAnswers: result.answers,
-          score: result.overallScore,
-        };
-        candidateRef.current = updated;
-        return updated;
-      });
+      setCandidate((prev) =>
+        prev ? { ...prev, evaluationAnswers: result.answers } : prev
+      );
     },
-    [candidateId]
+    [candidate, candidateId]
   );
 
   const saveCustomAnswer = useCallback(
     async (answer: InterviewAnswer) => {
-      const current = candidateRef.current;
-      if (!current) return;
-      const nextAnswers = current.adHocQuestions.map((item) =>
+      if (!candidate) return;
+      const nextAnswers = candidate.adHocQuestions.map((item) =>
         item.id === answer.id ? answer : item
       );
-      const optimistic = { ...current, adHocQuestions: nextAnswers };
-      candidateRef.current = optimistic;
-      setCandidate(optimistic);
-
+      setCandidate({ ...candidate, adHocQuestions: nextAnswers });
       const result = await interviewCockpitRepository.saveCustomAnswers(
         candidateId,
         nextAnswers
       );
-      setCandidate((latest) => {
-        if (!latest) return latest;
-        const updated = {
-          ...latest,
-          adHocQuestions: result.answers,
-          score: result.overallScore,
-        };
-        candidateRef.current = updated;
-        return updated;
-      });
+      setCandidate((prev) =>
+        prev ? { ...prev, adHocQuestions: result.answers } : prev
+      );
     },
-    [candidateId]
+    [candidate, candidateId]
   );
 
   const createCustomQuestion = useCallback(
@@ -607,12 +212,7 @@ export function InterviewCockpitClient({
             candidateId,
             question
           );
-        setCandidate((current) => {
-          if (!current) return current;
-          const updated = { ...current, adHocQuestions };
-          candidateRef.current = updated;
-          return updated;
-        });
+        setCandidate((prev) => (prev ? { ...prev, adHocQuestions } : prev));
         updateState('custom-question', 'saved');
         setShowCustomComposer(false);
       } catch (cause) {
@@ -628,21 +228,114 @@ export function InterviewCockpitClient({
     [candidateId, updateState]
   );
 
-  const updateCollaborativeNotes = useCallback(
-    (collaborativeNotes: CollaborativeNote[]) => {
-      setCandidate((current) =>
-        current ? { ...current, collaborativeNotes } : current
+  const deleteQuestion = useCallback(
+    async (questionId: string) => {
+      if (!candidate || !isDepartmentHead) return;
+      setActionError(null);
+      updateState(questionId, 'saving');
+
+      const isTemplate = candidate.evaluationAnswers.some(
+        (q) => q.id === questionId
       );
+
+      try {
+        if (isTemplate) {
+          setCandidate((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  evaluationAnswers: prev.evaluationAnswers.filter(
+                    (q) => q.id !== questionId
+                  ),
+                }
+              : prev
+          );
+          const result = await (
+            interviewCockpitRepository as InterviewCockpitRepositoryWithQuestionDeletion
+          ).deleteTemplateQuestion(candidateId, questionId);
+          setCandidate((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  evaluationAnswers: result.answers || prev.evaluationAnswers,
+                }
+              : prev
+          );
+        } else {
+          setCandidate((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  adHocQuestions: prev.adHocQuestions.filter(
+                    (q) => q.id !== questionId
+                  ),
+                }
+              : prev
+          );
+          const result = await (
+            interviewCockpitRepository as InterviewCockpitRepositoryWithQuestionDeletion
+          ).deleteCustomQuestion(candidateId, questionId);
+          setCandidate((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  adHocQuestions: result.answers || prev.adHocQuestions,
+                }
+              : prev
+          );
+        }
+        updateState(questionId, 'saved');
+      } catch (cause) {
+        updateState(questionId, 'error');
+        setActionError(
+          cause instanceof Error
+            ? cause.message
+            : 'Could not delete the question.'
+        );
+        void loadData();
+      }
     },
-    []
+    [candidate, candidateId, isDepartmentHead, loadData, updateState]
   );
 
-  const evaluatedAnswers = useMemo(
-    () => [
-      ...(candidate?.evaluationAnswers ?? []),
-      ...(candidate?.adHocQuestions ?? []),
-    ],
-    [candidate?.adHocQuestions, candidate?.evaluationAnswers]
+  const updateQuestionText = useCallback(
+    async (questionId: string, newText: string) => {
+      if (!candidate || !isDepartmentHead) return;
+      setActionError(null);
+      updateState(questionId, 'saving');
+
+      try {
+        setCandidate((prev) =>
+          prev
+            ? {
+                ...prev,
+                adHocQuestions: prev.adHocQuestions.map((q) =>
+                  q.id === questionId ? { ...q, question: newText } : q
+                ),
+              }
+            : prev
+        );
+
+        const result = await (
+          interviewCockpitRepository as InterviewCockpitRepositoryWithQuestionDeletion
+        ).updateCustomQuestion(candidateId, questionId, newText);
+        setCandidate((prev) =>
+          prev
+            ? { ...prev, adHocQuestions: result.answers || prev.adHocQuestions }
+            : prev
+        );
+        updateState(questionId, 'saved');
+      } catch (cause) {
+        updateState(questionId, 'error');
+        setActionError(
+          cause instanceof Error
+            ? cause.message
+            : 'Could not update the question text.'
+        );
+        void loadData();
+      }
+    },
+    [candidate, candidateId, isDepartmentHead, loadData, updateState]
   );
 
   const updateProfilePercent = useCallback((clientX: number) => {
@@ -661,13 +354,10 @@ export function InterviewCockpitClient({
         candidate.id,
         decision
       );
-      setCandidate({
-        ...candidate,
-        status: result.status,
-        selectedDecision: result.decision,
-      });
+      setCandidate({ ...candidate, status: result.status });
       updateState('decision', 'saved');
       setDecision(null);
+      setIsConfirmOpen(false);
     } catch (cause) {
       updateState('decision', 'error');
       setActionError(
@@ -676,101 +366,138 @@ export function InterviewCockpitClient({
     }
   };
 
+  // Hàm xử lý cập nhật trạng thái slot (No Show / Completed)
+  const handleUpdateSlotStatus = async () => {
+    if (!candidate || !slotAction || !candidate.interviewSlotId) {
+      setActionError(
+        'This candidate does not have a valid interview slot assigned.'
+      );
+      return;
+    }
+
+    setIsUpdatingSlot(true);
+    setActionError(null);
+
+    try {
+      const response = await fetch(
+        `/api/executive/interview-slots/${candidate.interviewSlotId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: slotAction,
+            department: candidate.department,
+          }),
+        }
+      );
+
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Failed to update slot status.');
+      }
+
+      setIsSlotConfirmOpen(false);
+      setSlotAction(null);
+      void loadData(true);
+    } catch (cause) {
+      setActionError(
+        cause instanceof Error ? cause.message : 'Could not update slot status.'
+      );
+    } finally {
+      setIsUpdatingSlot(false);
+    }
+  };
+
   if (loadError) return <AppNotice variant="error">{loadError}</AppNotice>;
   if (!candidate)
     return (
-      <div className="p-12 text-center text-sm font-semibold text-muted-foreground">
-        Loading interview cockpit…
+      <div className="mx-auto flex h-[calc(100dvh-10rem)] max-w-400 flex-col items-center justify-center px-4">
+        <div className="flex flex-col items-center space-y-3 ">
+          <i className="fa-solid fa-spinner fa-spin text-4xl text-[#DCB968]"></i>
+          <h3 className="text-sm font-black uppercase tracking-wider text-[#0D1742]">
+            Loading Interview Cockpit
+          </h3>
+        </div>
       </div>
     );
+  // Lấy trạng thái slot hiện tại của ứng viên (ví dụ: 'COMPLETED', 'NO_SHOW', 'BOOKED', 'AVAILABLE')
+  const currentSlotStatus = (
+    candidate as InterviewCandidate & { interviewSlotStatus?: SlotStatusType }
+  ).interviewSlotStatus;
 
   return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <Link
-            href={dashboardHref}
-            className="text-sm font-bold text-blue-600 hover:text-blue-700"
-          >
-            ← Back to Recruitment Dashboard
-          </Link>
-          <h1 className="mt-2 text-2xl font-black text-blue-950 dark:text-blue-300">
-            Interview Cockpit
-          </h1>
-          <p className="truncate text-sm text-muted-foreground">
-            {candidate.fullName} · {candidate.studentId}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-            {currentUser.role}
-          </span>
-          {candidate.status !== 'Pending' && (
-            <Round2StatusBadge status={candidate.status} />
-          )}
+    <div className="mx-auto flex flex-col">
+      {/* GLOBAL HEADER */}
+      <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <Link
+          href={dashboardHref}
+          className="group flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-gray-400 transition-colors hover:text-[#0D1742]"
+        >
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+          Back to Candidate Dashboard
+        </Link>
+        <div className="flex flex-wrap items-center gap-3">
           <SaveBadge state={saveState} />
         </div>
       </div>
 
       {actionError && (
-        <div className="mb-4">
+        <div className="mb-4 shrink-0">
           <AppNotice variant="error">{actionError}</AppNotice>
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 rounded-xl bg-card p-1 shadow-sm lg:hidden">
+      {/* MOBILE TABS */}
+      <div className="mb-4 flex shrink-0 rounded-xl bg-gray-100 p-1 lg:hidden">
         <button
-          type="button"
           className={cn(
-            'rounded-lg py-2 text-sm font-bold',
-            mobileTab === 'profile' && 'bg-blue-600 text-white'
+            'flex-1 rounded-lg py-2.5 text-sm font-black transition-all',
+            mobileTab === 'profile'
+              ? 'bg-white text-[#0D1742] shadow-sm'
+              : 'text-gray-500'
           )}
           onClick={() => setMobileTab('profile')}
         >
-          Profile
+          Context (Round 1)
         </button>
         <button
-          type="button"
           className={cn(
-            'rounded-lg py-2 text-sm font-bold',
-            mobileTab === 'evaluation' && 'bg-blue-600 text-white'
+            'flex-1 rounded-lg py-2.5 text-sm font-black transition-all',
+            mobileTab === 'evaluation'
+              ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
+              : 'text-gray-500'
           )}
           onClick={() => setMobileTab('evaluation')}
         >
-          Evaluation
+          Evaluation (Round 2)
         </button>
       </div>
 
       <div
         ref={splitContainerRef}
         className={cn(
-          'lg:grid lg:h-[calc(100dvh-15rem)] lg:min-h-[640px] lg:items-stretch',
+          'flex-1 min-h-0 lg:grid items-stretch',
           isResizing && 'select-none'
         )}
         style={{
-          gridTemplateColumns: `${profilePercent}fr 12px ${100 - profilePercent}fr`,
+          gridTemplateColumns: `${profilePercent}fr 16px ${100 - profilePercent}fr`,
         }}
       >
+        {/* PANEL LEFT: CONTEXT */}
         <div
           className={cn(
-            'min-w-0 lg:min-h-0',
+            'h-full min-w-0',
             mobileTab !== 'profile' && 'hidden lg:block'
           )}
         >
           <ProfilePanel candidate={candidate} />
         </div>
 
+        {/* RESIZER */}
         <div
           role="separator"
-          aria-label="Resize profile and evaluation panels"
-          aria-orientation="vertical"
-          aria-valuemin={MIN_PROFILE_PERCENT}
-          aria-valuemax={MAX_PROFILE_PERCENT}
-          aria-valuenow={Math.round(profilePercent)}
           tabIndex={0}
-          className="group hidden cursor-col-resize touch-none items-center justify-center outline-none lg:flex"
-          title="Drag to resize · Double-click to reset to 40/60"
-          onDoubleClick={() => setProfilePercent(DEFAULT_PROFILE_PERCENT)}
+          className="group hidden cursor-col-resize items-center justify-center self-stretch lg:flex"
           onPointerDown={(event) => {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
@@ -781,96 +508,132 @@ export function InterviewCockpitClient({
             if (isResizing) updateProfilePercent(event.clientX);
           }}
           onPointerUp={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
               event.currentTarget.releasePointerCapture(event.pointerId);
-            }
             setIsResizing(false);
           }}
           onPointerCancel={() => setIsResizing(false)}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowLeft') {
-              event.preventDefault();
-              setProfilePercent((current) => clampProfilePercent(current - 5));
-            }
-            if (event.key === 'ArrowRight') {
-              event.preventDefault();
-              setProfilePercent((current) => clampProfilePercent(current + 5));
-            }
-            if (event.key === 'Home') {
-              event.preventDefault();
-              setProfilePercent(DEFAULT_PROFILE_PERCENT);
-            }
-          }}
         >
-          <span className="flex h-20 w-2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition group-hover:border-blue-300 group-hover:bg-blue-50 group-hover:text-blue-600 group-focus-visible:ring-2 group-focus-visible:ring-blue-500 dark:group-hover:bg-blue-950/40">
-            <GripVertical className="h-4 w-4" />
-          </span>
+          <div className="h-16 w-1.5 rounded-full bg-gray-200 transition-colors group-hover:bg-[#DCB968]"></div>
         </div>
 
-        <section
+        {/* PANEL RIGHT: EVALUATION */}
+        <div
           className={cn(
-            'h-[calc(100dvh-13rem)] min-h-[520px] min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm lg:h-auto lg:min-h-0',
-            mobileTab === 'evaluation' ? 'flex' : 'hidden lg:flex'
+            'flex h-full min-w-0 flex-col overflow-hidden rounded-[24px] border border-gray-200 bg-gray-50 shadow-sm',
+            mobileTab !== 'evaluation' && 'hidden lg:flex'
           )}
         >
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-purple-600">
-                  Round 2 evaluation
-                </p>
-                <h2 className="mt-1 text-2xl font-black text-blue-950 dark:text-blue-300">
-                  Evaluation form
-                </h2>
-              </div>
-              <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700 dark:bg-purple-950/50 dark:text-purple-300">
-                Department template
-              </span>
+          <div className="flex-1 scroll-smooth overflow-y-auto p-6">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+              <h2 className="flex items-center gap-2 text-xl font-black text-[#0D1742]">
+                <i className="fa-solid fa-clipboard-question text-[#DCB968]"></i>{' '}
+                Live Assessment
+              </h2>
+              {isDepartmentHead && (
+                <div className="flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm gap-1">
+                  {/* Nút No Show với hiệu ứng Active động */}
+                  <button
+                    type="button"
+                    disabled={terminal || isUpdatingSlot}
+                    onClick={() => {
+                      setSlotAction('NO_SHOW');
+                      setIsSlotConfirmOpen(true);
+                    }}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50',
+                      currentSlotStatus === 'NO_SHOW'
+                        ? 'bg-[#B82649] text-white shadow-sm ring-2 ring-[#B82649]/30'
+                        : currentSlotStatus
+                          ? 'text-gray-400 opacity-40 grayscale-50 hover:bg-red-50 hover:text-red-600'
+                          : 'text-gray-500 hover:bg-red-50 hover:text-red-600'
+                    )}
+                  >
+                    <CalendarX2
+                      className={cn(
+                        'h-3.5 w-3.5',
+                        currentSlotStatus === 'NO_SHOW'
+                          ? 'text-white'
+                          : 'text-red-500'
+                      )}
+                    />{' '}
+                    No Show
+                  </button>
+
+                  <div className="my-1 w-px bg-gray-200"></div>
+
+                  {/* Nút Completed với hiệu ứng Active động */}
+                  <button
+                    type="button"
+                    disabled={terminal || isUpdatingSlot}
+                    onClick={() => {
+                      setSlotAction('COMPLETED');
+                      setIsSlotConfirmOpen(true);
+                    }}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50',
+                      currentSlotStatus === 'COMPLETED'
+                        ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30'
+                        : currentSlotStatus
+                          ? 'text-gray-400 opacity-40 grayscale-50 hover:bg-emerald-50 hover:text-emerald-600'
+                          : 'text-gray-500 hover:bg-emerald-50 hover:text-emerald-600'
+                    )}
+                  >
+                    <CalendarCheck
+                      className={cn(
+                        'h-3.5 w-3.5',
+                        currentSlotStatus === 'COMPLETED'
+                          ? 'text-white'
+                          : 'text-emerald-500'
+                      )}
+                    />{' '}
+                    Completed
+                  </button>
+                </div>
+              )}
             </div>
 
             {terminal && (
               <AppNotice variant="info" title="Evaluation closed">
-                Answers and notes are read-only after a decision. A Department
-                Head can still change the decision below after confirmation.
+                Answers and notes are read-only after a decision. Department
+                Head can still change the decision.
               </AppNotice>
             )}
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-5 space-y-6">
               {candidate.evaluationAnswers.length === 0 && (
-                <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
-                  No template questions were returned for this department and
-                  cohort.
+                <p className="rounded-2xl bg-white p-6 text-center text-sm font-bold text-gray-400">
+                  No standard questions available.
                 </p>
               )}
+
+              {/* RENDER TEMPLATE QUESTIONS */}
               {candidate.evaluationAnswers.map((answer, index) => (
-                <article
-                  key={`${candidate.id}:${answer.id}`}
-                  className="rounded-2xl border border-border p-4"
-                >
-                  <p className="text-xs font-extrabold uppercase tracking-wider text-purple-600">
-                    Question {index + 1}
-                  </p>
-                  <h3 className="mt-2 text-sm font-extrabold">
-                    {answer.question}
-                  </h3>
-                  <EvaluationAnswerEditor
-                    answer={answer}
-                    disabled={terminal}
-                    scoringEnabled={candidate.isScoringEnabled}
-                    onSaved={saveTemplateAnswer}
-                    onSaveState={(state) => updateState(answer.id, state)}
-                  />
-                </article>
+                <QuestionEvaluationCard
+                  key={answer.id}
+                  index={index}
+                  answer={answer}
+                  disabled={!hasEditRights || terminal}
+                  currentUser={currentUser}
+                  isDepartmentHead={isDepartmentHead}
+                  onSaved={saveTemplateAnswer}
+                  onSaveState={(state) => updateState(answer.id, state)}
+                  onDeleteQuestion={deleteQuestion}
+                />
               ))}
 
+              {/* RENDER AD-HOC QUESTIONS */}
               {candidate.adHocQuestions.map((answer) => (
-                <SavedCustomQuestion
-                  key={`${candidate.id}:${answer.id}`}
+                <QuestionEvaluationCard
+                  key={answer.id}
                   answer={answer}
-                  disabled={terminal}
-                  scoringEnabled={candidate.isScoringEnabled}
+                  disabled={!hasEditRights || terminal}
+                  currentUser={currentUser}
+                  isDepartmentHead={isDepartmentHead}
                   onSaved={saveCustomAnswer}
                   onSaveState={(state) => updateState(answer.id, state)}
+                  onDeleteQuestion={deleteQuestion}
+                  onUpdateQuestion={updateQuestionText}
                 />
               ))}
 
@@ -882,80 +645,115 @@ export function InterviewCockpitClient({
               )}
             </div>
 
-            <button
-              type="button"
-              disabled={terminal || showCustomComposer}
-              onClick={() => setShowCustomComposer(true)}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-purple-500 px-4 py-2.5 text-sm font-bold text-purple-600 transition hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-purple-950/30"
-            >
-              <Plus className="h-4 w-4" />
-              {candidate.adHocQuestions.length > 0
-                ? 'Add Another Custom Question'
-                : 'Add Custom Question'}
-            </button>
-
-            {candidate.isScoringEnabled && (
-              <OverallScoreSummary
-                score={candidate.score}
-                answers={evaluatedAnswers}
-              />
+            {isDepartmentHead && (
+              <button
+                type="button"
+                disabled={terminal || showCustomComposer}
+                onClick={() => setShowCustomComposer(true)}
+                className="mt-6 inline-flex items-center gap-2 rounded-xl border border-[#0D1742]/30 px-5 py-2.5 text-sm font-bold text-[#0D1742] transition hover:bg-[#0D1742]/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4 text-[#DCB968]" />
+                {candidate.adHocQuestions.length > 0
+                  ? 'Add Another Ad-Hoc Question'
+                  : 'Add Ad-Hoc Question'}
+              </button>
             )}
-          </div>
 
-          {isDepartmentHead && (
-            <div className="relative z-20 max-h-[52dvh] shrink-0 overflow-y-auto border-t border-border bg-card/95 p-3 shadow-[0_-10px_30px_rgba(15,23,42,0.10)] backdrop-blur sm:p-4 lg:max-h-[50%]">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                  General Notes
-                </p>
-                <span className="text-[10px] font-semibold text-muted-foreground">
-                  Auto-save
-                </span>
-              </div>
-              <GeneralNoteEditor
-                key={`${candidate.id}:${currentUser.id}`}
-                candidateId={candidate.id}
-                currentUserId={currentUser.id}
-                notes={candidate.collaborativeNotes}
-                disabled={terminal}
-                onSaved={updateCollaborativeNotes}
-                onSaveState={(state) =>
-                  updateState('collaborative-note', state)
-                }
-              />
+            <GeneralNoteCard
+              candidateId={candidate.id}
+              currentUserId={currentUser.id}
+              notes={candidate.generalNotes}
+              disabled={!hasEditRights || terminal}
+              onSaved={(notes) =>
+                setCandidate((prev) =>
+                  prev ? { ...prev, generalNotes: notes } : prev
+                )
+              }
+              onSaveState={(state) => updateState('general-note', state)}
+            />
 
-              <div className="mt-3 border-t border-border pt-3">
-                <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                  Final Decision
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                  Choose Pass, Fail or No Show. No Show is recorded as Fail. An
-                  existing decision can be changed, and every change requires
-                  confirmation.
-                </p>
+            {isDepartmentHead && (
+              <div className="mb-2 mt-8 border-t border-gray-200">
                 <DecisionBar
-                  value={candidate.selectedDecision}
-                  compact
-                  onChange={setDecision}
+                  value={candidate.status}
+                  onChange={(val) => {
+                    setDecision(val);
+                    setIsConfirmOpen(true);
+                  }}
                 />
               </div>
-            </div>
-          )}
-        </section>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* Confirm Dialog cho Trạng thái Duyệt (Pass / Pending / Fail) */}
       <ConfirmDialog
-        open={decision !== null}
-        title={`Confirm ${decision ?? ''}`}
+        open={isConfirmOpen}
+        title="Update Candidate Status"
+        variant={decision === 'Fail' ? 'destructive' : 'default'}
         description={
-          decision === 'No Show'
-            ? 'No Show will be recorded as Fail. Apply this decision? You can change it later, but each change requires confirmation.'
-            : `Apply ${decision ?? ''} to this candidate? You can change the decision later, but each change requires confirmation.`
+          decision ? (
+            <>
+              Are you sure you want to mark{' '}
+              <span className="font-bold text-gray-900">
+                {candidate.fullName}
+              </span>{' '}
+              as{' '}
+              <span
+                className={
+                  decision === 'Pass'
+                    ? 'font-bold text-emerald-600'
+                    : decision === 'Pending'
+                      ? 'font-bold text-[#A28436]'
+                      : 'font-bold text-[#B82649]'
+                }
+              >
+                {decision}
+              </span>
+              ? This will update their current standing in the recruitment
+              process.
+            </>
+          ) : (
+            ''
+          )
         }
-        confirmLabel={`Confirm ${decision ?? ''}`}
-        variant={decision === 'Pass' ? 'default' : 'destructive'}
+        confirmLabel={`Mark as ${decision || ''}`}
         onConfirm={() => void confirmDecision()}
-        onCancel={() => setDecision(null)}
+        onCancel={() => {
+          setDecision(null);
+          setIsConfirmOpen(false);
+        }}
+      />
+
+      {/* Confirm Dialog cho Trạng thái Lịch hẹn (No Show / Completed) */}
+      <ConfirmDialog
+        open={isSlotConfirmOpen}
+        title={`Mark Interview as ${slotAction ? SLOT_LABELS[slotAction] : ''}?`}
+        variant={slotAction === 'NO_SHOW' ? 'destructive' : 'default'}
+        description={
+          <p>
+            You are about to mark the interview slot for{' '}
+            <strong className="text-gray-900">{candidate.fullName}</strong> as{' '}
+            <span
+              className={
+                slotAction === 'COMPLETED'
+                  ? 'font-bold text-emerald-600'
+                  : 'font-bold text-red-600'
+              }
+            >
+              {slotAction ? SLOT_LABELS[slotAction] : ''}
+            </span>
+            . This action tracks attendance for this candidate.
+          </p>
+        }
+        confirmLabel={isUpdatingSlot ? 'Updating...' : `Confirm`}
+        onConfirm={() => void handleUpdateSlotStatus()}
+        onCancel={() => {
+          setSlotAction(null);
+          setIsSlotConfirmOpen(false);
+        }}
+        loading={isUpdatingSlot}
       />
     </div>
   );

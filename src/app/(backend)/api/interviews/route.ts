@@ -1,22 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import Candidate from '@/app/(backend)/models/Candidate';
-import SystemConfig from '@/app/(backend)/models/SystemConfig';
-import '@/app/(backend)/models/MasterInterviewSlot';
 import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 
 export const GET = withRBAC(
-  ['Department Head', 'Member'],
+  ['Department Head', 'Member', 'Executive Board'],
   async (req: NextRequest, { session }) => {
     try {
       await dbConnect();
       const { searchParams } = new URL(req.url);
+
+      const isExecutive = session.user.role === 'Executive Board';
       const assignedDepartment = normalizeHeadDepartment(
         session.user.department
       );
 
-      if (!assignedDepartment) {
+      // Bypass cho EB, bắt lỗi phòng ban cho các role khác
+      if (!isExecutive && !assignedDepartment) {
         return NextResponse.json(
           {
             success: false,
@@ -33,26 +34,19 @@ export const GET = withRBAC(
       const search = searchParams.get('search') || '';
       const round2Status = searchParams.get('round2Status') || '';
 
+      // Xây dựng điều kiện lọc (Query Match)
       const query: Record<string, unknown> = {
-        department: assignedDepartment,
-        status: 'Pass',
+        status: 'Pass', // Ứng viên phải pass R1
       };
 
-      // Fetch Active System Config
-      const systemConfig = await SystemConfig.findOne({
-        configName: 'global_settings',
-      });
-      if (systemConfig?.currentGeneration && systemConfig?.currentSemester) {
-        query.generation = systemConfig.currentGeneration;
-        query.semester = systemConfig.currentSemester;
+      if (!isExecutive) {
+        query.department = assignedDepartment;
       }
 
-      // Round 2 Status Filter
       if (round2Status && round2Status !== 'All') {
         query.round2Status = round2Status;
       }
 
-      // Search
       if (search.trim()) {
         query.$or = [
           { fullName: { $regex: search.trim(), $options: 'i' } },
@@ -62,19 +56,21 @@ export const GET = withRBAC(
 
       const skip = (page - 1) * limit;
 
+      // ĐÃ DỌN DẸP: Dùng `.find()` thay vì Aggregation đắt đỏ vì không cần lấy Slot nữa
       const [candidates, total] = await Promise.all([
         Candidate.find(query)
-          .populate('interviewSlotId', 'date startTime endTime room')
           .select(
-            'fullName email phone majorAndYear department status round2Status round2Decision round2Evaluation interviewSlotId appliedAt generation semester'
+            'fullName email phone majorAndYear department status round2Status round2Evaluation appliedAt'
           )
           .sort({ appliedAt: -1 })
           .skip(skip)
           .limit(limit)
-          .lean(),
+          .lean()
+          .exec(),
         Candidate.countDocuments(query),
       ]);
 
+      // Định dạng lại kết quả trả về
       const formattedCandidates = candidates.map((c) => ({
         id: c._id.toString(),
         fullName: c.fullName,
@@ -84,25 +80,9 @@ export const GET = withRBAC(
         department: c.department,
         status: c.status,
         round2Status: c.round2Status,
-        round2Decision: c.round2Decision ?? null,
-        generation: c.generation,
-        semester: c.semester,
-        interviewSlot: c.interviewSlotId
-          ? {
-              id: c.interviewSlotId._id.toString(),
-              date: c.interviewSlotId.date,
-              startTime: c.interviewSlotId.startTime,
-              endTime: c.interviewSlotId.endTime,
-              room: c.interviewSlotId.room,
-            }
-          : null,
         evaluationSummary: {
-          score: c.round2Evaluation?.score ?? null,
           hasNotes: Boolean(
-            c.round2Evaluation?.notes?.note1 ||
-            c.round2Evaluation?.notes?.note2 ||
-            c.round2Evaluation?.notes?.note3 ||
-            c.round2Evaluation?.collaborativeNotes?.some(
+            c.round2Evaluation?.generalNotes?.some(
               (note: { content?: string }) => Boolean(note.content?.trim())
             )
           ),

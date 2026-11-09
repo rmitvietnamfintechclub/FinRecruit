@@ -44,7 +44,7 @@ export default function CandidateTable({
 
   const handleViewDetails = (candidate: HeadDashboardListCandidate) => {
     if (round === 2) {
-      router.push(`/InterviewCockpit/${candidate.id}`);
+      router.push(`/InterviewCockpit/${candidate.id}?tab=round2`);
       return;
     }
     setSelectedCandidate(candidate);

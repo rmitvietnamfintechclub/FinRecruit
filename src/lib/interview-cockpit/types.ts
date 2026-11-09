@@ -1,16 +1,8 @@
 export const BACKEND_ROUND_2_STATUSES = ['Pending', 'Pass', 'Fail'] as const;
 
 export type BackendRound2Status = (typeof BACKEND_ROUND_2_STATUSES)[number];
-export type CockpitRole = 'Department Head' | 'Member' | 'Executive Board'; // Đã đồng bộ với Schema mới
+export type CockpitRole = 'Department Head' | 'Member' | 'Executive Board';
 export type SaveState = 'saved' | 'saving' | 'error';
-
-export type InterviewAnswer = {
-  id: string;
-  question: string;
-  answer: string;
-  isCustom?: boolean;
-  addedBy?: string; 
-};
 
 export type CollaborativeNote = {
   authorId: string;
@@ -19,6 +11,22 @@ export type CollaborativeNote = {
   role: CockpitRole;
   content: string;
   updatedAt: string;
+};
+
+// 1. Dành cho câu trả lời của Ứng viên (Vòng 1) - BẮT BUỘC CÓ field answer
+export type CandidateSubmission = {
+  id: string;
+  question: string;
+  answer: string;
+};
+
+// 2. Dành cho câu hỏi của Hội đồng (Vòng 2) - KHÔNG CÓ answer, chỉ có notes
+export type InterviewAnswer = {
+  id: string;
+  question: string;
+  isCustom?: boolean;
+  addedBy?: string;
+  collaborativeNotes: CollaborativeNote[];
 };
 
 export type CockpitUser = {
@@ -42,22 +50,27 @@ export type Round2CandidateSummary = {
   email: string;
   studentId: string;
   department: string;
-  generation: string;
-  semester: string;
-  interviewSlot: string;
   status: BackendRound2Status;
 };
+
+export type SlotStatusType = 'AVAILABLE' | 'BOOKED' | 'COMPLETED' | 'NO_SHOW';
 
 export type InterviewCandidate = Round2CandidateSummary & {
   majorAndYear: string;
   phone: string;
   facebookLink?: string;
   cvLink?: string;
-  generalAnswers: InterviewAnswer[];
-  departmentAnswers: InterviewAnswer[];
+  interviewSlotId?: string;
+  interviewSlotStatus?: SlotStatusType;
+
+  // ĐÃ CẬP NHẬT: Dùng type CandidateSubmission (có answer) cho Vòng 1
+  generalAnswers: CandidateSubmission[];
+  departmentAnswers: CandidateSubmission[];
+
+  // Dùng type InterviewAnswer (không có answer) cho Vòng 2
   evaluationAnswers: InterviewAnswer[];
   adHocQuestions: InterviewAnswer[];
-  collaborativeNotes: CollaborativeNote[];
+  generalNotes: CollaborativeNote[];
 };
 
 export type SettingsLoadSource = 'backend-config' | 'empty';
@@ -77,8 +90,8 @@ export interface InterviewCockpitRepository {
     candidateId: string,
     answers: InterviewAnswer[]
   ): Promise<EvaluationSaveResult>;
-  getCollaborativeNotes(candidateId: string): Promise<CollaborativeNote[]>;
-  saveCollaborativeNote(
+  getGeneralNotes(candidateId: string): Promise<CollaborativeNote[]>;
+  saveGeneralNote(
     candidateId: string,
     content: string
   ): Promise<CollaborativeNote[]>;
@@ -92,7 +105,7 @@ export interface InterviewCockpitRepository {
   ): Promise<EvaluationSaveResult>;
   setStatus(
     candidateId: string,
-    status: BackendRound2Status 
+    status: BackendRound2Status
   ): Promise<Round2StatusResult>;
   getSettings(): Promise<InterviewSettings>;
   saveSettings(settings: InterviewSettings): Promise<InterviewSettings>;

@@ -1,5 +1,6 @@
 import type {
   BackendRound2Status,
+  CandidateSubmission,
   CollaborativeNote,
   InterviewAnswer,
   InterviewCandidate,
@@ -17,10 +18,12 @@ type ApiEnvelope<T> = {
   code?: string;
 };
 
+// Kiểu dữ liệu nhận từ server
 type RawFormAnswer = {
   question?: unknown;
-  answer?: unknown;
+  answer?: unknown; // Dành riêng cho Vòng 1
   addedBy?: unknown;
+  collaborativeNotes?: RawCollaborativeNote[];
 };
 
 type RawCollaborativeNote = {
@@ -66,6 +69,8 @@ type RawInterviewDetail = {
   majorAndYear?: unknown;
   facebookLink?: unknown;
   cvLink?: unknown;
+  interviewSlotId?: unknown;
+  interviewSlotStatus?: unknown;
   generalAnswers?: RawFormAnswer[];
   customAnswers?: RawFormAnswer[];
   department?: unknown;
@@ -73,14 +78,14 @@ type RawInterviewDetail = {
   evaluation?: {
     templateAnswers?: RawFormAnswer[];
     adHocQuestions?: RawFormAnswer[];
-    collaborativeNotes?: RawCollaborativeNote[];
+    generalNotes?: RawCollaborativeNote[];
   };
 };
 
 type RawEvaluationUpdate = {
-  templateAnswers?: RawFormAnswer[];
-  adHocQuestions?: RawFormAnswer[];
-  collaborativeNotes?: RawCollaborativeNote[];
+  templateAnswers?: Partial<RawFormAnswer>[];
+  adHocQuestions?: Partial<RawFormAnswer>[];
+  generalNotes?: RawCollaborativeNote[];
 };
 
 type RawStatusUpdate = {
@@ -94,6 +99,7 @@ type RawDepartmentConfig = {
   interviewQuestions?: unknown;
 };
 
+// Utils xử lý chuỗi
 function stringValue(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
@@ -108,52 +114,7 @@ function studentIdFromEmail(email: string) {
   return email.split('@')[0] || email;
 }
 
-function formatDate(value: unknown) {
-  if (typeof value !== 'string' || !value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('en', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
-}
-
-function formatInterviewSlot(slot?: RawInterviewSlot | null) {
-  if (!slot) return 'Not scheduled';
-  const date = formatDate(slot.date);
-  const time = [stringValue(slot.startTime), stringValue(slot.endTime)]
-    .filter(Boolean)
-    .join('–');
-  const room = stringValue(slot.room);
-  return [date, time, room].filter(Boolean).join(' · ') || 'Not scheduled';
-}
-
-function mapAnswer(
-  answer: RawFormAnswer,
-  index: number,
-  prefix: string,
-  isCustom = false
-): InterviewAnswer {
-  return {
-    id: `${prefix}-${index + 1}`,
-    question: stringValue(answer.question),
-    answer: stringValue(answer.answer),
-    ...(isCustom ? { isCustom: true } : {}),
-    ...(typeof answer.addedBy === 'string' ? { addedBy: answer.addedBy } : {}),
-  };
-}
-
-function mapAnswers(
-  answers: RawFormAnswer[] | undefined,
-  prefix: string,
-  isCustom = false
-) {
-  return (Array.isArray(answers) ? answers : []).map((answer, index) =>
-    mapAnswer(answer, index, prefix, isCustom)
-  );
-}
-
+// Map Notes
 function mapCollaborativeNotes(
   notes: RawCollaborativeNote[] | undefined
 ): CollaborativeNote[] {
@@ -175,6 +136,58 @@ function mapCollaborativeNotes(
     .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
 }
 
+// ----------------------------------------------------
+// MAP DỮ LIỆU VÒNG 1 (CÓ ANSWER)
+// ----------------------------------------------------
+function mapSubmission(
+  answer: RawFormAnswer,
+  index: number,
+  prefix: string
+): CandidateSubmission {
+  return {
+    id: `${prefix}-${index + 1}`,
+    question: stringValue(answer.question),
+    answer: stringValue(answer.answer),
+  };
+}
+
+function mapSubmissions(answers: RawFormAnswer[] | undefined, prefix: string) {
+  return (Array.isArray(answers) ? answers : []).map((answer, index) =>
+    mapSubmission(answer, index, prefix)
+  );
+}
+
+// ----------------------------------------------------
+// MAP DỮ LIỆU VÒNG 2 (KHÔNG CÓ ANSWER)
+// ----------------------------------------------------
+function mapAnswer(
+  answer: RawFormAnswer,
+  index: number,
+  prefix: string,
+  isCustom = false
+): InterviewAnswer {
+  return {
+    id: `${prefix}-${index + 1}`,
+    question: stringValue(answer.question),
+    ...(isCustom ? { isCustom: true } : {}),
+    ...(typeof answer.addedBy === 'string' ? { addedBy: answer.addedBy } : {}),
+    collaborativeNotes: mapCollaborativeNotes(answer.collaborativeNotes),
+  };
+}
+
+function mapAnswers(
+  answers: RawFormAnswer[] | undefined,
+  prefix: string,
+  isCustom = false
+) {
+  return (Array.isArray(answers) ? answers : []).map((answer, index) =>
+    mapAnswer(answer, index, prefix, isCustom)
+  );
+}
+
+// ----------------------------------------------------
+// MAP ỨNG VIÊN
+// ----------------------------------------------------
 function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
   const email = stringValue(candidate.email);
   return {
@@ -183,17 +196,11 @@ function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
     email,
     studentId: studentIdFromEmail(email),
     department: stringValue(candidate.department),
-    generation: stringValue(candidate.generation),
-    semester: stringValue(candidate.semester),
-    interviewSlot: formatInterviewSlot(candidate.interviewSlot),
     status: backendStatus(candidate.round2Status),
   };
 }
 
-function mapCandidate(
-  candidate: RawInterviewDetail,
-  summary?: Round2CandidateSummary
-): InterviewCandidate {
+function mapCandidate(candidate: RawInterviewDetail): InterviewCandidate {
   const email = stringValue(candidate.email);
   const evaluation = candidate.evaluation;
 
@@ -203,30 +210,42 @@ function mapCandidate(
     email,
     studentId: studentIdFromEmail(email),
     department: stringValue(candidate.department),
-    generation: summary?.generation ?? '',
-    semester: summary?.semester ?? '',
-    interviewSlot: summary?.interviewSlot ?? 'Not scheduled',
     status: backendStatus(candidate.round2Status),
     majorAndYear: stringValue(candidate.majorAndYear),
     phone: stringValue(candidate.phone),
     facebookLink: stringValue(candidate.facebookLink) || undefined,
     cvLink: stringValue(candidate.cvLink) || undefined,
-    generalAnswers: mapAnswers(candidate.generalAnswers, 'general'),
-    departmentAnswers: mapAnswers(candidate.customAnswers, 'department'),
+    interviewSlotId: stringValue(candidate.interviewSlotId) || undefined,
+    interviewSlotStatus: stringValue(candidate.interviewSlotStatus) as
+      | 'AVAILABLE'
+      | 'BOOKED'
+      | 'COMPLETED'
+      | 'NO_SHOW'
+      | undefined,
+
+    // Vòng 1
+    generalAnswers: mapSubmissions(candidate.generalAnswers, 'general'),
+    departmentAnswers: mapSubmissions(candidate.customAnswers, 'department'),
+
+    // Vòng 2
     evaluationAnswers: mapAnswers(evaluation?.templateAnswers, 'template'),
     adHocQuestions: mapAnswers(evaluation?.adHocQuestions, 'ad-hoc', true),
-    collaborativeNotes: mapCollaborativeNotes(evaluation?.collaborativeNotes),
+    generalNotes: mapCollaborativeNotes(evaluation?.generalNotes),
   };
 }
 
-function toRawAnswers(answers: InterviewAnswer[]): RawFormAnswer[] {
-  return answers.map(({ question, answer, addedBy }) => ({
+// Format dữ liệu trước khi ném lên API (Chỉ truyền question, addedBy và collaborativeNotes)
+function toRawAnswers(answers: InterviewAnswer[]): Partial<RawFormAnswer>[] {
+  return answers.map(({ question, addedBy, collaborativeNotes }) => ({
     question,
-    answer,
     ...(addedBy ? { addedBy } : {}),
+    ...(collaborativeNotes ? { collaborativeNotes } : {}),
   }));
 }
 
+// ----------------------------------------------------
+// API CLIENT REPOSITORY
+// ----------------------------------------------------
 export class HttpInterviewCockpitRepository implements InterviewCockpitRepository {
   private async request<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await fetch(url, {
@@ -276,19 +295,8 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
     const detail = await this.request<RawInterviewDetail>(
       `/api/interviews/${candidateId}`
     );
-    const email = stringValue(detail.email);
-    let summary: Round2CandidateSummary | undefined;
 
-    if (email) {
-      const result = await this.request<RawCandidateList>(
-        `/api/interviews?page=1&limit=${PAGE_SIZE}&search=${encodeURIComponent(email)}`
-      );
-      summary = (result.candidates ?? [])
-        .map(mapSummary)
-        .find((candidate) => candidate.id === candidateId);
-    }
-
-    return mapCandidate(detail, summary);
+    return mapCandidate(detail);
   }
 
   async saveTemplateAnswers(candidateId: string, answers: InterviewAnswer[]) {
@@ -304,22 +312,22 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
     };
   }
 
-  async getCollaborativeNotes(candidateId: string) {
+  async getGeneralNotes(candidateId: string) {
     const result = await this.request<RawEvaluationUpdate>(
       `/api/interviews/${candidateId}/notes`
     );
-    return mapCollaborativeNotes(result.collaborativeNotes);
+    return mapCollaborativeNotes(result.generalNotes);
   }
 
-  async saveCollaborativeNote(candidateId: string, content: string) {
+  async saveGeneralNote(candidateId: string, content: string) {
     const result = await this.request<RawEvaluationUpdate>(
       `/api/interviews/${candidateId}/notes`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ collaborativeNote: content }),
+        body: JSON.stringify({ generalNote: content }),
       }
     );
-    return mapCollaborativeNotes(result.collaborativeNotes);
+    return mapCollaborativeNotes(result.generalNotes);
   }
 
   async addCustomQuestion(candidateId: string, question: string) {
@@ -343,6 +351,51 @@ export class HttpInterviewCockpitRepository implements InterviewCockpitRepositor
     );
     return {
       answers: mapAnswers(result.adHocQuestions, 'ad-hoc', true),
+    };
+  }
+
+  async updateCustomQuestion(
+    candidateId: string,
+    questionId: string,
+    newText: string
+  ) {
+    const result = await this.request<RawEvaluationUpdate>(
+      `/api/interviews/${candidateId}/ad-hoc-questions`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ questionId, newText }),
+      }
+    );
+    return {
+      answers: mapAnswers(result.adHocQuestions, 'ad-hoc', true),
+    };
+  }
+
+  // THÊM: Hàm xóa câu hỏi AdHoc
+  async deleteCustomQuestion(candidateId: string, questionId: string) {
+    const result = await this.request<RawEvaluationUpdate>(
+      `/api/interviews/${candidateId}/ad-hoc-questions`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify({ questionId }),
+      }
+    );
+    return {
+      answers: mapAnswers(result.adHocQuestions, 'ad-hoc', true),
+    };
+  }
+
+  // THÊM: Hàm xóa câu hỏi Template
+  async deleteTemplateQuestion(candidateId: string, questionId: string) {
+    const result = await this.request<RawEvaluationUpdate>(
+      `/api/interviews/${candidateId}/notes`,
+      {
+        method: 'DELETE', // Gọi DELETE tới route notes để xử lý
+        body: JSON.stringify({ questionId, type: 'template' }),
+      }
+    );
+    return {
+      answers: mapAnswers(result.templateAnswers, 'template', false),
     };
   }
 

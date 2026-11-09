@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { CandidateViewMode } from '@/components/ui/CandidateTable';
 import type { HeadDashboardListCandidate } from '@/types/headDashboard';
 import { AppNotice } from '@/components/feedback/AppNotice';
@@ -43,10 +44,11 @@ type ListApiResponse = {
 };
 
 export default function MemberDashboardClient() {
-  // === STATE CHUNG ===
+  const searchParams = useSearchParams();
+  const initialMode = (searchParams.get('tab') === 'round2' ? 'round2' : 'round1') as RoundMode;
   const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
   const [assignedDepartment, setAssignedDepartment] = useState<string | null>(null);
-  const [mode, setMode] = useState<RoundMode>('round1');
+  const [mode, setMode] = useState<RoundMode>(initialMode);
   const [viewMode, setViewMode] = useState<CandidateViewMode>('list');
   const [newCandidateNotice, setNewCandidateNotice] = useState(false);
   

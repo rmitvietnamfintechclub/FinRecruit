@@ -2,15 +2,6 @@ import mongoose, { Schema } from 'mongoose';
 import { ICandidate, CANDIDATE_CHOICES, DEPARTMENTS, STATUSES } from '@/app/(backend)/types';
 import { baseSchemaOptions } from './baseSchemaOptions';
 
-const FormAnswerSchema = new Schema(
-    {
-        question: { type: String, required: true },
-        answer: { type: String, default: '' },
-        addedBy: { type: String },
-    },
-    { _id: false }
-);
-
 const CollaborativeNoteSchema = new Schema(
     {
         authorId: { type: String, required: true },
@@ -23,6 +14,16 @@ const CollaborativeNoteSchema = new Schema(
         },
         content: { type: String, default: '' },
         updatedAt: { type: Date, required: true }
+    },
+    { _id: false }
+);
+
+const FormAnswerSchema = new Schema(
+    {
+        question: { type: String, required: true },
+        answer: { type: String, default: '' },
+        addedBy: { type: String },
+        collaborativeNotes: { type: [CollaborativeNoteSchema], default: [] }
     },
     { _id: false }
 );
@@ -56,10 +57,11 @@ const CandidateSchema = new Schema<ICandidate>(
         round2Evaluation: {
             templateAnswers: { type: [FormAnswerSchema], default: [] },
             adHocQuestions: { type: [FormAnswerSchema], default: [] },
-            collaborativeNotes: {
+            generalNotes: {
                 type: [CollaborativeNoteSchema],
                 default: []
             },
+            deletedTemplateQuestions: { type: [String], default: [] },
         },
 
         // Meta data
