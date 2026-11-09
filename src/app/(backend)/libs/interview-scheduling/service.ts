@@ -1,3 +1,4 @@
+import { Resend } from 'resend';
 import { Types } from 'mongoose';
 import dbConnect from '@/app/(backend)/libs/dbConnect';
 import MasterInterviewSlot from '@/app/(backend)/models/MasterInterviewSlot';
@@ -14,6 +15,8 @@ import type {
   ISlotBooking,
   SlotStatusType,
 } from '@/app/(backend)/types';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export type SlotStatus = 'AVAILABLE' | 'BOOKED' | 'COMPLETED' | 'NO_SHOW';
 
@@ -118,6 +121,20 @@ export function formatDateToYYYYMMDD(date: Date | string): string {
   return date.toISOString().split('T')[0] ?? '';
 }
 
+// Hàm hỗ trợ format ngày tháng năm sang dạng thân thiện dễ đọc (Ví dụ: 20 November 2026)
+export function formatFriendlyDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const parsed = new Date(dateStr);
+  if (isNaN(parsed.getTime())) return dateStr;
+
+  return parsed.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 export function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
@@ -187,7 +204,7 @@ export function serializeSlot(
     (b) => {
       let candName = 'Unknown';
       let candEmail = '';
-      let candIdStr: string = ''; // Khởi tạo với chuỗi rỗng
+      let candIdStr: string = '';
 
       if (b.candidateId instanceof Types.ObjectId) {
         candIdStr = b.candidateId.toString();
@@ -384,7 +401,6 @@ export async function submitInterviewerAvailability(
   const isHead = input.interviewerRole === 'Department Head';
   const isMember = input.interviewerRole === 'Member';
 
-  // KIỂM TRA SỨC CHỨA (CAPACITY CHECK) CHO MEMBER THEO TỪNG PHÒNG BAN
   if (isMember) {
     for (const sel of input.selections) {
       for (const sId of sel.slotIds) {
@@ -393,13 +409,11 @@ export async function submitInterviewerAvailability(
         const slotDoc = await MasterInterviewSlot.findById(sId).lean();
         if (!slotDoc) continue;
 
-        // Lấy giới hạn max members của phòng ban này (mặc định là 4 nếu chưa cấu hình)
         const maxLimit =
           (slotDoc.maxMembersPerDept as Record<string, number>)?.[
             sel.department
           ] ?? 4;
 
-        // Đếm số lượng member hiện tại đã đăng ký vào slot này cho phòng ban này (trừ chính user đang update)
         const existingMembersCount =
           await InterviewerAvailability.countDocuments({
             slotId: slotDoc._id,
@@ -694,7 +708,8 @@ export function generateIcsCalendar(
   const rawEnd = slot.endTime.replace(/:/g, '') + '00';
   const dtStamp =
     new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  const uid = `finrecruit-${slot.id}-${Date.now()}@rmit.edu.vn`;
+  const uid = `finrecruit-${slot.id}-${Date.now()}@rmitvietnamfintechclub.com`;
+  const friendlyDate = formatFriendlyDate(slot.date);
 
   return [
     'BEGIN:VCALENDAR',
@@ -707,11 +722,11 @@ export function generateIcsCalendar(
     `DTSTAMP:${dtStamp}`,
     `DTSTART;TZID=Asia/Ho_Chi_Minh:${rawDate}T${rawStart}`,
     `DTEND;TZID=Asia/Ho_Chi_Minh:${rawDate}T${rawEnd}`,
-    `SUMMARY:FinTech Club Round 2 Interview — ${department}`,
-    `DESCRIPTION:Dear ${candidateName},\\n\\nYour Round 2 interview for the ${department} has been confirmed.\\n\\nDate: ${slot.date}\\nTime: ${slot.startTime} - ${slot.endTime}\\nRoom: ${slot.room}\\n\\nPlease arrive 5-10 minutes prior to your time slot.`,
+    `SUMMARY:[RMIT FinTech Club] Round 2 Interview — ${department}`,
+    `DESCRIPTION:Dear ${candidateName},\\n\\nYou are invited to attend your interview for RMIT Vietnam FinTech Club Membership Recruitment ${slot.semester} (${department}).\\n\\nDate: ${friendlyDate}\\nTime: ${slot.startTime} - ${slot.endTime}\\nRoom: ${slot.room}\\nLocation: RMIT Saigon South Campus\\n\\nPlease arrive on time and be well-prepared for the interview.`,
     `LOCATION:RMIT Saigon South Campus - Room ${slot.room}`,
     'STATUS:CONFIRMED',
-    'ORGANIZER;CN=RMIT FinTech Club:mailto:fintechclub@rmit.edu.vn',
+    'ORGANIZER;CN=RUVN Financial Technology Club SGS:mailto:fintechclub.sgs@rmit.edu.vn',
     `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=${candidateName}:mailto:${candidateEmail}`,
     'END:VEVENT',
     'END:VCALENDAR',
@@ -724,20 +739,86 @@ export async function sendBookingConfirmationEmail(
   candidateEmail: string,
   department: DepartmentType
 ): Promise<void> {
-  const icsContent = generateIcsCalendar(
-    slot,
-    candidateName,
-    candidateEmail,
-    department
-  );
-  console.log(
-    `[Email Dispatch] Generated .ics calendar invitation for ${candidateEmail}:`,
-    {
-      slotId: slot.id,
-      summary: `FinTech Club Interview - ${department}`,
-      icsLength: icsContent.length,
-    }
-  );
+  try {
+    const icsContent = generateIcsCalendar(
+      slot,
+      candidateName,
+      candidateEmail,
+      department
+    );
+
+    const friendlyDate = formatFriendlyDate(slot.date);
+
+    await resend.emails.send({
+      from: 'RUVN Financial Technology Club SGS <finrecruit@rmitvietnamfintechclub.com>',
+      to: candidateEmail,
+      subject: `[Confirmed] Round 2 Interview Schedule — ${department} (RMIT FinTech Club)`,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #0D1742; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+          <p style="margin-bottom: 16px;">Dear <strong>${candidateName}</strong>,</p>
+          
+          <p style="margin-bottom: 20px;">
+            You are invited to attend your interview for <strong>RMIT Vietnam FinTech Club Membership Recruitment ${slot.semester}</strong> (${department}).
+          </p>
+          
+          <div style="background-color: #f8fafc; padding: 18px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #DCB968;">
+            <p style="margin: 6px 0;"><strong>Date:</strong> ${friendlyDate}</p>
+            <p style="margin: 6px 0;"><strong>Time:</strong> ${slot.startTime} - ${slot.endTime}</p>
+            <p style="margin: 6px 0;"><strong>Room:</strong> ${slot.room}</p>
+            <p style="margin: 6px 0;"><strong>Location:</strong> RMIT Saigon South Campus</p>
+          </div>
+
+          <p style="margin-bottom: 20px;">
+            Please arrive on time and be well-prepared for the interview. We have also attached a calendar invitation to this email. Please <strong>accept</strong> it to add the interview to your calendar.
+          </p>
+          
+          <p style="margin-bottom: 24px;">Best regards,</p>
+          
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+
+          <div style="font-size: 13px; line-height: 1.5; color: #0D1742;">
+            <div style="font-weight: bold; color: #DCB968; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">
+              RMIT Vietnam FinTech Club (SGS Campus)
+            </div>
+            <div style="font-weight: bold; color: #0D1742; margin-bottom: 12px;">
+              RMIT University Vietnam
+            </div>
+
+            <div style="font-style: italic; color: #1e3a8a; font-size: 12px; line-height: 1.6;">
+              President - Mr. Nguyen Truong Giang - <a href="mailto:s4118021@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4118021@rmit.edu.vn</a><br/>
+              External Vice President - Mr. Ho Nguyen Minh Nhat - <a href="mailto:s4123860@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4123860@rmit.edu.vn</a><br/>
+              Internal Vice President - Ms. Pham Thi Khanh Hoa - <a href="mailto:s4127901@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4127901@rmit.edu.vn</a><br/>
+              Chief of Finance - Ms. Dang Vo Bao Tran - <a href="mailto:s4016190@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4016190@rmit.edu.vn</a><br/>
+              Head of Business Department - Ms. Vu Ha Anh - <a href="mailto:s4147050@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4147050@rmit.edu.vn</a><br/>
+              Head of Marketing Department - Mr. Hoang Vu Nhat Thong - <a href="mailto:s4147002@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4147002@rmit.edu.vn</a><br/>
+              Head of Human Resources Department - Ms. Tran Khanh Linh - <a href="mailto:s4067294@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4067294@rmit.edu.vn</a><br/>
+              Head of Technology Department - Mr. Do Anh Khoa - <a href="mailto:s4132831@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4132831@rmit.edu.vn</a>
+            </div>
+
+            <div style="margin-top: 8px;">
+              <img src="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/images/fintech-logo.png" alt="RMIT FinTech Club Logo" style="height: 120px; width: auto; display: block;" />
+            </div>
+          </div>
+        </div>
+      `,
+      attachments: [
+        {
+          filename: 'interview-invite.ics',
+          content: Buffer.from(icsContent).toString('base64'),
+          contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+        },
+      ],
+    });
+
+    console.log(
+      `[Email Dispatch] Successfully sent calendar invite via Resend to ${candidateEmail}`
+    );
+  } catch (error) {
+    console.error(
+      '[Email Dispatch] Failed to send calendar invite via Resend:',
+      error
+    );
+  }
 }
 
 export async function updateSlotBookingStatus(
