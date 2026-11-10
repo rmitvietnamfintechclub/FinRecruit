@@ -12,7 +12,7 @@ import {
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { CohortBanner } from '@/components/feedback/CohortBanner';
 import { useIntervalWhenVisible } from '@/hooks/useIntervalWhenVisible';
-import type { DepartmentType } from '@/app/(backend)/types';
+import type { DepartmentType, StatusType } from '@/app/(backend)/types';
 import {
   findDepartmentState,
   ROUND_TRANSITION_DEPARTMENTS,
@@ -446,14 +446,33 @@ export default function HeadDashboardPage() {
         return;
       }
 
-      const updatedRound = confirmAction.targetRound;
+      const {
+        id: targetId,
+        newStatus: updatedStatus,
+        targetRound: roundNum,
+      } = confirmAction;
       setConfirmAction(null);
 
-      if (updatedRound === 1) {
-        await Promise.all([loadList(1, false), refreshStats()]);
+      if (roundNum === 1) {
+        setCandidates((prev) =>
+          prev.map((c) =>
+            c.id === targetId
+              ? { ...c, status: updatedStatus as StatusType }
+              : c
+          )
+        );
       } else {
-        await Promise.all([loadRound2(), refreshStats()]); // Round 2 load lại
+        setRound2Candidates((prev) =>
+          prev.map((c) =>
+            c.id === targetId
+              ? { ...c, round2Status: updatedStatus as StatusType }
+              : c
+          )
+        );
       }
+
+      // Chỉ âm thầm đồng bộ lại 4 thẻ thống kê
+      void refreshStats();
     } catch (e) {
       setPatchNotice(e instanceof Error ? e.message : 'Update failed.');
     } finally {
@@ -473,8 +492,13 @@ export default function HeadDashboardPage() {
         if (result.message) setPatchNotice(result.message);
         return;
       }
+
+      const reroutedId = rerouteConfirm.id;
       setRerouteConfirm(null);
-      await Promise.all([loadList(1, false), refreshStats()]);
+
+      setCandidates((prev) => prev.filter((c) => c.id !== reroutedId));
+
+      void refreshStats();
     } catch (e) {
       setPatchNotice(e instanceof Error ? e.message : 'Reroute failed.');
     } finally {
