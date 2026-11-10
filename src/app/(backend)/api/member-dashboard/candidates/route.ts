@@ -40,7 +40,6 @@ type CandidateListAggregationResult = {
     updatedAt: Date;
     round2Status: StatusType;
     interviewSlotId?: Types.ObjectId | null;
-    round2Evaluation?: { score?: number | null };
     interviewDate?: Date | string | null;
     interviewStartTime?: string | null;
     interviewEndTime?: string | null;
@@ -65,7 +64,6 @@ export const GET = withRBAC('Member', async (req: NextRequest, { session }) => {
   const statusParam = searchParams.get('status');
   const status = parseDashboardStatus(statusParam);
   const { page, limit, skip } = parsePaginationParams(searchParams);
-  const sourceByScore = searchParams.get('sortByScore') === 'true';
   const populateInterview = searchParams.get('populateInterview') === 'true';
 
   if (statusParam && statusParam !== 'All' && !status) {
@@ -97,9 +95,7 @@ export const GET = withRBAC('Member', async (req: NextRequest, { session }) => {
     cohort,
   });
 
-  const sortStage: Record<string, 1 | -1> = sourceByScore
-    ? { 'round2Evaluation.score': -1, createdAt: -1, _id: -1 }
-    : { createdAt: -1, _id: -1 };
+  const sortStage: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };
 
   const pipeline: PipelineStage.FacetPipelineStage[] = [
     { $match: match },
@@ -153,13 +149,11 @@ export const GET = withRBAC('Member', async (req: NextRequest, { session }) => {
 
   const projectStage: Record<string, number> = {
     customAnswers: 0,
-    cvLink: 0, 
+    cvLink: 0,
     __v: 0,
-    'round2Evaluation.templateAnswers': 0,
-    'round2Evaluation.adHocQuestions': 0,
-    'round2Evaluation.notes': 0,
+    round2Evaluation: 0, // Loại bỏ toàn bộ evaluation khỏi payload của member
   };
-  
+
   if (populateInterview) {
     projectStage.slotInfo = 0;
     projectStage.firstSlot = 0;
@@ -208,7 +202,6 @@ export const GET = withRBAC('Member', async (req: NextRequest, { session }) => {
           search,
           status,
           department: assignedDepartment,
-          sortByScore: sourceByScore,
         },
         activeCohort: {
           ...cohort,

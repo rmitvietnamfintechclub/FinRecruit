@@ -1,1 +1,0 @@
-export { POST } from '@/app/(backend)/api/public/interview-availability/route';

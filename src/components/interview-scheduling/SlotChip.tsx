@@ -23,7 +23,7 @@ export function SlotChip({ label, caption, state, onClick, title }: SlotChipProp
       aria-pressed={state === 'selected'}
       onClick={onClick}
       className={cn(
-        'flex min-w-[8.5rem] flex-col items-center rounded-lg px-3 py-2 text-center transition-colors',
+        'flex min-w-34 flex-col items-center rounded-lg px-3 py-2 text-center transition-colors',
         state === 'idle' &&
           'border border-[rgba(198,197,211,0.4)] bg-white text-black hover:border-[#16A34A]/60',
         state === 'selected' &&

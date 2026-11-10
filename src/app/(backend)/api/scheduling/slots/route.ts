@@ -1,1 +1,0 @@
-export { GET } from '@/app/(backend)/api/public/interview-booking/route';
