@@ -107,7 +107,7 @@ export type ExecutiveListRow = {
   appliedAt: string;
   createdAt?: string;
   updatedAt?: string;
-  
+
   // <-- Bổ sung object interviewSlot để map dữ liệu phỏng vấn
   interviewSlot?: {
     id: string;
@@ -147,7 +147,7 @@ export function mapExecutiveListItemToHeadRow(
     createdAt: toIsoString(raw.createdAt ?? raw.appliedAt),
     updatedAt: toIsoString(raw.updatedAt),
     routing: routingFromChoices({ department, choice1, choice2 }),
-    
+
     interviewDate: raw.interviewSlot?.date,
     interviewStartTime: raw.interviewSlot?.startTime,
     interviewEndTime: raw.interviewSlot?.endTime,
@@ -169,7 +169,8 @@ export function mapExecutiveDetailToHeadDetail(
       : null;
 
   // Lấy ra interviewSlot nếu có
-  const interviewSlotRaw = raw.interviewSlot as ExecutiveListRow['interviewSlot'];
+  const interviewSlotRaw =
+    raw.interviewSlot as ExecutiveListRow['interviewSlot'];
 
   const listBase = mapExecutiveListItemToHeadRow({
     _id: String(raw._id ?? ''),
@@ -207,17 +208,14 @@ export function mapExecutiveDetailToHeadDetail(
     adHocQuestions: Array.isArray(rawRound2?.adHocQuestions)
       ? rawRound2.adHocQuestions
       : [],
-    notes: {
-      note1: String(rawRound2?.notes?.note1 ?? ''),
-      note2: String(rawRound2?.notes?.note2 ?? ''),
-      note3: String(rawRound2?.notes?.note3 ?? ''),
-    },
-    collaborativeNotes: Array.isArray(rawRound2?.collaborativeNotes)
-      ? rawRound2.collaborativeNotes
+    generalNotes: Array.isArray(rawRound2?.generalNotes)
+      ? rawRound2.generalNotes
       : [],
-    score: typeof rawRound2?.score === 'number' ? rawRound2.score : null,
+    deletedTemplateQuestions: Array.isArray(rawRound2?.deletedTemplateQuestions)
+      ? rawRound2.deletedTemplateQuestions
+      : [],
   };
-
+  
   return {
     ...listBase,
     cvLink: String(raw.cvLink ?? ''),
