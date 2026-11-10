@@ -268,6 +268,12 @@ export function InterviewSchedulingClient() {
           date: dateStr,
           room: roomName,
           assignedDepartments: Array.from(selectedDepts),
+          maxMembersPerDept: {
+            'Technology Department': 4,
+            'Business Department': 4,
+            'Marketing Department': 4,
+            'HR Department': 4,
+          },
           ...c,
         }))
         .map((s) => ({ ...s, key: draftKey(s) }));
