@@ -51,8 +51,10 @@ export type DepartmentStateInfo = {
 const PAGE_SIZE = 12;
 
 export default function MasterCandidatesPage() {
- const searchParams = useSearchParams();
-  const initialMode = (searchParams.get('tab') === 'round2' ? 'round2' : 'round1') as RoundMode;
+  const searchParams = useSearchParams();
+  const initialMode = (
+    searchParams.get('tab') === 'round2' ? 'round2' : 'round1'
+  ) as RoundMode;
   const [activeCohort, setActiveCohort] = useState<ActiveCohort | null>(null);
   const [mode, setMode] = useState<RoundMode>(initialMode);
   const [deptFilter, setDeptFilter] = useState<MasterViewDeptFilter>('All');
@@ -136,45 +138,6 @@ export default function MasterCandidatesPage() {
     });
   }, [departmentStates]);
 
-  // Fetch counts động cho từng phòng ban (phục vụ Bar)
-  const fetchCounts = useCallback(async (deptName: string | null) => {
-    const dParam = deptName
-      ? `department=${encodeURIComponent(deptName)}&`
-      : '';
-    const base = '/api/executive/candidates';
-
-    try {
-      const [rAll, rP, rPa, rF] = await Promise.all([
-        fetch(`${base}?${dParam}limit=1`, { credentials: 'include' }),
-        fetch(`${base}?${dParam}status=Pending&limit=1`, {
-          credentials: 'include',
-        }),
-        fetch(`${base}?${dParam}status=Pass&limit=1`, {
-          credentials: 'include',
-        }),
-        fetch(`${base}?${dParam}status=Fail&limit=1`, {
-          credentials: 'include',
-        }),
-      ]);
-
-      const [jAll, jP, jPa, jF] = await Promise.all([
-        rAll.json().catch(() => ({})),
-        rP.json().catch(() => ({})),
-        rPa.json().catch(() => ({})),
-        rF.json().catch(() => ({})),
-      ]);
-
-      return {
-        total: jAll.data?.count ?? 0,
-        pending: jP.data?.count ?? 0,
-        passed: jPa.data?.count ?? 0,
-        failed: jF.data?.count ?? 0,
-      };
-    } catch {
-      return { total: 0, pending: 0, passed: 0, failed: 0 };
-    }
-  }, []);
-
   const loadAllData = useCallback(
     async (options?: { isPoll?: boolean }) => {
       if (!options?.isPoll) {
@@ -197,28 +160,14 @@ export default function MasterCandidatesPage() {
         params.set('limit', String(fetchLimit));
         params.set('page', String(fetchPage));
 
-        const [statsJson, listJson, currentStats, breakdownData] =
-          await Promise.all([
-            fetch('/api/executive/statistics', { credentials: 'include' }).then(
-              (r) => r.json().catch(() => ({}))
-            ),
-            fetch(`/api/executive/candidates?${params}`, {
-              credentials: 'include',
-            }).then((r) => r.json().catch(() => ({}))),
-            fetchCounts(apiDept),
-            deptFilter === 'All'
-              ? Promise.all(
-                  ROUND_TRANSITION_DEPARTMENTS.map(async (d) => {
-                    const c = await fetchCounts(d);
-                    return {
-                      department: d as DepartmentType,
-                      total: c.total,
-                      evaluated: Math.max(c.total - c.pending, 0),
-                    };
-                  })
-                )
-              : Promise.resolve(null),
-          ]);
+        const [statsJson, listJson] = await Promise.all([
+          fetch('/api/executive/statistics', { credentials: 'include' }).then(
+            (r) => r.json().catch(() => ({}))
+          ),
+          fetch(`/api/executive/candidates?${params}`, {
+            credentials: 'include',
+          }).then((r) => r.json().catch(() => ({}))),
+        ]);
 
         if (listJson.success === false) {
           if (listJson.status === 401) {
@@ -234,8 +183,34 @@ export default function MasterCandidatesPage() {
           setActiveCohort(listJson.data.activeCohort);
         }
 
-        setStatsRound1(currentStats);
-        if (breakdownData) setDeptStats(breakdownData);
+        if (statsJson.data) {
+          const targetStats = apiDept
+            ? statsJson.data.byDepartment?.[apiDept]?.round1
+            : statsJson.data.overall?.round1;
+
+          if (targetStats) {
+            setStatsRound1({
+              total: targetStats.total ?? 0,
+              pending: targetStats.pending ?? 0,
+              passed: targetStats.pass ?? 0,
+              failed: targetStats.fail ?? 0,
+            });
+          }
+
+          const breakdown: DepartmentProgress[] =
+            ROUND_TRANSITION_DEPARTMENTS.map((d) => {
+              const deptData =
+                statsJson.data.byDepartment?.[d as DepartmentType]?.round1;
+              const total = deptData?.total ?? 0;
+              const pending = deptData?.pending ?? 0;
+              return {
+                department: d as DepartmentType,
+                total,
+                evaluated: Math.max(total - pending, 0),
+              };
+            });
+          setDeptStats(breakdown);
+        }
 
         const rows = (listJson.data?.candidates || []).map(
           (c: ExecutiveListRow) => {
@@ -298,7 +273,7 @@ export default function MasterCandidatesPage() {
         }
       }
     },
-    [deptFilter, statusFilterRound1, triggerSessionExpired, fetchCounts, page]
+    [deptFilter, statusFilterRound1, triggerSessionExpired, page]
   );
 
   useEffect(() => {
@@ -316,10 +291,10 @@ export default function MasterCandidatesPage() {
         const params = new URLSearchParams({
           status: 'Pass',
           page: '1',
-          limit: '500', 
+          limit: '500',
         });
         if (apiDept) params.set('department', apiDept);
-        
+
         // Bắt buộc phải có cờ này để backend populate data phỏng vấn
         params.set('populateInterview', 'true');
 
@@ -341,25 +316,27 @@ export default function MasterCandidatesPage() {
           }
           return;
         }
-const rows = (listJson.data?.candidates || []).map(
-          (c: ExecutiveListRow & { 
-            interviewSlot?: { 
-              _id?: string; 
-              id?: string; 
-              date?: string; 
-              startTime?: string; 
-              endTime?: string; 
-              room?: string;
-              attendanceStatus?: 'COMPLETED' | 'NO_SHOW' | null; 
-            } 
-          }) => {
+        const rows = (listJson.data?.candidates || []).map(
+          (
+            c: ExecutiveListRow & {
+              interviewSlot?: {
+                _id?: string;
+                id?: string;
+                date?: string;
+                startTime?: string;
+                endTime?: string;
+                room?: string;
+                attendanceStatus?: 'COMPLETED' | 'NO_SHOW' | null;
+              };
+            }
+          ) => {
             // Xử lý an toàn dữ liệu interviewSlot populate từ DB
             const slot = c.interviewSlot;
             const interviewDate = slot?.date;
             const interviewStartTime = slot?.startTime;
             const interviewEndTime = slot?.endTime;
             const interviewRoom = slot?.room;
-            
+
             const interviewAttendance = slot?.attendanceStatus;
             const interviewSlotId = slot?._id || slot?.id; // Tùy backend trả về id hay _id
 

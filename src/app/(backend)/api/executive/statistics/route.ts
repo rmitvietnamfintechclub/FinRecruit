@@ -25,7 +25,6 @@ interface StatusCount {
   pending: number;
 }
 
-// Bổ sung thêm cấu trúc trả về cho Round 2
 interface DualStatusCount {
   round1: StatusCount;
   round2: StatusCount;
@@ -35,7 +34,7 @@ interface EvaluationStats {
   success: true;
   data: {
     overall: DualStatusCount;
-    byDepartment: Partial<Record<DepartmentType, DualStatusCount>>;
+    byDepartment: Record<DepartmentType, DualStatusCount>;
     activeCohort: CohortMeta;
     timestamp: string;
     lastUpdated: string;
@@ -48,102 +47,97 @@ interface ErrorResponse {
   error?: string;
 }
 
-// 👇 ĐÃ SỬA: ĐẾM CHO CẢ 2 VÒNG 👇
-async function getEvaluationStats(cohort: CohortFilter): Promise<DualStatusCount> {
-  const stats = await Candidate.aggregate([
-    {
-      $match: {
-        generation: cohort.generation,
-        semester: cohort.semester,
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        totalR1: { $sum: 1 },
-        passR1: { $sum: { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] } },
-        failR1: { $sum: { $cond: [{ $eq: ['$status', 'Fail'] }, 1, 0] } },
-        pendingR1: { $sum: { $cond: [{ $eq: ['$status', 'Pending'] }, 1, 0] } },
-        
-        // Đếm Round 2: Chỉ những người ĐÃ PASS R1 mới được tính vào Total của R2
-        totalR2: { $sum: { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] } },
-        passR2: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'Pass'] }, { $eq: ['$round2Status', 'Pass'] }] }, 1, 0] } },
-        failR2: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'Pass'] }, { $eq: ['$round2Status', 'Fail'] }] }, 1, 0] } },
-        pendingR2: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'Pass'] }, { $in: ['$round2Status', [null, undefined, 'Pending']] }] }, 1, 0] } },
-      },
-    },
-  ]);
+const emptyStatusCount = (): StatusCount => ({
+  total: 0,
+  pass: 0,
+  fail: 0,
+  pending: 0,
+});
 
-  if (!stats || stats.length === 0) {
-    return {
-      round1: { total: 0, pass: 0, fail: 0, pending: 0 },
-      round2: { total: 0, pass: 0, fail: 0, pending: 0 },
-    };
-  }
+const emptyDualStatusCount = (): DualStatusCount => ({
+  round1: emptyStatusCount(),
+  round2: emptyStatusCount(),
+});
 
+// Helper tái sử dụng cho các biểu thức accumulator của $group
+const statsAccumulators = {
+  totalR1: { $sum: 1 },
+  passR1: { $sum: { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] } },
+  failR1: { $sum: { $cond: [{ $eq: ['$status', 'Fail'] }, 1, 0] } },
+  pendingR1: { $sum: { $cond: [{ $eq: ['$status', 'Pending'] }, 1, 0] } },
+
+  // Round 2: Chỉ tính khi Round 1 Pass
+  totalR2: { $sum: { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] } },
+  passR2: {
+    $sum: {
+      $cond: [
+        {
+          $and: [
+            { $eq: ['$status', 'Pass'] },
+            { $eq: ['$round2Status', 'Pass'] },
+          ],
+        },
+        1,
+        0,
+      ],
+    },
+  },
+  failR2: {
+    $sum: {
+      $cond: [
+        {
+          $and: [
+            { $eq: ['$status', 'Pass'] },
+            { $eq: ['$round2Status', 'Fail'] },
+          ],
+        },
+        1,
+        0,
+      ],
+    },
+  },
+  pendingR2: {
+    $sum: {
+      $cond: [
+        {
+          $and: [
+            { $eq: ['$status', 'Pass'] },
+            { $eq: [{ $ifNull: ['$round2Status', 'Pending'] }, 'Pending'] },
+          ],
+        },
+        1,
+        0,
+      ],
+    },
+  },
+};
+
+type RawAggRow = {
+  _id: string | null;
+  totalR1: number;
+  passR1: number;
+  failR1: number;
+  pendingR1: number;
+  totalR2: number;
+  passR2: number;
+  failR2: number;
+  pendingR2: number;
+};
+
+function mapRowToDualStatus(row?: RawAggRow): DualStatusCount {
+  if (!row) return emptyDualStatusCount();
   return {
     round1: {
-      total: stats[0].totalR1,
-      pass: stats[0].passR1,
-      fail: stats[0].failR1,
-      pending: stats[0].pendingR1,
+      total: row.totalR1 ?? 0,
+      pass: row.passR1 ?? 0,
+      fail: row.failR1 ?? 0,
+      pending: row.pendingR1 ?? 0,
     },
     round2: {
-      total: stats[0].totalR2,
-      pass: stats[0].passR2,
-      fail: stats[0].failR2,
-      pending: stats[0].pendingR2,
-    },
-  };
-}
-
-async function getEvaluationStatsByDepartment(
-  dept: DepartmentType,
-  cohort: CohortFilter
-): Promise<DualStatusCount> {
-  const stats = await Candidate.aggregate([
-    {
-      $match: {
-        department: dept,
-        generation: cohort.generation,
-        semester: cohort.semester,
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        totalR1: { $sum: 1 },
-        passR1: { $sum: { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] } },
-        failR1: { $sum: { $cond: [{ $eq: ['$status', 'Fail'] }, 1, 0] } },
-        pendingR1: { $sum: { $cond: [{ $eq: ['$status', 'Pending'] }, 1, 0] } },
-        
-        totalR2: { $sum: { $cond: [{ $eq: ['$status', 'Pass'] }, 1, 0] } },
-        passR2: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'Pass'] }, { $eq: ['$round2Status', 'Pass'] }] }, 1, 0] } },
-        failR2: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'Pass'] }, { $eq: ['$round2Status', 'Fail'] }] }, 1, 0] } },
-        pendingR2: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'Pass'] }, { $in: ['$round2Status', [null, undefined, 'Pending']] }] }, 1, 0] } },
-      },
-    },
-  ]);
-
-  if (!stats || stats.length === 0) {
-    return {
-      round1: { total: 0, pass: 0, fail: 0, pending: 0 },
-      round2: { total: 0, pass: 0, fail: 0, pending: 0 },
-    };
-  }
-
-  return {
-    round1: {
-      total: stats[0].totalR1,
-      pass: stats[0].passR1,
-      fail: stats[0].failR1,
-      pending: stats[0].pendingR1,
-    },
-    round2: {
-      total: stats[0].totalR2,
-      pass: stats[0].passR2,
-      fail: stats[0].failR2,
-      pending: stats[0].pendingR2,
+      total: row.totalR2 ?? 0,
+      pass: row.passR2 ?? 0,
+      fail: row.failR2 ?? 0,
+      pending: row.pendingR2 ?? 0,
     },
   };
 }
@@ -152,7 +146,7 @@ export const GET = withRBAC(
   'Executive Board',
   async (
     _req: NextRequest,
-    context: { session: ActiveAppSession }
+    _context: { session: ActiveAppSession }
   ): Promise<Response> => {
     try {
       await dbConnect();
@@ -162,11 +156,56 @@ export const GET = withRBAC(
         semester: active.currentSemester,
       };
 
-      const overall = await getEvaluationStats(cohort);
-      const byDepartment: Partial<Record<DepartmentType, DualStatusCount>> = {};
-      for (const dept of ALL_DEPARTMENTS) {
-        byDepartment[dept] = await getEvaluationStatsByDepartment(dept, cohort);
-      }
+      // TẬP HỢP TOÀN BỘ SỐ LIỆU OVERALL VÀ THEO TỪNG BAN TRONG DUY NHẤT 1 AGGREGATION
+      const [aggResult] = await Candidate.aggregate<{
+        overall: RawAggRow[];
+        byDepartment: RawAggRow[];
+      }>([
+        {
+          $match: {
+            generation: cohort.generation,
+            semester: cohort.semester,
+          },
+        },
+        {
+          $facet: {
+            overall: [
+              {
+                $group: {
+                  _id: null,
+                  ...statsAccumulators,
+                },
+              },
+            ],
+            byDepartment: [
+              {
+                $group: {
+                  _id: '$department',
+                  ...statsAccumulators,
+                },
+              },
+            ],
+          },
+        },
+      ]);
+
+      const overall = mapRowToDualStatus(aggResult?.overall?.[0]);
+
+      // Khởi tạo sẵn cấu trúc cho toàn bộ 4 ban (kể cả ban chưa có ứng viên nào nộp hồ sơ)
+      const byDepartment = ALL_DEPARTMENTS.reduce(
+        (acc, dept) => {
+          acc[dept] = emptyDualStatusCount();
+          return acc;
+        },
+        {} as Record<DepartmentType, DualStatusCount>
+      );
+
+      // Điền số liệu thực tế từ aggregation
+      aggResult?.byDepartment?.forEach((row) => {
+        if (row._id && ALL_DEPARTMENTS.includes(row._id as DepartmentType)) {
+          byDepartment[row._id as DepartmentType] = mapRowToDualStatus(row);
+        }
+      });
 
       const now = new Date().toISOString();
       const response: EvaluationStats = {
@@ -186,7 +225,8 @@ export const GET = withRBAC(
       return NextResponse.json(response, { status: 200 });
     } catch (error: unknown) {
       console.error('[statistics/GET] Error:', error);
-      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      const message =
+        error instanceof Error ? error.message : 'Unknown error occurred';
       const errorResponse: ErrorResponse = {
         success: false,
         message: 'Failed to fetch evaluation statistics.',

@@ -14,6 +14,7 @@ import {
 import { AppNotice } from '@/components/feedback/AppNotice';
 import { DepartmentTransitionStrip } from '@/components/dashboard/DepartmentTransitionStrip';
 import { useSessionExpired } from '@/components/providers/SessionExpiredProvider';
+import type { DepartmentType } from '@/app/(backend)/types';
 
 // --- TYPES ---
 type HeadAccount = {
@@ -43,17 +44,29 @@ type StatusCount = {
   pending: number;
 };
 
+type DualStatusCount = {
+  round1: StatusCount;
+  round2: StatusCount;
+};
+
 type StatisticsPayload = {
   success?: boolean;
   data?: {
-    overall: StatusCount;
+    overall: DualStatusCount;
+    byDepartment: Record<DepartmentType, DualStatusCount>;
   };
 };
 
-type DepartmentProgress = {
+export type DepartmentProgress = {
   department: string;
-  evaluated: number;
-  total: number;
+  round1: {
+    evaluated: number;
+    total: number;
+  };
+  round2: {
+    evaluated: number;
+    total: number;
+  };
 };
 
 // --- UI CONFIG ---
@@ -83,95 +96,26 @@ const DEPT_UI: Record<
   },
 };
 
-// --- COMPONENTS ---
 const Skeleton = ({ className }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-gray-200 ${className}`} />
 );
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const AnimatedNumber = ({ value }: { value: number }) => {
-  const [prevValue, setPrevValue] = useState(value);
-  const [direction, setDirection] = useState(1);
-
-  if (value !== prevValue) {
-    setDirection(value > prevValue ? 1 : -1);
-    setPrevValue(value);
-  }
-
-  return (
-    <>
-      <style>{`
-        @keyframes slideInUpFade { 0% { opacity: 0; transform: translateY(15px); } 100% { opacity: 1; transform: translateY(0); } }
-        @keyframes slideInDownFade { 0% { opacity: 0; transform: translateY(-15px); } 100% { opacity: 1; transform: translateY(0); } }
-        .animate-number-up { animation: slideInUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .animate-number-down { animation: slideInDownFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-      `}</style>
-      <span
-        key={value}
-        className={`inline-block ${direction === 1 ? 'animate-number-up' : 'animate-number-down'}`}
-      >
-        {value}
-      </span>
-    </>
-  );
-};
-
-// --- MAIN PAGE ---
 export function ExecutiveHomeClient() {
   const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
-  const [stats, setStats] = useState<StatisticsPayload['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deptStats, setDeptStats] = useState<DepartmentProgress[]>([]);
 
   const { triggerSessionExpired } = useSessionExpired();
 
-  const fetchCounts = useCallback(async (deptName: string | null) => {
-    const dParam = deptName
-      ? `department=${encodeURIComponent(deptName)}&`
-      : '';
-    const base = '/api/executive/candidates';
-
-    try {
-      const [rAll, rP] = await Promise.all([
-        fetch(`${base}?${dParam}limit=1`, { credentials: 'include' }),
-        fetch(`${base}?${dParam}status=Pending&limit=1`, {
-          credentials: 'include',
-        }),
-      ]);
-
-      const [jAll, jP] = await Promise.all([
-        rAll.json().catch(() => ({})),
-        rP.json().catch(() => ({})),
-      ]);
-
-      return {
-        total: jAll.data?.count ?? 0,
-        pending: jP.data?.count ?? 0,
-      };
-    } catch {
-      return { total: 0, pending: 0 };
-    }
-  }, []);
-
   const loadAllData = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      const [dashRes, statsRes, breakdownData] = await Promise.all([
+      // Chỉ cần 2 fetch duy nhất: Dashboard & Statistics
+      const [dashRes, statsRes] = await Promise.all([
         fetch('/api/executive/dashboard', { credentials: 'include' }),
         fetch('/api/executive/statistics', { credentials: 'include' }),
-        // Lấy số liệu đếm của cả 4 phòng ban
-        Promise.all(
-          HEAD_DEPARTMENTS.map(async (d) => {
-            const c = await fetchCounts(d);
-            return {
-              department: d,
-              total: c.total,
-              evaluated: Math.max(c.total - c.pending, 0),
-            };
-          })
-        ),
       ]);
 
       const dashJson = (await dashRes.json()) as DashboardPayload;
@@ -184,8 +128,30 @@ export function ExecutiveHomeClient() {
       if (!statsRes.ok || !statsJson.success)
         throw new Error('Statistics failed to load.');
 
+      // Map trực tiếp từ byDepartment của API stats (không cần loop gọi 16 requests)
+      const breakdownData: DepartmentProgress[] = HEAD_DEPARTMENTS.map(
+        (dept) => {
+          const d = statsJson.data?.byDepartment?.[dept];
+          const r1Total = d?.round1.total ?? 0;
+          const r1Pending = d?.round1.pending ?? 0;
+          const r2Total = d?.round2.total ?? 0;
+          const r2Pending = d?.round2.pending ?? 0;
+
+          return {
+            department: dept,
+            round1: {
+              total: r1Total,
+              evaluated: Math.max(r1Total - r1Pending, 0),
+            },
+            round2: {
+              total: r2Total,
+              evaluated: Math.max(r2Total - r2Pending, 0),
+            },
+          };
+        }
+      );
+
       setDashboard(dashJson);
-      setStats(statsJson.data ?? null);
       setDeptStats(breakdownData);
     } catch (e) {
       const errorMessage =
@@ -203,7 +169,7 @@ export function ExecutiveHomeClient() {
     } finally {
       setLoading(false);
     }
-  }, [triggerSessionExpired, fetchCounts]);
+  }, [triggerSessionExpired]);
 
   useEffect(() => {
     void loadAllData();
@@ -211,20 +177,12 @@ export function ExecutiveHomeClient() {
 
   const active = dashboard?.active;
   const recruitmentOn = Boolean(active?.isRecruitmentActive);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const overallStats = stats?.overall ?? {
-    total: 0,
-    pass: 0,
-    fail: 0,
-    pending: 0,
-  };
 
   const hasPendingGuests = (dashboard?.waitingGuestCount ?? 0) > 0;
   const departmentsMissingHeads = HEAD_DEPARTMENTS.filter(
     (dept) => (dashboard?.headsByDepartment?.[dept]?.length ?? 0) === 0
   );
 
-  // Biến điều kiện để tự động gập/mở Roster
   const showNeedsAttention =
     loading || hasPendingGuests || departmentsMissingHeads.length > 0;
 
@@ -293,7 +251,7 @@ export function ExecutiveHomeClient() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* 3. DEPARTMENT ROSTER (RÕ TÊN HEAD + SỐ MEMBER) */}
+        {/* 2. DEPARTMENT ROSTER */}
         <Card
           className={`rounded-[24px] shadow-sm transition-all duration-500 ${showNeedsAttention ? 'lg:col-span-2' : 'lg:col-span-3'}`}
         >
@@ -403,7 +361,7 @@ export function ExecutiveHomeClient() {
           </CardContent>
         </Card>
 
-        {/* 4. ACTION CENTER (CHỈ HIỆN KHI CẦN THIẾT) */}
+        {/* 3. ACTION CENTER */}
         {showNeedsAttention && (
           <div className="space-y-6">
             <Card className="rounded-[24px] shadow-sm bg-[#0D1742] text-white border-transparent">
@@ -469,10 +427,10 @@ export function ExecutiveHomeClient() {
         )}
       </div>
 
-      {/* 5. STAGE GATES / TRANSITION STRIP (FULL WIDTH Ở CUỐI) */}
+      {/* 4. RECRUITMENT PROGRESSION */}
       <div className="pt-2">
         <h2 className="mb-4 text-sm font-black uppercase tracking-[0.15em] text-gray-400 pl-2">
-          Round Transitions
+          Recruitment Progression
         </h2>
         <DepartmentTransitionStrip
           isRecruitmentActive={active?.isRecruitmentActive ?? false}
