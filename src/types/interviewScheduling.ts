@@ -73,7 +73,7 @@ export type SlotMutationResult =
   | { ok: true; slots: InterviewSlot[] }
   | { ok: false; reason: 'SLOT_BOOKED' | 'SLOT_NOT_FOUND'; message: string };
 
-export type InterviewLinks = { internalUrl: string; publicUrl: string };
+export type InterviewLinks = { internalUrl: string; publicUrl: string, lookupUrl: string };
 
 export type BookableSlot = InterviewSlot & { bookable: boolean };
 

@@ -562,12 +562,16 @@ export function CandidateBookingsMonitorClient() {
       {/* Global Modals */}
       <ShareLinkModal
         open={shareOpen}
-        title="Candidate Registration Portal"
-        caption="Share this link with candidates to register their interview slots."
+        title="Candidate Interview Portals"
+        caption="Share the links below with candidates for slot reservation and schedule tracking."
         links={[
           {
-            label: 'Candidate Registration Link',
+            label: 'Candidate Booking Link',
             url: links?.publicUrl ?? '',
+          },
+          {
+            label: 'Candidate Schedule Lookup Link',
+            url: links?.lookupUrl ?? '',
           },
         ]}
         onClose={() => setShareOpen(false)}

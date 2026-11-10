@@ -1,6 +1,7 @@
 'use client';
 
-import { AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { AlertCircle, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, ReactNode } from 'react';
 import { PublicPageShell } from '@/components/dashboard/PublicPageShell';
 import { SegmentedControl } from '@/components/interview-scheduling/SegmentedControl';
@@ -181,9 +182,7 @@ export function IntervieweeBookingClient() {
               Sorry, this email is not eligible for Round 2 interview bookings
               according to our records. Please contact us directly via our
               email:{' '}
-              <span
-                className="font-bold text-[#DCB968] hover:text-[#b89547]"
-              >
+              <span className="font-bold text-[#DCB968] hover:text-[#b89547]">
                 {CONTACT_EMAIL}
               </span>{' '}
               for further assistance.
@@ -248,16 +247,19 @@ export function IntervieweeBookingClient() {
           title="Interview Booked"
           subtitle="Your interview slot has been successfully confirmed."
           actions={
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="w-full rounded-xl bg-[#0D1742] px-4 py-3.5 text-sm font-bold text-[#DCB968] transition-all hover:bg-[#1a2b75] shadow-sm"
-            >
-              Done
-            </button>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="w-full rounded-xl bg-[#0D1742] px-4 py-3.5 text-sm font-bold text-[#DCB968] transition-all hover:bg-[#1a2b75] shadow-sm"
+              >
+                Done
+              </button>
+            </div>
           }
         >
-          <div className="space-y-5">
+          <div className="space-y-4">
+            {/* Chi tiết ca phỏng vấn */}
             <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
               <DetailRows
                 rows={[
@@ -285,13 +287,41 @@ export function IntervieweeBookingClient() {
                 ]}
               />
             </div>
-            <div className="flex items-start gap-3 rounded-xl bg-blue-50/50 p-4 border border-blue-100">
-              <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-              <p className="text-[13px] leading-relaxed text-blue-800 font-medium">
-                A calendar invitation (.ics) has been sent to your email (
-                <strong className="text-blue-900">{screen.email}</strong>).
-                Please accept it to add the interview to your calendar.
-              </p>
+
+            <div className="rounded-2xl border border-gray-150 bg-gray-50/70 p-4 sm:p-5 text-left space-y-3.5">
+              {/* Dòng 1: Xác nhận Calendar Invite */}
+              <div className="flex items-start gap-3">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#0D1742] text-[#DCB968] shadow-sm mt-0.5">
+                  <AlertCircle className="size-4" />
+                </div>
+                <p className="text-[13px] leading-relaxed text-gray-700 font-medium">
+                  A calendar invitation (
+                  <span className="font-bold text-[#0D1742]">.ics</span>) has
+                  been sent to{' '}
+                  <strong className="text-[#0D1742]">{screen.email}</strong>.
+                  Please check your inbox and <strong>accept</strong> it to
+                  synchronize the interview to your calendar.
+                </p>
+              </div>
+
+              <div className="border-t border-gray-200/70" />
+
+              {/* Dòng 2: Hướng dẫn tra cứu với CTA rõ ràng */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-0.5">
+                <div>
+                  <p className="text-[12px] font-bold text-[#0D1742]">
+                    Need to re-check your interview details later?
+                  </p>
+                </div>
+
+                <Link
+                  href="/interview-lookup"
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#0D1742] px-3.5 py-2 text-xs font-bold text-[#DCB968] shadow-sm transition-all hover:bg-[#1a2b75] hover:text-white"
+                >
+                  <span>Interview Lookup Portal</span>
+                  <span>&rarr;</span>
+                </Link>
+              </div>
             </div>
           </div>
         </TransactionalCard>
@@ -419,9 +449,18 @@ export function IntervieweeBookingClient() {
       <div className="mx-auto max-w-4xl space-y-8 mb-20 animate-in fade-in duration-500">
         <Card className="rounded-[24px] border-gray-200 bg-white shadow-sm pt-0 overflow-hidden">
           <CardHeader className="border-b border-gray-200 bg-[#0D1742] pb-4 pt-5">
-            <CardTitle className="text-[15px] font-black uppercase tracking-wider text-[#DCB968]">
-              Candidate Profile
-            </CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-[15px] font-black uppercase tracking-wider text-[#DCB968]">
+                Candidate Profile
+              </CardTitle>
+              <Link
+                href="/interview-lookup"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCB968]/40 bg-[#DCB968]/10 px-3.5 py-1.5 text-xs font-bold text-[#DCB968] shadow-sm transition-all group hover:bg-[#DCB968] hover:text-[#0D1742]"
+              >
+                <Search className="size-3.5 text-[#DCB968] transition-colors group-hover:text-[#0D1742]" />
+                <span>Already booked? Check schedule here</span>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-6 sm:grid-cols-2">

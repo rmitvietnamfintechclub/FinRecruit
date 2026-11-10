@@ -15,6 +15,10 @@ import type {
   ISlotBooking,
   SlotStatusType,
 } from '@/app/(backend)/types';
+import {
+  generateIcsCalendar,
+  formatFriendlyDate,
+} from '@/lib/interview-scheduling/ics';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -119,20 +123,6 @@ export function formatDateToYYYYMMDD(date: Date | string): string {
     return new Date(date).toISOString().split('T')[0] ?? '';
   }
   return date.toISOString().split('T')[0] ?? '';
-}
-
-// Hàm hỗ trợ format ngày tháng năm sang dạng thân thiện dễ đọc (Ví dụ: 20 November 2026)
-export function formatFriendlyDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const parsed = new Date(dateStr);
-  if (isNaN(parsed.getTime())) return dateStr;
-
-  return parsed.toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
 }
 
 export function toMinutes(hhmm: string): number {
@@ -698,42 +688,6 @@ export async function confirmCandidateBooking(
   return { ok: true, booking: serializedBooking };
 }
 
-export function generateIcsCalendar(
-  slot: SerializedInterviewSlot,
-  candidateName: string,
-  candidateEmail: string,
-  department: DepartmentType
-): string {
-  const rawDate = slot.date.replace(/-/g, '');
-  const rawStart = slot.startTime.replace(/:/g, '') + '00';
-  const rawEnd = slot.endTime.replace(/:/g, '') + '00';
-  const dtStamp =
-    new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  const uid = `finrecruit-${slot.id}-${Date.now()}@rmitvietnamfintechclub.com`;
-  const friendlyDate = formatFriendlyDate(slot.date);
-
-  return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//RMIT Vietnam FinTech Club//Fin-Recruit//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:REQUEST',
-    'BEGIN:VEVENT',
-    `UID:${uid}`,
-    `DTSTAMP:${dtStamp}`,
-    `DTSTART;TZID=Asia/Ho_Chi_Minh:${rawDate}T${rawStart}`,
-    `DTEND;TZID=Asia/Ho_Chi_Minh:${rawDate}T${rawEnd}`,
-    `SUMMARY:[RMIT FinTech Club] Round 2 Interview — ${department}`,
-    `DESCRIPTION:Dear ${candidateName},\\n\\nYou are invited to attend your interview for RMIT Vietnam FinTech Club Membership Recruitment ${slot.semester} (${department}).\\n\\nDate: ${friendlyDate}\\nTime: ${slot.startTime} - ${slot.endTime}\\nRoom: ${slot.room}\\nLocation: RMIT Saigon South Campus\\n\\nPlease arrive on time and be well-prepared for the interview.`,
-    `LOCATION:RMIT Saigon South Campus - Room ${slot.room}`,
-    'STATUS:CONFIRMED',
-    'ORGANIZER;CN=RUVN Financial Technology Club SGS:mailto:fintechclub.sgs@rmit.edu.vn',
-    `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=${candidateName}:mailto:${candidateEmail}`,
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ].join('\r\n');
-}
-
 export async function sendBookingConfirmationEmail(
   slot: SerializedInterviewSlot,
   candidateName: string,
@@ -749,43 +703,67 @@ export async function sendBookingConfirmationEmail(
     );
 
     const friendlyDate = formatFriendlyDate(slot.date);
+    const appBaseUrl =
+      process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+      'https://finrecruit.rmitvietnamfintechclub.com';
+    const lookupUrl = `${appBaseUrl}/interview-lookup`;
 
     await resend.emails.send({
       from: 'RUVN Financial Technology Club SGS <finrecruit@rmitvietnamfintechclub.com>',
       to: candidateEmail,
       subject: `[Confirmed] Round 2 Interview Schedule — ${department} (RMIT FinTech Club)`,
       html: `
-        <div style="font-family: Arial, sans-serif; color: #0D1742; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
-          <p style="margin-bottom: 16px;">Dear <strong>${candidateName}</strong>,</p>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0D1742; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+          <p style="margin-top: 0; margin-bottom: 16px; font-size: 15px;">Dear <strong>${candidateName}</strong>,</p>
           
-          <p style="margin-bottom: 20px;">
+          <p style="margin-bottom: 20px; font-size: 14px; color: #334155;">
             You are invited to attend your interview for <strong>RMIT Vietnam FinTech Club Membership Recruitment ${slot.semester}</strong> (${department}).
           </p>
           
-          <div style="background-color: #f8fafc; padding: 18px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #DCB968;">
-            <p style="margin: 6px 0;"><strong>Date:</strong> ${friendlyDate}</p>
-            <p style="margin: 6px 0;"><strong>Time:</strong> ${slot.startTime} - ${slot.endTime}</p>
-            <p style="margin: 6px 0;"><strong>Room:</strong> ${slot.room}</p>
-            <p style="margin: 6px 0;"><strong>Location:</strong> RMIT Saigon South Campus</p>
+          <!-- Key Details Card -->
+          <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin: 24px 0; border-left: 4px solid #DCB968; border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Date:</strong> ${friendlyDate}</p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Time:</strong> <span style="font-weight: 700; color: #0D1742;">${slot.startTime} - ${slot.endTime}</span></p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Room:</strong> <span style="font-weight: 700; color: #0D1742;">${slot.room}</span></p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Location:</strong> RMIT Saigon South Campus</p>
           </div>
 
-          <p style="margin-bottom: 20px;">
-            Please arrive on time and be well-prepared for the interview. We have also attached a calendar invitation to this email. Please <strong>accept</strong> it to add the interview to your calendar.
+          <!-- Schedule Lookup CTA Box -->
+          <div style="background-color: #fcfbf7; border: 1px dashed #dcb968; border-radius: 12px; padding: 20px; text-align: center; margin: 26px 0;">
+            <p style="margin: 0 0 12px 0; font-size: 13px; font-weight: 600; color: #5E5E92;">
+              Need to check your interview schedule later?
+            </p>
+            <div>
+              <a href="${lookupUrl}" 
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 style="background-color: #0D1742; color: #DCB968; padding: 12px 28px; border-radius: 10px; font-weight: 700; text-decoration: none; display: inline-block; font-size: 13px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(13,23,66,0.15);">
+                Interview Lookup Portal &rarr;
+              </a>
+            </div>
+            <p style="font-size: 11px; color: #64748b; margin: 10px 0 0 0;">
+              You can verify your interview details anytime using your RMIT student email.
+            </p>
+          </div>
+
+          <p style="margin-bottom: 24px; font-size: 14px; color: #334155;">
+            Please arrive on time and be well-prepared for the interview. We have also attached a calendar invitation (<code style="background-color: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-size: 12px;">.ics</code>) to this email. Please <strong>accept</strong> it to synchronize the interview with your calendar.
           </p>
           
-          <p style="margin-bottom: 24px;">Best regards,</p>
+          <p style="margin-bottom: 24px; font-size: 14px;">Best regards,</p>
           
-          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
 
+          <!-- Email Signature -->
           <div style="font-size: 13px; line-height: 1.5; color: #0D1742;">
-            <div style="font-weight: bold; color: #DCB968; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <div style="font-weight: 800; color: #DCB968; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
               RMIT Vietnam FinTech Club (SGS Campus)
             </div>
-            <div style="font-weight: bold; color: #0D1742; margin-bottom: 12px;">
+            <div style="font-weight: 700; color: #0D1742; margin-bottom: 12px; font-size: 13px;">
               RMIT University Vietnam
             </div>
 
-            <div style="font-style: italic; color: #1e3a8a; font-size: 12px; line-height: 1.6;">
+            <div style="font-style: italic; color: #1e3a8a; font-size: 11.5px; line-height: 1.6;">
               President - Mr. Nguyen Truong Giang - <a href="mailto:s4118021@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4118021@rmit.edu.vn</a><br/>
               External Vice President - Mr. Ho Nguyen Minh Nhat - <a href="mailto:s4123860@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4123860@rmit.edu.vn</a><br/>
               Internal Vice President - Ms. Pham Thi Khanh Hoa - <a href="mailto:s4127901@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4127901@rmit.edu.vn</a><br/>
@@ -796,8 +774,8 @@ export async function sendBookingConfirmationEmail(
               Head of Technology Department - Mr. Do Anh Khoa - <a href="mailto:s4132831@rmit.edu.vn" style="color: #2563eb; text-decoration: underline;">s4132831@rmit.edu.vn</a>
             </div>
 
-            <div style="margin-top: 8px;">
-              <img src="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/images/fintech-logo.png" alt="RMIT FinTech Club Logo" style="height: 120px; width: auto; display: block;" />
+            <div style="margin-top: 14px;">
+              <img src="${appBaseUrl}/images/fintech-logo.png" alt="RMIT FinTech Club Logo" style="height: 90px; width: auto; display: block;" />
             </div>
           </div>
         </div>

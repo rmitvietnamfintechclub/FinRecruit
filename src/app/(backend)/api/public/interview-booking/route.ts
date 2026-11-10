@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import dbConnect from '@/app/(backend)/libs/dbConnect';
+import Candidate from '@/app/(backend)/models/Candidate';
 import {
   confirmCandidateBooking,
   findExistingCandidateBooking,
   getBookableSchedule,
 } from '@/app/(backend)/libs/interview-scheduling/service';
-import type { DepartmentType } from '@/app/(backend)/types';
+import type { DepartmentType, ICandidate } from '@/app/(backend)/types';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +19,10 @@ function getClientDetails(req: NextRequest) {
   return { ip, userAgent };
 }
 
+function escapeRegex(text: string): string {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+
 export async function GET(req: NextRequest) {
   try {
     const department = req.nextUrl.searchParams.get(
@@ -25,8 +31,46 @@ export async function GET(req: NextRequest) {
     const email = req.nextUrl.searchParams.get('email');
 
     if (email) {
-      const booking = await findExistingCandidateBooking(email);
-      return NextResponse.json({ success: true, booking });
+      await dbConnect();
+      const trimmedEmail = email.trim().toLowerCase();
+
+      // 1. Kiểm tra ứng viên trong Database
+      const candidate = await Candidate.findOne({
+        email: { $regex: new RegExp(`^${escapeRegex(trimmedEmail)}$`, 'i') },
+      })
+        .lean<ICandidate | null>()
+        .exec();
+
+      if (!candidate) {
+        return NextResponse.json({
+          success: false,
+          reason: 'CANDIDATE_NOT_FOUND',
+          message:
+            'We could not find this email in our application database. Please ensure you are using the exact student email you registered with.',
+        });
+      }
+
+      // 2. Kiểm tra điều kiện Round 1
+      if (candidate.status !== 'Pass') {
+        return NextResponse.json({
+          success: false,
+          reason: 'NOT_PASSED_ROUND_1',
+          message:
+            'Sorry, this email is not eligible for Round 2 interview bookings according to our records.',
+        });
+      }
+
+      // 3. Tìm ca phỏng vấn đã đặt (nếu có)
+      const booking = await findExistingCandidateBooking(trimmedEmail);
+
+      return NextResponse.json({
+        success: true,
+        candidate: {
+          fullName: candidate.fullName,
+          department: candidate.department,
+        },
+        booking,
+      });
     }
 
     if (department) {
@@ -55,15 +99,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const clientInfo = getClientDetails(req);
 
-    // Gọi service xử lý logic
     const result = await confirmCandidateBooking(body, clientInfo);
 
-    // NẾU LỖI: Trả về chính xác object result (chứa reason, correctDepartment, v.v.)
     if (!result.ok) {
       return NextResponse.json(result, { status: 400 });
     }
 
-    // NẾU THÀNH CÔNG
     return NextResponse.json(result, { status: 200 });
   } catch (e) {
     return NextResponse.json(

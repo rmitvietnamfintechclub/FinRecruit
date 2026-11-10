@@ -16,7 +16,8 @@ export async function middleware(request: NextRequest) {
 
   if (
     pathname.startsWith('/interview-availability') ||
-    pathname.startsWith('/interview-booking')
+    pathname.startsWith('/interview-booking') ||
+    pathname.startsWith('/interview-lookup')   
   ) {
     return NextResponse.next();
   }
