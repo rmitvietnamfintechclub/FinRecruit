@@ -30,16 +30,13 @@ export function WaitingRoomClient({
     setIsChecking(true);
 
     try {
-      // Gọi update() để NextAuth làm mới lại Token (JWT) từ server
       const updatedSession = await update();
 
-      // Nếu role đã thay đổi khác 'Guest', lập tức đưa user vào Dashboard
       if (updatedSession?.user?.role && updatedSession.user.role !== 'Guest') {
-        router.push('/');
-        router.refresh();
+        window.location.href = '/';
+        return;
       }
     } finally {
-      // Giả lập delay một chút để UI nút quay mượt mà hơn khi user bấm thủ công
       setTimeout(() => setIsChecking(false), 800);
     }
   };

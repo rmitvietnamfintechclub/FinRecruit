@@ -14,6 +14,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (
+    pathname.startsWith('/interview-availability') ||
+    pathname.startsWith('/interview-booking')
+  ) {
+    return NextResponse.next();
+  }
+
   const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
@@ -59,11 +66,11 @@ export async function middleware(request: NextRequest) {
 
   // Legacy Route Alias
   if (pathname.startsWith('/masterview')) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname === '/masterview'
+    const target =
+      pathname === '/masterview'
         ? '/MasterViewDashboard'
         : `/MasterViewDashboard${pathname.slice('/masterview'.length)}`;
-    return NextResponse.redirect(url);
+    return safeRedirect(target);
   }
 
   // Department Head dashboard routes
@@ -77,49 +84,33 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith('/MemberDashboard')) {
-    if (!isLoggedIn) {
-      return NextResponse.redirect(new URL('/loginPage', request.url));
-    }
-    if (role === 'Guest') {
-      return NextResponse.redirect(new URL('/waiting-room', request.url));
-    }
-    if (role !== 'Member') {
-      return NextResponse.redirect(new URL(getHomePathForRole(role), request.url));
-    }
-    return NextResponse.next();
-  }
-
-  // Member dashboard routes
-  if (pathname.startsWith('/MemberDashboard')) {
     if (!isLoggedIn) return safeRedirect('/loginPage');
-
-    if (role !== 'Member') {
-      return safeRedirect(homePath);
-    }
+    if (role !== 'Member') return safeRedirect(homePath);
     return NextResponse.next();
   }
 
   // Shared interview workspace routes
-  if (
-    pathname.startsWith('/InterviewCockpit') ||
-    pathname.startsWith('/interviews')
-  ) {
+  if (pathname.startsWith('/InterviewCockpit')) {
     if (!isLoggedIn) return safeRedirect('/loginPage');
 
-    if (role !== 'Department Head' && role !== 'Member' && role !== 'Executive Board') {
+    if (
+      role !== 'Department Head' &&
+      role !== 'Member' &&
+      role !== 'Executive Board'
+    ) {
       return safeRedirect(homePath);
     }
     return NextResponse.next();
   }
 
   // Executive Board Routing
-    if (pathname.startsWith('/MasterViewDashboard') || pathname.startsWith('/executive')) {
+  if (
+    pathname.startsWith('/MasterViewDashboard') ||
+    pathname.startsWith('/executive')
+  ) {
     if (!isLoggedIn) return safeRedirect('/loginPage');
-
     if (role !== 'Executive Board') {
-      // If the user's home path happens to be MasterViewDashboard but they aren't EB,
-      // kick them out to prevent a loop.
-      if (homePath === '/MasterViewDashboard' || homePath.startsWith('/MasterViewDashboard')) {
+      if (homePath.startsWith('/MasterViewDashboard')) {
         return safeRedirect('/loginPage');
       }
       return safeRedirect(homePath);

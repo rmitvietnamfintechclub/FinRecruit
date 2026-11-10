@@ -11,6 +11,10 @@ export default async function WaitingRoomPage() {
     redirect('/loginPage');
   }
 
+  if (session.user.role && session.user.role !== 'Guest') {
+    redirect('/');
+  }
+
   const displayName =
     session.user.name?.trim() || session.user.email?.split('@')[0] || 'Guest';
 
