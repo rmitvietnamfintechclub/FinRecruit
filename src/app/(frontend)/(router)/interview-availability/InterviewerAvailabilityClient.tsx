@@ -453,12 +453,14 @@ export function InterviewerAvailabilityClient() {
                               return true;
 
                             // 2. Kiểm tra Head của phòng ban 'd' đã available chưa
-                            const isHeadFree = hasHeadAvailable(
-                              availability,
-                              s.id,
-                              d
-                            );
-                            if (!isHeadFree) return true;
+                            if (role !== 'Department Head') {
+                              const isHeadFree = hasHeadAvailable(
+                                availability,
+                                s.id,
+                                d
+                              );
+                              if (!isHeadFree) return true;
+                            }
 
                             // 3. LOGIC MỚI: Kiểm tra giới hạn số lượng Member (Chỉ áp dụng khi user chọn role là 'Member')
                             if (role === 'Member') {
@@ -491,7 +493,10 @@ export function InterviewerAvailabilityClient() {
                             if (lockedForHead(s, d))
                               return 'Locked: A candidate is scheduled for this slot. Please contact the Executive Board to make changes.';
 
-                            if (!hasHeadAvailable(availability, s.id, d)) {
+                            if (
+                              role !== 'Department Head' &&
+                              !hasHeadAvailable(availability, s.id, d)
+                            ) {
                               return `This slot is unavailable because Head of ${DEPARTMENT_META[d].full} has not registered for it yet.`;
                             }
 

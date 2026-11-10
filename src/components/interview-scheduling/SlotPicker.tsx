@@ -109,6 +109,13 @@ export function SlotPicker<T extends InterviewSlot>({
                           : 0;
 
                       const isFull = currentCount >= maxLimit;
+                      const isCandidateBooked = deptName
+                        ? s.bookings?.some(
+                            (b) =>
+                              b.department === deptName &&
+                              b.status !== 'AVAILABLE'
+                          )
+                        : false;
 
                       const chipElement = (
                         <button
@@ -145,7 +152,7 @@ export function SlotPicker<T extends InterviewSlot>({
                             {slotDuration(s)}
                           </span>
 
-                          {deptName && (!disabled || isFull) && (
+                          {deptName && (!disabled || isFull || isCandidateBooked) && (
                             <span
                               className={cn(
                                 'mt-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-black tracking-wider uppercase',
