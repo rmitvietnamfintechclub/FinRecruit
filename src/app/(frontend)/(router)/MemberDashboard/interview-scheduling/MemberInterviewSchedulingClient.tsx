@@ -65,21 +65,26 @@ function ReadOnlyStatusBadge({ status }: { status: SlotStatus }) {
   );
 }
 
-// Hàm render Name Tags (Pills)
+const deriveStudentId = (email?: string) => {
+  if (!email) return '';
+  return email.split('@')[0]?.toUpperCase() ?? '';
+};
+
 const renderPills = (
-  rs: { interviewerName: string }[],
+  rs: { interviewerName: string; interviewerEmail?: string }[],
   role: 'EB' | 'Head' | 'Member',
   meta: { strong: string },
   tones: { light: string; dark: string }
 ) => {
   if (!rs || rs.length === 0)
-    return <span className="text-gray-300 font-medium">-</span>;
+    return <span className="font-medium text-gray-300">-</span>;
 
   return (
-    <div className="mx-auto flex max-w-60 flex-wrap justify-center gap-1.5">
+    <div className="mx-auto flex max-w-64 flex-wrap justify-center gap-2">
       {rs.map((r, i) => {
         let style = {};
         let extraClasses = '';
+        const studentId = deriveStudentId(r.interviewerEmail);
 
         if (role === 'EB') {
           style = {
@@ -106,15 +111,33 @@ const renderPills = (
 
         return (
           <span
-            key={`${r.interviewerName}-${i}`}
+            key={`${r.interviewerEmail || r.interviewerName}-${i}`}
             style={style}
             className={cn(
-              'inline-flex items-center rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all',
+              'inline-flex flex-col items-center justify-center rounded-xl px-2.5 py-1 text-center transition-all',
               extraClasses
             )}
-            title={r.interviewerName}
+            title={
+              studentId
+                ? `${r.interviewerName} (${studentId})`
+                : r.interviewerName
+            }
           >
-            {r.interviewerName}
+            <span className="text-[11px] font-bold leading-tight">
+              {r.interviewerName}
+            </span>
+            {studentId && (
+              <span
+                className={cn(
+                  'mt-0.5 rounded px-1.5 py-0.2 text-[9px] font-black uppercase tracking-widest tabular-nums',
+                  role === 'EB'
+                    ? 'bg-white/20 text-[#DCB968]'
+                    : 'bg-black/5 opacity-75'
+                )}
+              >
+                {studentId}
+              </span>
+            )}
           </span>
         );
       })}
@@ -212,9 +235,7 @@ export function MemberInterviewSchedulingClient({
                 <div
                   className={cn(
                     'transition-all duration-300 ease-in-out origin-top',
-                    isCollapsed
-                      ? 'max-h-0 opacity-0'
-                      : 'max-h-500 opacity-100'
+                    isCollapsed ? 'max-h-0 opacity-0' : 'max-h-500 opacity-100'
                   )}
                 >
                   <div className="overflow-x-auto">

@@ -51,7 +51,10 @@ export function InterviewerAvailabilityMonitorClient() {
     return filterSlotsByAssignedDept(slots, department);
   }, [slots, department]);
 
-  const byDate = useMemo(() => groupSlotsByDate(filteredSlots), [filteredSlots]);
+  const byDate = useMemo(
+    () => groupSlotsByDate(filteredSlots),
+    [filteredSlots]
+  );
 
   function toggle(date: string) {
     setCollapsed((prev) => {
@@ -65,9 +68,13 @@ export function InterviewerAvailabilityMonitorClient() {
   const tones = DEPARTMENT_COLORS[department];
   const meta = DEPARTMENT_META[department];
 
-  // Hàm render Name Tags (Pills) với phân cấp màu sắc
+  const deriveStudentId = (email?: string) => {
+    if (!email) return '';
+    return email.split('@')[0]?.toUpperCase() ?? '';
+  };
+
   const renderPills = (
-    rs: { interviewerName: string }[],
+    rs: { interviewerName: string; interviewerEmail?: string }[],
     role: 'EB' | 'Head' | 'Member'
   ) => {
     if (!rs.length) return <span className="text-gray-300">-</span>;
@@ -77,6 +84,7 @@ export function InterviewerAvailabilityMonitorClient() {
         {rs.map((r, i) => {
           let style = {};
           let extraClasses = '';
+          const studentId = deriveStudentId(r.interviewerEmail);
 
           if (role === 'EB') {
             style = {
@@ -103,14 +111,28 @@ export function InterviewerAvailabilityMonitorClient() {
 
           return (
             <span
-              key={`${r.interviewerName}-${i}`}
+              key={`${r.interviewerEmail || r.interviewerName}-${i}`}
               style={style}
               className={cn(
-                'inline-flex items-center rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all',
+                'inline-flex flex-col items-center justify-center rounded-xl px-2.5 py-1 text-center transition-all',
                 extraClasses
               )}
             >
-              {r.interviewerName}
+              <span className="text-[11px] font-bold leading-tight">
+                {r.interviewerName}
+              </span>
+              {studentId && (
+                <span
+                  className={cn(
+                    'mt-0.5 rounded px-1.5 py-0.2 text-[9px] font-black tracking-widest uppercase tabular-nums',
+                    role === 'EB'
+                      ? 'bg-white/20 text-[#DCB968]'
+                      : 'bg-black/5 opacity-75'
+                  )}
+                >
+                  {studentId}
+                </span>
+              )}
             </span>
           );
         })}
@@ -163,7 +185,9 @@ export function InterviewerAvailabilityMonitorClient() {
                 )}
               >
                 {/* Luôn render Human Resources cho phòng HR trên các nút Tab */}
-                {d === 'HR Department' ? 'Human Resources' : DEPARTMENT_META[d].short}
+                {d === 'HR Department'
+                  ? 'Human Resources'
+                  : DEPARTMENT_META[d].short}
               </button>
             );
           })}
@@ -188,7 +212,8 @@ export function InterviewerAvailabilityMonitorClient() {
               No schedules available for this department
             </p>
             <p className="mt-1.5 text-xs font-medium text-gray-500">
-              Generate and deploy master slots for this department before tracking availability.
+              Generate and deploy master slots for this department before
+              tracking availability.
             </p>
           </div>
         ) : (
@@ -249,16 +274,16 @@ export function InterviewerAvailabilityMonitorClient() {
                         {buildMonitorRows(daySlots).map((row) =>
                           row.type === 'lunch' ? (
                             <tr
-                                key={row.key}
-                                className="bg-gray-100/80 border-y border-gray-200"
+                              key={row.key}
+                              className="bg-gray-100/80 border-y border-gray-200"
+                            >
+                              <td
+                                colSpan={COLS.length}
+                                className="px-4 py-4 text-[11px] font-black tracking-[0.3em] uppercase text-gray-500 opacity-70"
                               >
-                                <td
-                                  colSpan={COLS.length}
-                                  className="px-4 py-4 text-[11px] font-black tracking-[0.3em] uppercase text-gray-500 opacity-70"
-                                >
-                                  LUNCH BREAK
-                                </td>
-                              </tr>
+                                LUNCH BREAK
+                              </td>
+                            </tr>
                           ) : (
                             (() => {
                               const a = availabilityForSlot(

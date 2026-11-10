@@ -401,6 +401,7 @@ export async function submitInterviewerAvailability(
   const isHead = input.interviewerRole === 'Department Head';
   const isMember = input.interviewerRole === 'Member';
 
+  // 1. KIỂM TRA SỨC CHỨA (CAPACITY CHECK) CHO MEMBER THEO TỪNG PHÒNG BAN
   if (isMember) {
     for (const sel of input.selections) {
       for (const sId of sel.slotIds) {
@@ -414,6 +415,7 @@ export async function submitInterviewerAvailability(
             sel.department
           ] ?? 4;
 
+        // Đếm số lượng member khác (ngoại trừ chính email này) đã đăng ký
         const existingMembersCount =
           await InterviewerAvailability.countDocuments({
             slotId: slotDoc._id,
@@ -431,6 +433,7 @@ export async function submitInterviewerAvailability(
     }
   }
 
+  // 2. TẬP HỢP CÁC SLOT ĐÃ CÓ ỨNG VIÊN ĐẶT LỊCH (CHỈ DÀNH CHO HEAD)
   const lockedSlotsByDept = new Map<string, Set<string>>();
 
   if (isHead) {
@@ -452,6 +455,7 @@ export async function submitInterviewerAvailability(
 
   const finalSelections = [...input.selections];
 
+  // 3. ĐẢM BẢO HEAD KHÔNG THỂ BỎ CHỌN NHỮNG CA ĐÃ CÓ ỨNG VIÊN MÀ HEAD ĐÓ ĐÃ TỪNG NHẬN
   if (isHead) {
     const oldHistory = await InterviewerAvailability.find({
       interviewerEmail: email,
@@ -478,15 +482,12 @@ export async function submitInterviewerAvailability(
     });
   }
 
+  // 4. CHỈ XÓA DỮ LIỆU CŨ CỦA ĐÚNG EMAIL NÀY (TUYỆT ĐỐI KHÔNG XÓA THEO NAME)
   await InterviewerAvailability.deleteMany({
-    $or: [
-      { interviewerEmail: email },
-      {
-        interviewerName: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
-      },
-    ],
+    interviewerEmail: email,
   });
 
+  // 5. CHÈN BẢN GHI MỚI
   const recordsToInsert: Array<Record<string, unknown>> = [];
   const seen = new Set<string>();
 
