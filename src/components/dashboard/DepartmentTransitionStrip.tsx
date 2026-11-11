@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 export type DepartmentProgress = {
   department: string;
@@ -33,13 +34,16 @@ export function DepartmentTransitionStrip({
   isRecruitmentActive = false,
   deptStats = [],
 }: DepartmentTransitionStripProps) {
-  const [activeRound, setActiveRound] = useState<'round1' | 'round2'>('round1');
+  const [selectedRound, setSelectedRound] = useState<'round1' | 'round2'>(
+    'round1'
+  );
   const states = useDepartmentStates();
 
   const totalDepts = HEAD_DEPARTMENTS.length;
 
   // 1. Tiến độ khóa Round 1
   const lockedR1Count = states.filter((s) => s.isRound1Locked).length;
+  const isAllRound1Locked = totalDepts > 0 && lockedR1Count === totalDepts;
   const r1Percentage =
     totalDepts > 0 ? Math.round((lockedR1Count / totalDepts) * 100) : 0;
 
@@ -49,6 +53,8 @@ export function DepartmentTransitionStrip({
   ).length;
   const r2Percentage =
     totalDepts > 0 ? Math.round((lockedR2Count / totalDepts) * 100) : 0;
+
+  const activeRound = isAllRound1Locked ? selectedRound : 'round1';
 
   const currentLockedCount =
     activeRound === 'round1' ? lockedR1Count : lockedR2Count;
@@ -72,10 +78,10 @@ export function DepartmentTransitionStrip({
                 Evaluation Status
               </CardTitle>
               {/* Segmented Switcher giữa Round 1 & Round 2 */}
-              <div className="inline-flex rounded-xl bg-gray-100 p-1 shadow-inner">
+              <div className="inline-flex items-center rounded-xl bg-gray-100 p-1 shadow-inner">
                 <button
                   type="button"
-                  onClick={() => setActiveRound('round1')}
+                  onClick={() => setSelectedRound('round1')}
                   className={cn(
                     'rounded-lg px-3 py-1 text-xs font-bold transition-all',
                     activeRound === 'round1'
@@ -85,18 +91,45 @@ export function DepartmentTransitionStrip({
                 >
                   Round 1
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveRound('round2')}
-                  className={cn(
-                    'rounded-lg px-3 py-1 text-xs font-bold transition-all',
-                    activeRound === 'round2'
-                      ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-900'
-                  )}
+
+                <Tooltip
+                  side="top"
+                  content={
+                    !isAllRound1Locked ? (
+                      <div className="space-y-1 text-center">
+                        <p className="text-[11px] text-gray-200">
+                          All {totalDepts} departments must lock Round 1
+                          evaluations first.
+                        </p>
+                      </div>
+                    ) : (
+                      'Switch to Round 2 Interview Evaluation'
+                    )
+                  }
                 >
-                  Round 2
-                </button>
+                  <span className="inline-block">
+                    <button
+                      type="button"
+                      disabled={!isAllRound1Locked}
+                      onClick={() =>
+                        isAllRound1Locked && setSelectedRound('round2')
+                      }
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-bold transition-all',
+                        activeRound === 'round2'
+                          ? 'bg-[#0D1742] text-[#DCB968] shadow-sm'
+                          : isAllRound1Locked
+                            ? 'text-gray-500 hover:text-gray-900'
+                            : 'text-gray-400 cursor-not-allowed opacity-50'
+                      )}
+                    >
+                      {!isAllRound1Locked && (
+                        <i className="fa-solid fa-lock text-[10px]" />
+                      )}
+                      <span>Round 2</span>
+                    </button>
+                  </span>
+                </Tooltip>
               </div>
             </div>
             <CardDescription className="text-sm font-medium mt-1">
@@ -173,7 +206,7 @@ export function DepartmentTransitionStrip({
                   )}
                 >
                   <div className="flex flex-col min-w-0 flex-1 mr-2">
-                    <span className="truncate text-sm tracking-tight">
+                    <span className="truncate text-sm tracking-tighter">
                       {department}
                     </span>
                     <span className="text-[10px] font-medium opacity-70">
@@ -183,7 +216,7 @@ export function DepartmentTransitionStrip({
 
                   <div
                     className={cn(
-                      'flex shrink-0 items-center justify-center rounded-full text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 border',
+                      'flex shrink-0 items-center justify-center rounded-full text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 border',
                       isR1Locked
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : isR1Pending
@@ -227,7 +260,7 @@ export function DepartmentTransitionStrip({
                 )}
               >
                 <div className="flex flex-col min-w-0 flex-1 mr-2">
-                  <span className="truncate text-sm tracking-tighter">
+                  <span className="truncate text-sm tracking-tight">
                     {department}
                   </span>
                   <span className="text-[10px] font-medium opacity-70">
@@ -260,8 +293,7 @@ export function DepartmentTransitionStrip({
                     'No Candidates'
                   ) : (
                     <>
-                      <i className="fa-solid fa-spinner fa-spin mr-1.5" />{' '}
-                      Eval
+                      <i className="fa-solid fa-spinner fa-spin mr-1.5" /> Eval
                     </>
                   )}
                 </div>
