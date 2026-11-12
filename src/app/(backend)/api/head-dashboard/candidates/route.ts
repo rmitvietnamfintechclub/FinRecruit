@@ -45,15 +45,15 @@ type CandidateListAggregationResult = {
     round2Evaluation?: {
       score?: number | null;
     };
-    interviewDate?: Date | string | null;      
-    interviewStartTime?: string | null;        
+    interviewDate?: Date | string | null;
+    interviewStartTime?: string | null;
     interviewEndTime?: string | null;
     interviewRoom?: string | null;
     interviewAttendance?: string | null;
   }>;
 };
 
-// Include 'Member' so interviwers can access the dashboard candidate list
+// Include 'Member' so interviewers can access the dashboard candidate list
 export const GET = withRBAC(
   ['Department Head', 'Member'],
   async (req: NextRequest, { session }) => {
@@ -76,7 +76,7 @@ export const GET = withRBAC(
     const status = parseDashboardStatus(statusParam);
     const { page, limit, skip } = parsePaginationParams(searchParams);
 
-    // Parse quatitative scoring sort toggle
+    // Parse quantitative scoring sort toggle
     const sourceByScore = searchParams.get('sortByScore') === 'true';
 
     if (statusParam && statusParam !== 'All' && !status) {
@@ -91,8 +91,6 @@ export const GET = withRBAC(
 
     await dbConnect();
 
-    // Ensure the MasterInterviewSlot model is registered before running aggregate
-    // This prevents errors if Mongoose hasn't initialized the schema yet.
     if (!MasterInterviewSlot) {
       console.warn('MasterInterviewSlot model not found');
     }
@@ -113,86 +111,91 @@ export const GET = withRBAC(
 
     // Dynamic sorting behavior
     const sortStage: Record<string, 1 | -1> = sourceByScore
-      ? { 'round2Evaluation.score': -1, createdAt: -1, _id: -1 } // Rank highest scores first
-      : { createdAt: -1, _id: -1 }; // Default chronological order (newest first)
+      ? { 'round2Evaluation.score': -1, createdAt: -1, _id: -1 }
+      : { createdAt: -1, _id: -1 };
 
-    const aggregateResults = (await Candidate.aggregate([
-      { $match: match },
-      {
-        $facet: {
-          metadata: [{ $count: 'total' }],
-          items: [
-            { $sort: sortStage },
-            { $skip: skip },
-            { $limit: limit },
-
-            {
-              $lookup: {
-                from: 'masterinterviewslots',
-                localField: 'interviewSlotId',
-                foreignField: '_id',
-                as: 'slotInfo',
+    // Chạy song song aggregation danh sách và đếm ứng viên choice2 đang chờ ở ban khác
+    const [aggregateResults, incomingSecondChoicePending] = await Promise.all([
+      Candidate.aggregate([
+        { $match: match },
+        {
+          $facet: {
+            metadata: [{ $count: 'total' }],
+            items: [
+              { $sort: sortStage },
+              { $skip: skip },
+              { $limit: limit },
+              {
+                $lookup: {
+                  from: 'masterinterviewslots',
+                  localField: 'interviewSlotId',
+                  foreignField: '_id',
+                  as: 'slotInfo',
+                },
               },
-            },
-            {
-              $addFields: {
-                firstSlot: { $arrayElemAt: ['$slotInfo', 0] },
+              {
+                $addFields: {
+                  firstSlot: { $arrayElemAt: ['$slotInfo', 0] },
+                },
               },
-            },
-            {
-              $addFields: {
-                interviewDate: '$firstSlot.date',
-                interviewStartTime: '$firstSlot.startTime',
-                interviewEndTime: '$firstSlot.endTime',
-                interviewRoom: '$firstSlot.room',
-                
-                interviewAttendance: {
-                  $let: {
-                    vars: {
-                      matchedBooking: {
-                        $arrayElemAt: [
-                          {
-                            $filter: {
-                              input: { $ifNull: ['$firstSlot.bookings', []] },
-                              as: 'booking',
-                              cond: {
-                                $eq: [
-                                  '$$booking.department',
-                                  assignedDepartment,
-                                ],
+              {
+                $addFields: {
+                  interviewDate: '$firstSlot.date',
+                  interviewStartTime: '$firstSlot.startTime',
+                  interviewEndTime: '$firstSlot.endTime',
+                  interviewRoom: '$firstSlot.room',
+                  interviewAttendance: {
+                    $let: {
+                      vars: {
+                        matchedBooking: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: { $ifNull: ['$firstSlot.bookings', []] },
+                                as: 'booking',
+                                cond: {
+                                  $eq: [
+                                    '$$booking.department',
+                                    assignedDepartment,
+                                  ],
+                                },
                               },
                             },
-                          },
-                          0,
-                        ],
+                            0,
+                          ],
+                        },
                       },
+                      in: '$$matchedBooking.status',
                     },
-                    in: '$$matchedBooking.status', 
                   },
                 },
               },
-            },
-
-            {
-              $project: {
-                customAnswers: 0,
-                cvLink: 0,
-                __v: 0,
-                'round2Evaluation.templateAnswers': 0,
-                'round2Evaluation.adHocQuestions': 0,
-                'round2Evaluation.notes': 0,
-                // Dọn dẹp dữ liệu rác sau khi lookup
-                slotInfo: 0,
-                firstSlot: 0,
+              {
+                $project: {
+                  customAnswers: 0,
+                  cvLink: 0,
+                  __v: 0,
+                  'round2Evaluation.templateAnswers': 0,
+                  'round2Evaluation.adHocQuestions': 0,
+                  'round2Evaluation.notes': 0,
+                  slotInfo: 0,
+                  firstSlot: 0,
+                },
               },
-            },
-          ],
+            ],
+          },
         },
-      },
-    ]).exec()) as CandidateListAggregationResult[];
+      ]).exec() as Promise<CandidateListAggregationResult[]>,
+      Candidate.countDocuments({
+        choice2: assignedDepartment,
+        department: { $ne: assignedDepartment },
+        generation: active.currentGeneration,
+        semester: active.currentSemester,
+        status: 'Pending',
+      }).exec(),
+    ]);
 
     const aggregationResult = aggregateResults[0];
-
     const total = aggregationResult?.metadata?.[0]?.total ?? 0;
 
     const items =
@@ -222,6 +225,7 @@ export const GET = withRBAC(
           limit,
           total,
           totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+          incomingSecondChoicePending,
           filters: {
             search,
             status,

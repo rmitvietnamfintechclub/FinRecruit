@@ -554,17 +554,23 @@ export async function findExistingCandidateBooking(
   email: string
 ): Promise<SerializedInterviewSlot | null> {
   await dbConnect();
+  const active = await getActiveConfig();
   const trimmed = email.trim().toLowerCase();
 
   const candidate = await Candidate.findOne({
     email: { $regex: new RegExp(`^${escapeRegex(trimmed)}$`, 'i') },
+    generation: active.currentGeneration,
+    semester: active.currentSemester,
   })
+    .sort({ appliedAt: -1 })
     .lean<ICandidate | null>()
     .exec();
 
   if (!candidate || !candidate._id) return null;
 
   const slot = await MasterInterviewSlot.findOne({
+    generation: active.currentGeneration,
+    semester: active.currentSemester,
     'bookings.candidateId': candidate._id,
   })
     .populate('bookings.candidateId', 'fullName email department')
@@ -584,12 +590,18 @@ export async function confirmCandidateBooking(
     return { ok: false, reason: 'SLOT_NOT_FOUND' };
   }
 
+  const active = await getActiveConfig();
   const email = input.email.trim().toLowerCase();
   const name = input.name.trim();
 
+  // 1. Tìm đúng hồ sơ ứng viên trong Gen & Sem đang active
   const candidate = await Candidate.findOne({
     email: { $regex: new RegExp(`^${escapeRegex(email)}$`, 'i') },
-  }).exec();
+    generation: active.currentGeneration,
+    semester: active.currentSemester,
+  })
+    .sort({ appliedAt: -1 })
+    .exec();
 
   if (!candidate) {
     return { ok: false, reason: 'CANDIDATE_NOT_FOUND' };
@@ -607,7 +619,10 @@ export async function confirmCandidateBooking(
     };
   }
 
+  // 2. Chỉ kiểm tra trùng lịch trong Gen & Sem hiện tại
   const existingSlot = await MasterInterviewSlot.findOne({
+    generation: active.currentGeneration,
+    semester: active.currentSemester,
     'bookings.candidateId': candidate._id,
   })
     .populate('bookings.candidateId', 'fullName email department')
@@ -632,9 +647,12 @@ export async function confirmCandidateBooking(
     return { ok: false, reason: 'SLOT_NO_LONGER_AVAILABLE' };
   }
 
+  // 3. Khóa đúng slot thuộc Gen & Sem hiện tại
   const updatedSlot = await MasterInterviewSlot.findOneAndUpdate(
     {
       _id: new Types.ObjectId(input.slotId),
+      generation: active.currentGeneration,
+      semester: active.currentSemester,
       assignedDepartments: input.department,
       'bookings.department': { $ne: input.department },
     },

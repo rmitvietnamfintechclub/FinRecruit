@@ -32,6 +32,7 @@ export const POST = withRBAC(
 
         const activeConfig = await getActiveConfig();
 
+        // 1. Kiểm tra ứng viên đang trực thuộc ban mình mà còn Pending
         const pendingCount = await Candidate.countDocuments({
             department,
             generation: activeConfig.currentGeneration,
@@ -47,6 +48,30 @@ export const POST = withRBAC(
                         `Round 1 cannot be locked because ${pendingCount} candidate` +
                         `${pendingCount === 1 ? ' is' : 's are'} still pending evaluation.`,
                     pendingCount,
+                },
+                { status: 400 }
+            );
+        }
+
+        // 2. Kiểm tra ứng viên ở ban khác (choice1) đang Pending và có choice2 là ban mình
+        const incomingSecondChoiceCount = await Candidate.countDocuments({
+            choice2: department,
+            department: { $ne: department },
+            generation: activeConfig.currentGeneration,
+            semester: activeConfig.currentSemester,
+            status: 'Pending',
+        }).exec();
+
+        if (incomingSecondChoiceCount > 0) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    code: 'INCOMING_SECOND_CHOICE_PENDING',
+                    message:
+                        `Round 1 cannot be locked yet because ${incomingSecondChoiceCount} candidate` +
+                        `${incomingSecondChoiceCount === 1 ? '' : 's'} with ${department} as their 2nd choice ` +
+                        `${incomingSecondChoiceCount === 1 ? 'is' : 'are'} still pending evaluation in their 1st-choice department.`,
+                    incomingSecondChoiceCount,
                 },
                 { status: 400 }
             );
@@ -109,6 +134,7 @@ export const POST = withRBAC(
                 generation: activeConfig.currentGeneration,
                 semester: activeConfig.currentSemester,
                 pendingCount,
+                incomingSecondChoiceCount,
             },
         });
 

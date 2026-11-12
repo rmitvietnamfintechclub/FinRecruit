@@ -6,6 +6,7 @@ import {
   findExistingCandidateBooking,
   getBookableSchedule,
 } from '@/app/(backend)/libs/interview-scheduling/service';
+import { getActiveConfig } from '@/app/(backend)/libs/system-config/service';
 import type { DepartmentType, ICandidate } from '@/app/(backend)/types';
 
 export const runtime = 'nodejs';
@@ -32,12 +33,16 @@ export async function GET(req: NextRequest) {
 
     if (email) {
       await dbConnect();
+      const active = await getActiveConfig();
       const trimmedEmail = email.trim().toLowerCase();
 
-      // 1. Kiểm tra ứng viên trong Database
+      // 1. Kiểm tra ứng viên trong đúng Gen & Sem hiện tại
       const candidate = await Candidate.findOne({
         email: { $regex: new RegExp(`^${escapeRegex(trimmedEmail)}$`, 'i') },
+        generation: active.currentGeneration,
+        semester: active.currentSemester,
       })
+        .sort({ appliedAt: -1 })
         .lean<ICandidate | null>()
         .exec();
 

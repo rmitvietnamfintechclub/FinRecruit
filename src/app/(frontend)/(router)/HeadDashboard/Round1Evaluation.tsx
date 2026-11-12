@@ -37,7 +37,13 @@ type Round1EvaluationProps = {
   error: string | null;
   listEmptyHint: string | null;
   page: number;
-  stats: { total: number; pending: number; passed: number; failed: number };
+  stats: {
+    total: number;
+    pending: number;
+    passed: number;
+    failed: number;
+    incomingSecondChoicePending: number;
+  };
   isRound1Locked: boolean;
   locking: boolean;
   isRecruitmentActive: boolean;
@@ -343,6 +349,7 @@ export function Round1Evaluation({
           canLock={
             !isRecruitmentActive &&
             stats.pending === 0 &&
+            stats.incomingSecondChoicePending === 0 &&
             stats.total > 0 &&
             !isRound1Locked
           }
@@ -350,6 +357,7 @@ export function Round1Evaluation({
             !isRecruitmentActive &&
             stats.total > 0 &&
             stats.pending === 0 &&
+            stats.incomingSecondChoicePending === 0 &&
             !isRound1Locked
           }
           lockDisabledReason={
@@ -357,7 +365,9 @@ export function Round1Evaluation({
               ? 'Cannot lock while the public recruitment form is still open.'
               : stats.pending > 0
                 ? `Resolve ${stats.pending} pending application${stats.pending > 1 ? 's' : ''} to lock.`
-                : null
+                : stats.incomingSecondChoicePending > 0
+                  ? `Waiting for ${stats.incomingSecondChoicePending} candidate${stats.incomingSecondChoicePending > 1 ? 's' : ''} with ${headDepartment} as 2nd choice to finish 1st-choice evaluation.`
+                  : null
           }
           lockedTitle="Round 1 Evaluation closed"
           lockedDescription="Results are final. Passed candidates are in the Round 2 interview pool."

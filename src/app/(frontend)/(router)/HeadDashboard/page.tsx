@@ -51,6 +51,7 @@ type ListApiResponse = {
     totalPages: number;
     emptyState?: string | null;
     activeCohort?: ActiveCohort;
+    incomingSecondChoicePending?: number;
     filters?: {
       status?: string | null;
       department?: string;
@@ -89,6 +90,7 @@ export default function HeadDashboardPage() {
     pending: 0,
     passed: 0,
     failed: 0,
+    incomingSecondChoicePending: 0,
   });
 
   // === ROUND 2 STATE ===
@@ -203,6 +205,8 @@ export default function HeadDashboardPage() {
         pending: rP.ok && jP.success ? (jP.meta?.total ?? 0) : 0,
         passed: rPa.ok && jPa.success ? (jPa.meta?.total ?? 0) : 0,
         failed: rF.ok && jF.success ? (jF.meta?.total ?? 0) : 0,
+        incomingSecondChoicePending:
+          jAll.meta?.incomingSecondChoicePending ?? 0,
       });
     } catch {}
   }, []);
