@@ -158,6 +158,13 @@ export function QuestionEvaluationCard({
     }
   };
 
+  const canModifyThisQuestion =
+    !disabled &&
+    (isDepartmentHead ||
+      (Boolean(answer.isCustom) &&
+        answer.addedBy?.email?.toLowerCase() ===
+          currentUser.email.toLowerCase()));
+
   return (
     <>
       <ConfirmDialog
@@ -250,9 +257,20 @@ export function QuestionEvaluationCard({
               </div>
             ) : (
               <div className="min-w-0 flex-1">
-                <h3 className="mt-1 text-sm font-black text-gray-900 leading-snug wrap-break-word">
-                  {answer.question}
-                </h3>
+                <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                  <h3 className="text-sm font-black text-gray-900 leading-snug wrap-break-word">
+                    {answer.question}
+                  </h3>
+
+                  {answer.isEdited && (
+                    <span
+                      title="This question was edited after creation"
+                      className="inline-flex shrink-0 items-center rounded-md bg-gray-200/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-gray-600"
+                    >
+                      Edited
+                    </span>
+                  )}
+                </div>
 
                 {answer.isCustom && answer.addedBy && (
                   <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-900/70">
@@ -274,10 +292,9 @@ export function QuestionEvaluationCard({
 
           {/* CÁC NÚT TÁC VỤ BÊN PHẢI */}
           <div className="flex items-center gap-2 shrink-0 pt-0.5">
-            {isDepartmentHead &&
+            {canModifyThisQuestion &&
               answer.isCustom &&
               onUpdateQuestion &&
-              !disabled &&
               !isEditing && (
                 <button
                   type="button"
@@ -289,19 +306,17 @@ export function QuestionEvaluationCard({
                 </button>
               )}
 
-            {isDepartmentHead &&
-              onDeleteQuestion &&
-              !disabled &&
-              !isEditing && (
-                <button
-                  type="button"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => setIsConfirmDeleteOpen(true)}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 shadow-2xs"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
+            {canModifyThisQuestion && onDeleteQuestion && !isEditing && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => setIsConfirmDeleteOpen(true)}
+                title="Delete question"
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 shadow-2xs"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -314,7 +329,7 @@ export function QuestionEvaluationCard({
             value={draftNote}
             onChange={(e) => setDraftNote(e.target.value)}
             placeholder="Record the candidate’s response or your main takeaways here…"
-            className="min-h-25rounded-xl border-gray-200 bg-gray-50/50 p-3 text-sm font-medium text-gray-900 transition-colors placeholder:text-gray-400 hover:border-gray-300 focus-visible:border-[#0D1742] focus-visible:bg-white focus-visible:ring-[#0D1742]"
+            className="min-h-25 rounded-xl border-gray-200 bg-gray-50/50 p-3 text-sm font-medium text-gray-900 transition-colors placeholder:text-gray-400 hover:border-gray-300 focus-visible:border-[#0D1742] focus-visible:bg-white focus-visible:ring-[#0D1742]"
           />
           <TeamInsightsFeed
             notes={answer.collaborativeNotes}

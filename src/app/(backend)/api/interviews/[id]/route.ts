@@ -133,6 +133,7 @@ export const GET = withRBAC<InterviewRouteContext>(
           : [];
         return {
           question: q.question,
+          isEdited: Boolean(q.isEdited),
           collaborativeNotes: sortNotes(rawNotes as ICollaborativeNote[]),
         };
       });
@@ -143,6 +144,7 @@ export const GET = withRBAC<InterviewRouteContext>(
       const formattedAdHocQuestions = rawAdHoc.map((q) => ({
         question: q.question,
         addedBy: q.addedBy,
+        isEdited: Boolean(q.isEdited),
         collaborativeNotes: sortNotes(
           q.collaborativeNotes as ICollaborativeNote[]
         ),

@@ -15,6 +15,7 @@ interface IDbQuestion {
   id?: string;
   question: string;
   addedBy?: IQuestionAuthor | string;
+  isEdited?: boolean;
   collaborativeNotes?: ICollaborativeNote[];
 }
 
@@ -130,6 +131,7 @@ export const GET = withRBAC<InterviewNotesRouteContext>(
           id: q.id,
           question: q.question,
           addedBy: q.addedBy,
+          isEdited: Boolean(q.isEdited), 
           collaborativeNotes: sortNotes(q.collaborativeNotes),
         })),
       };
@@ -297,7 +299,7 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
             };
             adHocDb.push(dbItem);
           }
-          
+
           if (!dbItem.collaborativeNotes) dbItem.collaborativeNotes = [];
 
           let currentUserPayloadNote: Partial<ICollaborativeNote> | null = null;
@@ -350,6 +352,7 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
       ).map((q) => ({
         question: q.question,
         addedBy: q.addedBy,
+        isEdited: Boolean(q.isEdited),
         collaborativeNotes: sortNotes(q.collaborativeNotes),
       }));
 

@@ -24,6 +24,7 @@ type RawFormAnswer = {
   question?: unknown;
   answer?: unknown; // Dành riêng cho Vòng 1
   addedBy?: unknown;
+  isEdited?: unknown;
   collaborativeNotes?: RawCollaborativeNote[];
 };
 
@@ -201,6 +202,7 @@ function mapAnswer(
     id: `${prefix}-${index + 1}`,
     question: stringValue(answer.question),
     ...(isCustom ? { isCustom: true } : {}),
+    ...(answer.isEdited ? { isEdited: true } : {}),
     ...(author ? { addedBy: author } : {}),
     collaborativeNotes: mapCollaborativeNotes(answer.collaborativeNotes),
   };
@@ -265,11 +267,11 @@ function mapCandidate(candidate: RawInterviewDetail): InterviewCandidate {
   };
 }
 
-// Format dữ liệu trước khi ném lên API (Chỉ truyền question, addedBy và collaborativeNotes)
 function toRawAnswers(answers: InterviewAnswer[]): Partial<RawFormAnswer>[] {
-  return answers.map(({ question, addedBy, collaborativeNotes }) => ({
+  return answers.map(({ question, addedBy, isEdited, collaborativeNotes }) => ({
     question,
     ...(addedBy ? { addedBy } : {}),
+    ...(isEdited ? { isEdited } : {}),
     ...(collaborativeNotes ? { collaborativeNotes } : {}),
   }));
 }

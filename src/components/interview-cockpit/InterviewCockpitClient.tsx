@@ -251,13 +251,32 @@ export function InterviewCockpitClient({
 
   const deleteQuestion = useCallback(
     async (questionId: string) => {
-      if (!candidate || !isDepartmentHead) return;
-      setActionError(null);
-      updateState(questionId, 'saving');
+      if (!candidate || !hasEditRights) return;
 
       const isTemplate = candidate.evaluationAnswers.some(
         (q) => q.id === questionId
       );
+
+      // Chốt chặn quyền ở Client:
+      // 1. Chỉ Head mới được xóa Template Question
+      if (isTemplate && !isDepartmentHead) return;
+
+      // 2. Với Custom Question: Head hoặc chính chủ sở hữu (email khớp) mới được xóa
+      if (!isTemplate && !isDepartmentHead) {
+        const targetQ = candidate.adHocQuestions.find(
+          (q) => q.id === questionId
+        );
+        if (
+          !targetQ ||
+          targetQ.addedBy?.email?.toLowerCase() !==
+            currentUser.email.toLowerCase()
+        ) {
+          return;
+        }
+      }
+
+      setActionError(null);
+      updateState(questionId, 'saving');
 
       try {
         if (isTemplate) {
@@ -316,12 +335,34 @@ export function InterviewCockpitClient({
         void loadData();
       }
     },
-    [candidate, candidateId, isDepartmentHead, loadData, updateState]
+    [
+      candidate,
+      candidateId,
+      currentUser.email,
+      hasEditRights,
+      isDepartmentHead,
+      loadData,
+      updateState,
+    ]
   );
 
   const updateQuestionText = useCallback(
     async (questionId: string, newText: string) => {
-      if (!candidate || !isDepartmentHead) return;
+      if (!candidate || !hasEditRights) return;
+
+      if (!isDepartmentHead) {
+        const targetQ = candidate.adHocQuestions.find(
+          (q) => q.id === questionId
+        );
+        if (
+          !targetQ ||
+          targetQ.addedBy?.email?.toLowerCase() !==
+            currentUser.email.toLowerCase()
+        ) {
+          return;
+        }
+      }
+
       setActionError(null);
       updateState(questionId, 'saving');
 
@@ -331,7 +372,9 @@ export function InterviewCockpitClient({
             ? {
                 ...prev,
                 adHocQuestions: prev.adHocQuestions.map((q) =>
-                  q.id === questionId ? { ...q, question: newText } : q
+                  q.id === questionId
+                    ? { ...q, question: newText, isEdited: true }
+                    : q
                 ),
               }
             : prev
@@ -356,7 +399,15 @@ export function InterviewCockpitClient({
         void loadData();
       }
     },
-    [candidate, candidateId, isDepartmentHead, loadData, updateState]
+    [
+      candidate,
+      candidateId,
+      currentUser.email,
+      hasEditRights,
+      isDepartmentHead,
+      loadData,
+      updateState,
+    ]
   );
 
   const updateProfilePercent = useCallback((clientX: number) => {
@@ -666,7 +717,7 @@ export function InterviewCockpitClient({
               )}
             </div>
 
-            {isDepartmentHead && (
+            {hasEditRights && (
               <button
                 type="button"
                 disabled={terminal || showCustomComposer}

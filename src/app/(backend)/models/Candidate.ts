@@ -36,6 +36,7 @@ const FormAnswerSchema = new Schema(
     question: { type: String, required: true },
     answer: { type: String, default: '' },
     addedBy: { type: QuestionAuthorSchema, required: false },
+    isEdited: { type: Boolean, default: false },
     collaborativeNotes: { type: [CollaborativeNoteSchema], default: [] },
   },
   { _id: false }

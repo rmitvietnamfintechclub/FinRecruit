@@ -151,6 +151,7 @@ export interface ICustomAnswer {
   question: string;
   answer: string;
   addedBy?: IQuestionAuthor | string;
+  isEdited?: boolean;
   collaborativeNotes?: ICollaborativeNote[];
 }
 

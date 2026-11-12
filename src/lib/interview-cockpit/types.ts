@@ -32,6 +32,7 @@ export type InterviewAnswer = {
   question: string;
   isCustom?: boolean;
   addedBy?: QuestionAuthor;
+  isEdited?: boolean;
   collaborativeNotes: CollaborativeNote[];
 };
 
