@@ -366,7 +366,7 @@ export function Round1Evaluation({
               : stats.pending > 0
                 ? `Resolve ${stats.pending} pending application${stats.pending > 1 ? 's' : ''} to lock.`
                 : stats.incomingSecondChoicePending > 0
-                  ? `Waiting for ${stats.incomingSecondChoicePending} candidate${stats.incomingSecondChoicePending > 1 ? 's' : ''} with ${headDepartment} as 2nd choice to finish 1st-choice evaluation.`
+                  ? `Waiting for ${stats.incomingSecondChoicePending} candidate${stats.incomingSecondChoicePending > 1 ? 's' : ''} with ${headDepartment} as 2nd choice to finish Round 1 evaluation.`
                   : null
           }
           lockedTitle="Round 1 Evaluation closed"
