@@ -21,11 +21,17 @@ export type CandidateSubmission = {
 };
 
 // 2. Dành cho câu hỏi của Hội đồng (Vòng 2) - KHÔNG CÓ answer, chỉ có notes
+export type QuestionAuthor = {
+  name: string;
+  email: string;
+  role: CockpitRole;
+};
+
 export type InterviewAnswer = {
   id: string;
   question: string;
   isCustom?: boolean;
-  addedBy?: string;
+  addedBy?: QuestionAuthor;
   collaborativeNotes: CollaborativeNote[];
 };
 

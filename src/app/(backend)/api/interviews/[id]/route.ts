@@ -6,6 +6,7 @@ import DepartmentConfig from '@/app/(backend)/models/DepartmentConfig';
 import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
 import { reconcileTemplateAnswers } from '@/app/(backend)/libs/round2Evaluation';
+import MasterInterviewSlot from '@/app/(backend)/models/MasterInterviewSlot';
 import type { ICollaborativeNote, ICustomAnswer } from '@/app/(backend)/types';
 
 type InterviewRouteContext = {
@@ -78,10 +79,9 @@ export const GET = withRBAC<InterviewRouteContext>(
       // TRA CỨU TRẠNG THÁI SLOT THỰC TẾ TỪ MASTER INTERVIEW SLOT
       let slotStatus = null;
       if (candidate.interviewSlotId) {
-        const MasterSlot =
-          mongoose.models.MasterInterviewSlot ||
-          mongoose.model('MasterInterviewSlot');
-        const masterSlot = await MasterSlot.findById(candidate.interviewSlotId)
+        const masterSlot = await MasterInterviewSlot.findById(
+          candidate.interviewSlotId
+        )
           .lean()
           .exec();
 

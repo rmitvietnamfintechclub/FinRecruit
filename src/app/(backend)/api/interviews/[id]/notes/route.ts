@@ -4,7 +4,7 @@ import dbConnect from '@/app/(backend)/libs/dbConnect';
 import Candidate from '@/app/(backend)/models/Candidate';
 import { withRBAC } from '@/app/(backend)/guards/auth&RBAC';
 import { normalizeHeadDepartment } from '@/app/(backend)/libs/departments';
-import type { ICollaborativeNote } from '@/app/(backend)/types';
+import type { ICollaborativeNote, IQuestionAuthor } from '@/app/(backend)/types';
 
 type InterviewNotesRouteContext = {
   params: Promise<{ id: string }>;
@@ -14,7 +14,7 @@ type InterviewNotesRouteContext = {
 interface IDbQuestion {
   id?: string;
   question: string;
-  addedBy?: string;
+  addedBy?: IQuestionAuthor | string;
   collaborativeNotes?: ICollaborativeNote[];
 }
 
@@ -288,13 +288,16 @@ export const PATCH = withRBAC<InterviewNotesRouteContext>(
             dbItem = {
               question: payloadItem.question,
               addedBy:
-                typeof payloadItem.addedBy === 'string'
-                  ? payloadItem.addedBy
-                  : undefined,
+                payloadItem.addedBy && typeof payloadItem.addedBy === 'object'
+                  ? (payloadItem.addedBy as IQuestionAuthor)
+                  : typeof payloadItem.addedBy === 'string'
+                    ? payloadItem.addedBy
+                    : undefined,
               collaborativeNotes: [],
             };
             adHocDb.push(dbItem);
           }
+          
           if (!dbItem.collaborativeNotes) dbItem.collaborativeNotes = [];
 
           let currentUserPayloadNote: Partial<ICollaborativeNote> | null = null;

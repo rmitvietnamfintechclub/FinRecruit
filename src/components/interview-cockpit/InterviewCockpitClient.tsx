@@ -206,6 +206,27 @@ export function InterviewCockpitClient({
     async (question: string) => {
       updateState('custom-question', 'saving');
       setActionError(null);
+
+      // Tạo item tạm thời hiển thị ngay lập tức trên UI
+      const tempQuestion: InterviewAnswer = {
+        id: `temp-${Date.now()}`,
+        question,
+        isCustom: true,
+        addedBy: {
+          name: currentUser.name,
+          email: currentUser.email,
+          role: currentUser.role,
+        },
+        collaborativeNotes: [],
+      };
+
+      setCandidate((prev) =>
+        prev
+          ? { ...prev, adHocQuestions: [...prev.adHocQuestions, tempQuestion] }
+          : prev
+      );
+      setShowCustomComposer(false);
+
       try {
         const adHocQuestions =
           await interviewCockpitRepository.addCustomQuestion(
@@ -214,7 +235,6 @@ export function InterviewCockpitClient({
           );
         setCandidate((prev) => (prev ? { ...prev, adHocQuestions } : prev));
         updateState('custom-question', 'saved');
-        setShowCustomComposer(false);
       } catch (cause) {
         updateState('custom-question', 'error');
         setActionError(
@@ -222,10 +242,11 @@ export function InterviewCockpitClient({
             ? cause.message
             : 'Could not create the custom question.'
         );
+        void loadData(); // Rollback lại dữ liệu chuẩn từ server nếu lỗi
         throw cause;
       }
     },
-    [candidateId, updateState]
+    [candidateId, currentUser, loadData, updateState]
   );
 
   const deleteQuestion = useCallback(

@@ -6,6 +6,7 @@ import type {
   InterviewCandidate,
   InterviewCockpitRepository,
   InterviewSettings,
+  QuestionAuthor,
   Round2CandidateSummary,
 } from './types';
 
@@ -157,20 +158,50 @@ function mapSubmissions(answers: RawFormAnswer[] | undefined, prefix: string) {
   );
 }
 
-// ----------------------------------------------------
-// MAP DỮ LIỆU VÒNG 2 (KHÔNG CÓ ANSWER)
-// ----------------------------------------------------
+function mapQuestionAuthor(raw: unknown): QuestionAuthor | undefined {
+  if (!raw) return undefined;
+
+  // Trường hợp 1: Dữ liệu mới dạng object { name, email, role }
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    const email = stringValue(obj.email);
+    const name = stringValue(obj.name) || email.split('@')[0];
+    const role = (
+      ['Department Head', 'Member', 'Executive Board'].includes(
+        obj.role as string
+      )
+        ? obj.role
+        : 'Department Head'
+    ) as 'Department Head' | 'Member' | 'Executive Board';
+
+    if (!name && !email) return undefined;
+    return { name, email, role };
+  }
+
+  // Trường hợp 2: Tương thích ngược dữ liệu cũ trong DB (chỉ lưu string email)
+  if (typeof raw === 'string' && raw.trim()) {
+    return {
+      name: raw.split('@')[0],
+      email: raw.trim(),
+      role: 'Department Head',
+    };
+  }
+
+  return undefined;
+}
+
 function mapAnswer(
   answer: RawFormAnswer,
   index: number,
   prefix: string,
   isCustom = false
 ): InterviewAnswer {
+  const author = mapQuestionAuthor(answer.addedBy);
   return {
     id: `${prefix}-${index + 1}`,
     question: stringValue(answer.question),
     ...(isCustom ? { isCustom: true } : {}),
-    ...(typeof answer.addedBy === 'string' ? { addedBy: answer.addedBy } : {}),
+    ...(author ? { addedBy: author } : {}),
     collaborativeNotes: mapCollaborativeNotes(answer.collaborativeNotes),
   };
 }

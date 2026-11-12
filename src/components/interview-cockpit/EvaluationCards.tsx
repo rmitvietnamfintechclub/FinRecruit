@@ -249,9 +249,26 @@ export function QuestionEvaluationCard({
                 </div>
               </div>
             ) : (
-              <h3 className="mt-1 text-sm font-black text-gray-900 leading-snug wrap-break-word">
-                {answer.question}
-              </h3>
+              <div className="min-w-0 flex-1">
+                <h3 className="mt-1 text-sm font-black text-gray-900 leading-snug wrap-break-word">
+                  {answer.question}
+                </h3>
+
+                {answer.isCustom && answer.addedBy && (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-900/70">
+                    <i className="fa-solid fa-user-pen text-[10px] text-amber-600/80" />
+                    <span>
+                      Added by{' '}
+                      <strong className="font-bold text-amber-950">
+                        {answer.addedBy.name}
+                      </strong>{' '}
+                      <span className="font-medium text-amber-800/70">
+                        ({answer.addedBy.role})
+                      </span>
+                    </span>
+                  </p>
+                )}
+              </div>
             )}
           </div>
 

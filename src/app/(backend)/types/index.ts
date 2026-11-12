@@ -141,11 +141,17 @@ export interface ICollaborativeNote {
   updatedAt: Date;
 }
 
+export interface IQuestionAuthor {
+  name: string;
+  email: string;
+  role: Extract<RoleType, 'Department Head' | 'Member' | 'Executive Board'>;
+}
+
 export interface ICustomAnswer {
   question: string;
   answer: string;
-  addedBy?: string; // Used for ad-hoc R2 questions
-  collaborativeNotes?: ICollaborativeNote[]; // CẬP NHẬT: Note bám theo từng câu hỏi
+  addedBy?: IQuestionAuthor | string;
+  collaborativeNotes?: ICollaborativeNote[];
 }
 
 export interface IRound2Evaluation {

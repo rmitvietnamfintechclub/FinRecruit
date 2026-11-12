@@ -647,7 +647,7 @@ export async function confirmCandidateBooking(
         },
       },
     },
-    { new: true }
+    { returnDocument: 'after' }
   )
     .populate('bookings.candidateId', 'fullName email department')
     .exec();

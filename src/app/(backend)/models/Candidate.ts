@@ -18,14 +18,27 @@ const CollaborativeNoteSchema = new Schema(
     { _id: false }
 );
 
-const FormAnswerSchema = new Schema(
-    {
-        question: { type: String, required: true },
-        answer: { type: String, default: '' },
-        addedBy: { type: String },
-        collaborativeNotes: { type: [CollaborativeNoteSchema], default: [] }
+const QuestionAuthorSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true },
+    role: {
+      type: String,
+      enum: ['Member', 'Department Head', 'Executive Board'],
+      required: true,
     },
-    { _id: false }
+  },
+  { _id: false }
+);
+
+const FormAnswerSchema = new Schema(
+  {
+    question: { type: String, required: true },
+    answer: { type: String, default: '' },
+    addedBy: { type: QuestionAuthorSchema, required: false },
+    collaborativeNotes: { type: [CollaborativeNoteSchema], default: [] },
+  },
+  { _id: false }
 );
 
 const CandidateSchema = new Schema<ICandidate>(
