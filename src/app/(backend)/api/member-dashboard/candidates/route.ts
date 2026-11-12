@@ -159,15 +159,24 @@ export const GET = withRBAC('Member', async (req: NextRequest, { session }) => {
     projectStage.firstSlot = 0;
   }
 
-  const aggregateResults = (await Candidate.aggregate([
-    { $match: match },
-    {
-      $facet: {
-        metadata: [{ $count: 'total' }],
-        items: [...pipeline, { $project: projectStage }],
+  const [aggregateResults, incomingSecondChoicePending] = await Promise.all([
+    Candidate.aggregate([
+      { $match: match },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          items: [...pipeline, { $project: projectStage }],
+        },
       },
-    },
-  ]).exec()) as CandidateListAggregationResult[];
+    ]).exec() as Promise<CandidateListAggregationResult[]>,
+    Candidate.countDocuments({
+      choice2: assignedDepartment,
+      department: { $ne: assignedDepartment },
+      generation: active.currentGeneration,
+      semester: active.currentSemester,
+      status: 'Pending',
+    }).exec(),
+  ]);
 
   const aggregationResult = aggregateResults[0];
   const total = aggregationResult?.metadata?.[0]?.total ?? 0;
@@ -198,6 +207,7 @@ export const GET = withRBAC('Member', async (req: NextRequest, { session }) => {
         limit,
         total,
         totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+        incomingSecondChoicePending,
         filters: {
           search,
           status,

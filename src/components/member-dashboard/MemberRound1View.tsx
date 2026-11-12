@@ -36,7 +36,7 @@ type MemberRound1ViewProps = {
   error: string | null;
   listEmptyHint: string | null;
   page: number;
-  stats: { total: number; pending: number; passed: number; failed: number };
+  stats: { total: number; pending: number; passed: number; failed: number, incomingSecondChoicePending?: number; };
   statusFilter: string;
   viewMode: CandidateViewMode;
   isLocked: boolean;
@@ -248,6 +248,7 @@ export function MemberRound1View({
           isLocked={isLocked}
           isRecruitmentActive={isRecruitmentActive}
           isLoading={loading && candidates.length === 0}
+          incomingSecondChoicePending={stats.incomingSecondChoicePending ?? 0}
         />
 
         {loading && !error && candidates.length === 0 ? (

@@ -2,6 +2,7 @@
 
 import type { DepartmentType } from '@/app/(backend)/types';
 import { ROUND_TRANSITION_DEPARTMENTS } from '@/lib/round-transition/reducer';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 type DepartmentProgress = {
   department: DepartmentType;
@@ -81,13 +82,14 @@ export function RoundTransitionBar({
               <i className="fa-solid fa-hourglass-half" /> Pending Lock
             </span>
           ) : incomingPending > 0 && evaluated === total ? (
-            <span
-              title={`Waiting for ${incomingPending} candidate(s) with ${department} as 2nd choice to finish 1st-choice evaluation`}
-              className="inline-flex items-center gap-1 rounded-md bg-purple-50 border border-purple-200 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-purple-700"
+            <Tooltip
+              content={`Waiting for ${incomingPending} candidate(s) with ${department} as 2nd choice to finish Round 1 evaluation`}
             >
-              <i className="fa-solid fa-clock-rotate-left" /> +{incomingPending}{' '}
-              2nd Choice
-            </span>
+              <span className="inline-flex cursor-help items-center gap-1 rounded-md bg-purple-50 border border-purple-200 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-purple-700">
+                <i className="fa-solid fa-clock-rotate-left" /> Awaiting 2nd
+                Choice
+              </span>
+            </Tooltip>
           ) : (
             <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-blue-600">
               <i className="fa-solid fa-spinner fa-spin" /> Evaluating
@@ -104,7 +106,7 @@ export function RoundTransitionBar({
                 : isPendingLock
                   ? `All evaluated — Waiting to lock`
                   : evaluated === total && incomingPending > 0
-                    ? `Waiting for ${incomingPending} 2nd-choice review${incomingPending > 1 ? 's' : ''}`
+                    ? `Waiting for ${incomingPending} candidate(s) with ${department} as 2nd choice`
                     : `In progress — ${evaluated} of ${total} evaluated`}
           </h2>
           <div
@@ -263,21 +265,15 @@ export function RoundTransitionBar({
                 deptEvaluated === deptTotal &&
                 deptIncomingPending > 0;
 
-              return (
+              const cardContent = (
                 <div
-                  key={dept}
-                  title={
-                    isWaitingSecondChoice
-                      ? `Waiting for ${deptIncomingPending} candidate(s) with ${dept} as 2nd choice to finish 1st-choice evaluation`
-                      : undefined
-                  }
                   className={`flex flex-col p-3 rounded-xl border transition-colors ${
                     isDeptLocked
                       ? 'border-emerald-200 bg-emerald-50/50'
                       : isDeptPendingLock
                         ? 'border-amber-200 bg-amber-50/50'
                         : isWaitingSecondChoice
-                          ? 'border-purple-200 bg-purple-50/40'
+                          ? 'cursor-help border-purple-200 bg-purple-50/40'
                           : 'border-gray-200 bg-white'
                   }`}
                 >
@@ -337,6 +333,19 @@ export function RoundTransitionBar({
                   </div>
                 </div>
               );
+
+              if (isWaitingSecondChoice) {
+                return (
+                  <Tooltip
+                    key={dept}
+                    content={`Waiting for ${deptIncomingPending} candidate(s) with ${dept} as 2nd choice to finish Round 1 evaluation`}
+                  >
+                    {cardContent}
+                  </Tooltip>
+                );
+              }
+
+              return <div key={dept}>{cardContent}</div>;
             })}
           </div>
         </div>

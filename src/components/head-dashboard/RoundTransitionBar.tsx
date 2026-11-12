@@ -14,6 +14,7 @@ export type RoundTransitionBarProps = {
   total: number;
   isLocked: boolean;
   locking: boolean;
+  incomingSecondChoicePending?: number;
 
   canLock: boolean;
   isPendingLock: boolean;
@@ -43,7 +44,7 @@ export function RoundTransitionBar({
   lockedTitle,
   lockedDescription,
   lockedSuccessMessage,
-  lockConfirmDescription, // <--- Nhận prop
+  lockConfirmDescription,
   onLock,
   onGoToNextRound,
   nextRoundLabel,
@@ -103,6 +104,10 @@ export function RoundTransitionBar({
     );
   }
 
+  const isWaitingSecondChoice =
+    !isPendingLock &&
+    Boolean(lockDisabledReason && lockDisabledReason.includes('2nd choice'));
+
   return (
     <TooltipProvider delayDuration={300}>
       <section
@@ -120,24 +125,36 @@ export function RoundTransitionBar({
                 className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${
                   isPendingLock
                     ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                    : isWaitingSecondChoice
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200'
                 }`}
               >
                 <i
                   className={`fa-solid ${
-                    isPendingLock ? 'fa-hourglass-half' : 'fa-spinner fa-spin'
+                    isPendingLock
+                      ? 'fa-hourglass-half'
+                      : isWaitingSecondChoice
+                        ? 'fa-clock-rotate-left'
+                        : 'fa-spinner fa-spin'
                   }`}
                 />
-                {isPendingLock ? 'Pending Lock' : 'Evaluating'}
+                {isPendingLock
+                  ? 'Pending Lock'
+                  : isWaitingSecondChoice
+                    ? 'Awaiting 2nd Choice'
+                    : 'Evaluating'}
               </span>
             </div>
 
             <h2 className="text-xl font-black tracking-tight text-[#0D1742]">
-              {total === 0
+              {total === 0 && !isWaitingSecondChoice
                 ? 'No candidates'
                 : isPendingLock
                   ? 'All evaluated — Ready to lock'
-                  : `In progress — ${evaluated} of ${total} evaluated`}
+                  : isWaitingSecondChoice
+                    ? 'All evaluated — Awaiting 2nd-choice reviews'
+                    : `In progress — ${evaluated} of ${total} evaluated`}
             </h2>
             <div
               className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100"
@@ -149,7 +166,11 @@ export function RoundTransitionBar({
             >
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  isPendingLock ? 'bg-amber-400' : 'bg-[#10B981]'
+                  isPendingLock
+                    ? 'bg-amber-400'
+                    : isWaitingSecondChoice
+                      ? 'bg-purple-400'
+                      : 'bg-[#10B981]'
                 }`}
                 style={{ width: `${percentage}%` }}
               />
@@ -201,12 +222,26 @@ export function RoundTransitionBar({
           </div>
         </div>
 
-        {lockDisabledReason && lockDisabledReason.includes('Resolve') && (
-          <p className="mt-4 flex items-center rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
-            <i className="fa-solid fa-circle-info mr-2 opacity-80" />
-            {lockDisabledReason}
-          </p>
-        )}
+        {lockDisabledReason &&
+          (lockDisabledReason.includes('Resolve') ||
+            lockDisabledReason.includes('2nd choice')) && (
+            <p
+              className={`mt-4 flex items-center rounded-lg border px-3 py-2 text-xs font-semibold ${
+                lockDisabledReason.includes('2nd choice')
+                  ? 'border-purple-200 bg-purple-50 text-purple-700'
+                  : 'border-blue-100 bg-blue-50 text-blue-700'
+              }`}
+            >
+              <i
+                className={`fa-solid ${
+                  lockDisabledReason.includes('2nd choice')
+                    ? 'fa-clock-rotate-left'
+                    : 'fa-circle-info'
+                } mr-2 opacity-80`}
+              />
+              {lockDisabledReason}
+            </p>
+          )}
 
         {notice ? (
           <div className="mt-4 w-full sm:w-auto">
