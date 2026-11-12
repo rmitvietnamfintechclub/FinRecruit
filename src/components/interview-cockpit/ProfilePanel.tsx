@@ -4,11 +4,26 @@ import {
   Phone,
   GraduationCap,
   Globe,
+  Cake,
 } from 'lucide-react';
 import type { InterviewCandidate } from '@/lib/interview-cockpit/types';
 
+// Helper format DOB chuẩn DD/MM/YYYY + tự tính tuổi
+function formatDobWithAge(rawDob?: string): string {
+  if (!rawDob) return 'N/A';
+  const parsed = new Date(rawDob);
+  if (Number.isNaN(parsed.getTime())) return rawDob;
+
+  const formattedDate = parsed.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+
+  return formattedDate;
+}
+
 export function ProfilePanel({ candidate }: { candidate: InterviewCandidate }) {
-  // Helper render badge trạng thái Round 2
   const renderRound2StatusBadge = (status: string) => {
     const statusLower = status.toLowerCase();
     if (statusLower === 'pass') {
@@ -56,75 +71,87 @@ export function ProfilePanel({ candidate }: { candidate: InterviewCandidate }) {
         </div>
       </div>
 
-      {/* 2. BODY CONTENT (CUỘN ĐỘC LẬP BÊN TRONG) */}
+      {/* 2. BODY CONTENT */}
       <div className="min-h-0 flex-1 overflow-y-auto pt-5 pr-1 space-y-6">
         {/* SECTION I: PERSONAL INFORMATION */}
         <div>
           <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[#0D1742]/50">
             I. Personal Information
           </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {/* Major & Year */}
-            <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
-              <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
-                <GraduationCap className="h-3 w-3 text-blue-500" /> Major & Year
-              </p>
-              <p className="mt-1 text-xs font-bold text-gray-900 truncate">
-                {candidate.majorAndYear || 'N/A'}
-              </p>
-            </div>
 
-            {/* Phone */}
-            <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
-              <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
-                <Phone className="h-3 w-3 text-emerald-500" /> Phone
-              </p>
-              <p className="mt-1 text-xs font-bold text-gray-900 truncate">
-                {candidate.phone || 'N/A'}
-              </p>
-            </div>
-
-            {/* Facebook Link */}
-            <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
-              <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
-                <Globe className="h-3 w-3 text-blue-600" /> Facebook
-              </p>
-              {candidate.facebookLink ? (
-                <a
-                  href={candidate.facebookLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline truncate max-w-full"
-                >
-                  View Facebook <ExternalLink className="h-3 w-3 shrink-0" />
-                </a>
-              ) : (
-                <p className="mt-1 text-xs font-semibold text-gray-400">
-                  Not provided
+          <div className="space-y-3">
+            {/* Hàng 1: Major & Year + Date of Birth */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                  <Cake className="h-3 w-3 text-pink-500" /> Date of Birth
                 </p>
-              )}
+                <p className="mt-1 text-xs font-bold text-gray-900 truncate">
+                  {formatDobWithAge(candidate.dob)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                  <GraduationCap className="h-3 w-3 text-blue-500" /> Major &
+                  Year
+                </p>
+                <p className="mt-1 text-xs font-bold text-gray-900 truncate">
+                  {candidate.majorAndYear || 'N/A'}
+                </p>
+              </div>
             </div>
 
-            {/* CV / Portfolio Link */}
-            <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
-              <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
-                <i className="fa-solid fa-file-pdf text-red-500 text-[10px]" />{' '}
-                CV / Portfolio
-              </p>
-              {candidate.cvLink ? (
-                <a
-                  href={candidate.cvLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-[#0D1742] hover:underline truncate max-w-full"
-                >
-                  View CV <ExternalLink className="h-3 w-3 shrink-0" />
-                </a>
-              ) : (
-                <p className="mt-1 text-xs font-semibold text-gray-400">
-                  Not provided
+            {/* Hàng 2: Phone + Facebook + CV/Portfolio */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                  <Phone className="h-3 w-3 text-emerald-500" /> Phone
                 </p>
-              )}
+                <p className="mt-1 text-xs font-bold text-gray-900 truncate">
+                  {candidate.phone || 'N/A'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                  <Globe className="h-3 w-3 text-blue-600" /> Facebook
+                </p>
+                {candidate.facebookLink ? (
+                  <a
+                    href={candidate.facebookLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline truncate max-w-full"
+                  >
+                    View Profile <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                ) : (
+                  <p className="mt-1 text-xs font-semibold text-gray-400">
+                    Not provided
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                  <i className="fa-solid fa-file-pdf text-red-500 text-[10px]" />{' '}
+                  CV / Portfolio
+                </p>
+                {candidate.cvLink ? (
+                  <a
+                    href={candidate.cvLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-[#0D1742] hover:underline truncate max-w-full"
+                  >
+                    View CV <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                ) : (
+                  <p className="mt-1 text-xs font-semibold text-gray-400">
+                    Not provided
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>

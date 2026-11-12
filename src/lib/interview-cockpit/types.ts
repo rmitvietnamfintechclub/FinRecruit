@@ -56,6 +56,7 @@ export type Round2CandidateSummary = {
   fullName: string;
   email: string;
   studentId: string;
+  dob: string;
   department: string;
   status: BackendRound2Status;
 };

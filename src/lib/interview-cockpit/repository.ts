@@ -49,6 +49,7 @@ type RawCandidateSummary = {
   id?: unknown;
   fullName?: unknown;
   email?: unknown;
+  dob?: unknown;
   department?: unknown;
   round2Status?: unknown;
   generation?: unknown;
@@ -67,6 +68,7 @@ type RawInterviewDetail = {
   id?: unknown;
   fullName?: unknown;
   email?: unknown;
+  dob?: unknown;
   phone?: unknown;
   majorAndYear?: unknown;
   facebookLink?: unknown;
@@ -227,6 +229,7 @@ function mapSummary(candidate: RawCandidateSummary): Round2CandidateSummary {
     id: stringValue(candidate.id),
     fullName: stringValue(candidate.fullName),
     email,
+    dob: stringValue(candidate.dob),
     studentId: studentIdFromEmail(email),
     department: stringValue(candidate.department),
     status: backendStatus(candidate.round2Status),
@@ -241,6 +244,7 @@ function mapCandidate(candidate: RawInterviewDetail): InterviewCandidate {
     id: stringValue(candidate.id),
     fullName: stringValue(candidate.fullName),
     email,
+    dob: stringValue(candidate.dob),
     studentId: studentIdFromEmail(email),
     department: stringValue(candidate.department),
     status: backendStatus(candidate.round2Status),

@@ -159,6 +159,7 @@ export const GET = withRBAC<InterviewRouteContext>(
         id: candidate._id.toString(),
         fullName: candidate.fullName,
         email: candidate.email,
+        dob: candidate.dob,
         phone: candidate.phone,
         majorAndYear: candidate.majorAndYear,
         facebookLink: candidate.facebookLink,
