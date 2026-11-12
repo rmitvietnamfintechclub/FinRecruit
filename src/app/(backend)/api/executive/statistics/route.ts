@@ -23,6 +23,7 @@ interface StatusCount {
   pass: number;
   fail: number;
   pending: number;
+  incomingSecondChoicePending?: number;
 }
 
 interface DualStatusCount {
@@ -47,16 +48,17 @@ interface ErrorResponse {
   error?: string;
 }
 
-const emptyStatusCount = (): StatusCount => ({
+const emptyStatusCount = (includeIncoming = false): StatusCount => ({
   total: 0,
   pass: 0,
   fail: 0,
   pending: 0,
+  ...(includeIncoming ? { incomingSecondChoicePending: 0 } : {}),
 });
 
-const emptyDualStatusCount = (): DualStatusCount => ({
-  round1: emptyStatusCount(),
-  round2: emptyStatusCount(),
+const emptyDualStatusCount = (includeIncoming = false): DualStatusCount => ({
+  round1: emptyStatusCount(includeIncoming),
+  round2: emptyStatusCount(false),
 });
 
 // Helper tái sử dụng cho các biểu thức accumulator của $group
@@ -124,14 +126,26 @@ type RawAggRow = {
   pendingR2: number;
 };
 
-function mapRowToDualStatus(row?: RawAggRow): DualStatusCount {
-  if (!row) return emptyDualStatusCount();
+type RawIncomingRow = {
+  _id: string | null;
+  count: number;
+};
+
+function mapRowToDualStatus(
+  row?: RawAggRow,
+  incomingSecondChoicePending?: number
+): DualStatusCount {
+  if (!row)
+    return emptyDualStatusCount(incomingSecondChoicePending !== undefined);
   return {
     round1: {
       total: row.totalR1 ?? 0,
       pass: row.passR1 ?? 0,
       fail: row.failR1 ?? 0,
       pending: row.pendingR1 ?? 0,
+      ...(incomingSecondChoicePending !== undefined
+        ? { incomingSecondChoicePending }
+        : {}),
     },
     round2: {
       total: row.totalR2 ?? 0,
@@ -156,10 +170,11 @@ export const GET = withRBAC(
         semester: active.currentSemester,
       };
 
-      // TẬP HỢP TOÀN BỘ SỐ LIỆU OVERALL VÀ THEO TỪNG BAN TRONG DUY NHẤT 1 AGGREGATION
+      // TẬP HỢP TOÀN BỘ SỐ LIỆU OVERALL, THEO BAN, VÀ INCOMING CHOICE 2 TRONG 1 AGGREGATION
       const [aggResult] = await Candidate.aggregate<{
         overall: RawAggRow[];
         byDepartment: RawAggRow[];
+        incomingSecondChoice: RawIncomingRow[];
       }>([
         {
           $match: {
@@ -185,16 +200,41 @@ export const GET = withRBAC(
                 },
               },
             ],
+            incomingSecondChoice: [
+              {
+                $match: {
+                  status: 'Pending',
+                  choice2: { $in: ALL_DEPARTMENTS },
+                  $expr: { $ne: ['$department', '$choice2'] },
+                },
+              },
+              {
+                $group: {
+                  _id: '$choice2',
+                  count: { $sum: 1 },
+                },
+              },
+            ],
           },
         },
       ]);
 
       const overall = mapRowToDualStatus(aggResult?.overall?.[0]);
 
+      // Map số lượng ứng viên đang chờ reroute từ choice 1 theo từng ban
+      const incomingMap = new Map<DepartmentType, number>();
+      aggResult?.incomingSecondChoice?.forEach((row) => {
+        if (row._id && ALL_DEPARTMENTS.includes(row._id as DepartmentType)) {
+          incomingMap.set(row._id as DepartmentType, row.count ?? 0);
+        }
+      });
+
       // Khởi tạo sẵn cấu trúc cho toàn bộ 4 ban (kể cả ban chưa có ứng viên nào nộp hồ sơ)
       const byDepartment = ALL_DEPARTMENTS.reduce(
         (acc, dept) => {
-          acc[dept] = emptyDualStatusCount();
+          acc[dept] = emptyDualStatusCount(true);
+          acc[dept].round1.incomingSecondChoicePending =
+            incomingMap.get(dept) ?? 0;
           return acc;
         },
         {} as Record<DepartmentType, DualStatusCount>
@@ -203,7 +243,11 @@ export const GET = withRBAC(
       // Điền số liệu thực tế từ aggregation
       aggResult?.byDepartment?.forEach((row) => {
         if (row._id && ALL_DEPARTMENTS.includes(row._id as DepartmentType)) {
-          byDepartment[row._id as DepartmentType] = mapRowToDualStatus(row);
+          const dept = row._id as DepartmentType;
+          byDepartment[dept] = mapRowToDualStatus(
+            row,
+            incomingMap.get(dept) ?? 0
+          );
         }
       });
 

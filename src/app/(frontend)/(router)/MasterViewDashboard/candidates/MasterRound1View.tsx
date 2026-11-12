@@ -55,6 +55,7 @@ type MasterRound1ViewProps = {
     department: DepartmentType;
     evaluated: number;
     total: number;
+    incomingSecondChoicePending: number;
   }>;
   isRecruitmentActive: boolean;
   onSetDeptFilter: (d: MasterViewDeptFilter) => void;

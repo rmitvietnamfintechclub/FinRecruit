@@ -39,6 +39,7 @@ export type DepartmentProgress = {
   department: DepartmentType;
   evaluated: number;
   total: number;
+  incomingSecondChoicePending: number;
 };
 
 // Định nghĩa Type an toàn cho Department State từ hook API
@@ -207,6 +208,8 @@ export default function MasterCandidatesPage() {
                 department: d as DepartmentType,
                 total,
                 evaluated: Math.max(total - pending, 0),
+                incomingSecondChoicePending:
+                  deptData?.incomingSecondChoicePending ?? 0,
               };
             });
           setDeptStats(breakdown);
