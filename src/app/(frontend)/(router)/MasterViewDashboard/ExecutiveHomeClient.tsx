@@ -42,6 +42,7 @@ type StatusCount = {
   pass: number;
   fail: number;
   pending: number;
+  incomingSecondChoicePending?: number;
 };
 
 type DualStatusCount = {
@@ -62,6 +63,7 @@ export type DepartmentProgress = {
   round1: {
     evaluated: number;
     total: number;
+    incomingSecondChoicePending: number;
   };
   round2: {
     evaluated: number;
@@ -112,7 +114,6 @@ export function ExecutiveHomeClient() {
     setError(null);
     setLoading(true);
     try {
-      // Chỉ cần 2 fetch duy nhất: Dashboard & Statistics
       const [dashRes, statsRes] = await Promise.all([
         fetch('/api/executive/dashboard', { credentials: 'include' }),
         fetch('/api/executive/statistics', { credentials: 'include' }),
@@ -128,12 +129,12 @@ export function ExecutiveHomeClient() {
       if (!statsRes.ok || !statsJson.success)
         throw new Error('Statistics failed to load.');
 
-      // Map trực tiếp từ byDepartment của API stats (không cần loop gọi 16 requests)
       const breakdownData: DepartmentProgress[] = HEAD_DEPARTMENTS.map(
         (dept) => {
           const d = statsJson.data?.byDepartment?.[dept];
           const r1Total = d?.round1.total ?? 0;
           const r1Pending = d?.round1.pending ?? 0;
+          const r1Incoming = d?.round1.incomingSecondChoicePending ?? 0;
           const r2Total = d?.round2.total ?? 0;
           const r2Pending = d?.round2.pending ?? 0;
 
@@ -142,6 +143,7 @@ export function ExecutiveHomeClient() {
             round1: {
               total: r1Total,
               evaluated: Math.max(r1Total - r1Pending, 0),
+              incomingSecondChoicePending: r1Incoming,
             },
             round2: {
               total: r2Total,

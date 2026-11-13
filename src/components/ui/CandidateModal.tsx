@@ -176,6 +176,7 @@ export const CandidateModal: FC<CandidateModalProps> = ({
   const routingSource = detail ?? candidate;
   const isSecondChoiceStage = routingSource.routing.currentStage === 'choice2';
   const choice1Label = detail?.choice1 ?? candidate.choice1;
+  const choice2Label = detail?.choice2 ?? candidate.choice2;
 
   const statusBadge =
     {
@@ -260,7 +261,10 @@ export const CandidateModal: FC<CandidateModalProps> = ({
                     {SECOND_CHOICE_BANNER_TITLE}
                   </h4>
                   <p className="mt-1 text-xs font-medium leading-relaxed text-[#5E5E92]">
-                    {secondChoiceBannerMessage(choice1Label)}
+                    {secondChoiceBannerMessage(
+                      choice1Label ?? 'first choice',
+                      choice2Label ?? 'second choice'
+                    )}
                   </p>
                 </div>
               </div>

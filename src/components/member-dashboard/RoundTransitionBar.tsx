@@ -81,7 +81,7 @@ export function RoundTransitionBar({
           </span>
         ) : isWaitingSecondChoice ? (
           <Tooltip
-            content={`Waiting for ${incomingPending} candidate(s) with ${department} as 2nd choice to finish Round 1 evaluation`}
+            content={`Waiting for ${incomingPending} candidate${incomingPending > 1 ? 's' : ''} with ${department} as 2nd choice to finish Round 1 evaluation.`}
           >
             <span className="inline-flex cursor-help items-center gap-1 rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-purple-700">
               <i className="fa-solid fa-clock-rotate-left" /> Awaiting 2nd
@@ -104,7 +104,7 @@ export function RoundTransitionBar({
               : isPendingLock
                 ? 'All evaluated — Waiting to lock'
                 : isWaitingSecondChoice
-                  ? `Waiting for ${incomingPending} candidate(s) with ${department} as 2nd choice`
+                  ? `Waiting for ${incomingPending} candidate${incomingPending > 1 ? 's' : ''} with ${department} as 2nd choice`
                   : `In progress — ${evaluated} of ${total} evaluated`}
         </h2>
         <div
