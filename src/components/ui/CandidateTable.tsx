@@ -223,7 +223,12 @@ export default function CandidateTable({
 
                   {round === 1 &&
                   candidate.routing.currentStage === 'choice2' ? (
-                    <Tooltip content={secondChoiceTooltip(candidate.choice1)}>
+                    <Tooltip
+                      content={secondChoiceTooltip(
+                        candidate.choice1 ?? '',
+                        candidate.choice2 ?? ''
+                      )}
+                    >
                       <span className="mt-1.5 inline-flex cursor-help items-center gap-1 rounded-full border border-[#E0D8FF] bg-[#F0EDFF] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#2C305F] shadow-sm">
                         <i className="fa-solid fa-share" aria-hidden />
                         {SECOND_CHOICE_BADGE_LABEL}
@@ -347,7 +352,10 @@ export default function CandidateTable({
                     {round === 1 &&
                       candidate.routing.currentStage === 'choice2' && (
                         <Tooltip
-                          content={secondChoiceTooltip(candidate.choice1)}
+                          content={secondChoiceTooltip(
+                            candidate.choice1 ?? '',
+                            candidate.choice2 ?? ''
+                          )}
                         >
                           <span className="mt-1.5 inline-flex cursor-help items-center gap-1.5 rounded-full border border-[#E0D8FF] bg-[#F0EDFF] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#2C305F] shadow-sm">
                             <i
